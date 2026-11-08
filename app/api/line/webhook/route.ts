@@ -1,6 +1,7 @@
 import { reply, verifySignature, type LineMessage } from '@/lib/line';
 import { json } from '@/lib/request';
 import { db } from '@/lib/supabase';
+import { getContact, type Contact } from '@/lib/shop';
 
 type P = { price_per_day: number; shuttle_price: number; extra_price_per_day: number; reschedule_min_days: number };
 const DEFAULT_P: P = { price_per_day: 100, shuttle_price: 300, extra_price_per_day: 120, reschedule_min_days: 7 };
@@ -15,8 +16,6 @@ type Event = { type: string; replyToken?: string; message?: { type: string; text
 const GREEN = '#0E3320';
 const GOLD = '#E0B04A';
 const MUTED = '#6B7A70';
-const PHONE = process.env.SHOP_PHONE ?? '0888101089';
-const PHONE_DISPLAY = PHONE.replace(/^(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3');
 
 const base = () => process.env.NEXT_PUBLIC_BASE_URL ?? '';
 const liffUrl = (path: string) =>
@@ -53,12 +52,12 @@ const bullet = (text: string) => ({
   ],
 });
 
-const callButton = (style: 'primary' | 'secondary') => ({
+const callButton = (style: 'primary' | 'secondary', k: Contact) => ({
   type: 'button', style, height: 'sm', color: style === 'primary' ? GREEN : undefined,
-  action: { type: 'uri', label: `โทร ${PHONE_DISPLAY}`, uri: `tel:${PHONE}` },
+  action: { type: 'uri', label: `โทร ${k.display}`, uri: `tel:${k.phone}` },
 });
 
-const priceFlex = (p: P): LineMessage => ({
+const priceFlex = (p: P, k: Contact): LineMessage => ({
   type: 'flex',
   altText: `ราคา: ที่จอด ${p.price_per_day} บาท/วัน · รถรับส่งไป-กลับ ${p.shuttle_price} บาท`,
   contents: {
@@ -86,18 +85,18 @@ const priceFlex = (p: P): LineMessage => ({
       type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
       contents: [
         { type: 'button', style: 'primary', color: GOLD, height: 'sm', action: { type: 'uri', label: 'จองเลย', uri: liffUrl('/book') } },
-        callButton('secondary'),
+        callButton('secondary', k),
       ],
     },
   },
 });
 
-const adminFlex: LineMessage = {
+const adminFlex = (k: Contact): LineMessage => ({
   type: 'flex',
-  altText: `ติดต่อแอดมิน 08:00–20:00 · โทร ${PHONE_DISPLAY}`,
+  altText: `ติดต่อแอดมิน ${k.hours} · โทร ${k.display}`,
   contents: {
     type: 'bubble',
-    header: header('ติดต่อแอดมิน', 'ตอบแชททุกวัน 08:00–20:00'),
+    header: header('ติดต่อแอดมิน', `ตอบแชททุกวัน ${k.hours}`),
     body: {
       type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '18px',
       contents: [
@@ -107,7 +106,7 @@ const adminFlex: LineMessage = {
           type: 'box', layout: 'horizontal', margin: 'md',
           contents: [
             { type: 'text', text: 'โทร', size: 'sm', color: MUTED, flex: 1 },
-            { type: 'text', text: PHONE_DISPLAY, size: 'lg', weight: 'bold', color: GREEN, flex: 4 },
+            { type: 'text', text: k.display, size: 'lg', weight: 'bold', color: GREEN, flex: 4 },
           ],
         },
       ],
@@ -115,12 +114,12 @@ const adminFlex: LineMessage = {
     footer: {
       type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
       contents: [
-        callButton('primary'),
+        callButton('primary', k),
         { type: 'button', style: 'secondary', height: 'sm', action: { type: 'uri', label: 'จองที่จอดรถ', uri: liffUrl('/book') } },
       ],
     },
   },
-};
+});
 
 const bookFlex = (p: P): LineMessage => ({
   type: 'flex',
@@ -140,19 +139,20 @@ export async function POST(req: Request) {
   if (!verifySignature(body, req.headers.get('x-line-signature'))) return json({ error: 'bad signature' }, 401);
   const { events } = JSON.parse(body) as { events: Event[] };
 
+  const k = await getContact();
   await Promise.all(events.map(async (e) => {
     if (!e.replyToken) return;
     if (e.type === 'follow') {
       return reply(e.replyToken, [
         { type: 'image', originalContentUrl: `${base()}/welcome.png`, previewImageUrl: `${base()}/welcome.png` },
-        { type: 'text', text: `ยินดีต้อนรับสู่ Backyard Airport · The Hangar\nจองที่จอดและรถรับส่งได้ตลอด 24 ชั่วโมงจากเมนูด้านล่าง\nคุยกับแอดมิน 08:00–20:00 · โทร ${PHONE_DISPLAY}` },
+        { type: 'text', text: `ยินดีต้อนรับสู่ Backyard Airport · The Hangar\nจองที่จอดและรถรับส่งได้ตลอด 24 ชั่วโมงจากเมนูด้านล่าง\nคุยกับแอดมิน ${k.hours} · โทร ${k.display}` },
       ]);
     }
     const text = e.type === 'message' && e.message?.type === 'text' ? e.message.text ?? '' : '';
     // type "myid" in the chat to get your LINE user id (for ALERT_LINE_USER_IDS). Reply messages are free.
     if (/^\s*myid\s*$/i.test(text) && e.source?.userId) return reply(e.replyToken, [{ type: 'text', text: `LINE user ID ของคุณ:\n${e.source.userId}` }]);
-    if (/ราคา|เงื่อนไข/.test(text)) return reply(e.replyToken, [priceFlex(await prices())]);
-    if (/แอดมิน|ติดต่อ|โทร/.test(text)) return reply(e.replyToken, [adminFlex]);
+    if (/ราคา|เงื่อนไข/.test(text)) return reply(e.replyToken, [priceFlex(await prices(), k)]);
+    if (/แอดมิน|ติดต่อ|โทร/.test(text)) return reply(e.replyToken, [adminFlex(k)]);
     if (/จอง/.test(text)) return reply(e.replyToken, [bookFlex(await prices())]);
   }));
   return json({ ok: true });

@@ -33,6 +33,8 @@ export default function MyBookings() {
   const [pts, setPts] = useState<Points | null>(null);
   const [showMoves, setShowMoves] = useState(false);
   const [mem, setMem] = useState<Member | null>(null);
+  const [shop, setShop] = useState<{ shop_phone?: string; admin_hours?: string; reschedule_min_days?: number } | null>(null);
+  useEffect(() => { fetch('/api/prices').then((r) => (r.ok ? r.json() : null)).then((j) => j && setShop(j)).catch(() => {}); }, []);
   useEffect(() => {
     if (!liff.ready) return;
     fetch('/api/my', { headers: authHeaders(liff.idToken) })
@@ -99,7 +101,7 @@ export default function MyBookings() {
             </div>
           );
         })}
-        <p className="small">ต้องการเลื่อนวัน? ทักแอดมินในแชท (08:00–20:00) ต้องเลื่อนล่วงหน้าอย่างน้อย 7 วัน</p>
+        <p className="small">ต้องการเลื่อนวัน? ทักแอดมินในแชท ({shop?.admin_hours ?? '08:00–20:00'}) ต้องเลื่อนล่วงหน้าอย่างน้อย {shop?.reschedule_min_days ?? 7} วัน{shop?.shop_phone ? <> · <a href={`tel:${shop.shop_phone}`}>โทร {shop.shop_phone.replace(/^(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3')}</a></> : null}</p>
       </div>
     </main>
   );

@@ -22,6 +22,7 @@ const ERR: Record<string, string> = {
   vehicle_busy: 'รถคันนี้มีเที่ยวอื่นในช่วงเวลาใกล้กัน',
   not_enough_points: 'แต้มของลูกค้าไม่พอให้หัก',
   invalid_points: 'จำนวนแต้มไม่ถูกต้อง หรือยังไม่ได้ใส่เหตุผล',
+  invalid_phone: 'เบอร์โทรไม่ถูกต้อง (ต้องขึ้นต้นด้วย 0 และมี 9–10 หลัก)',
   points_over_limit: 'เกินจำนวนแต้มที่หัวหน้าหน้างานให้ได้ต่อครั้ง ให้แอดมินเป็นคนให้',
   invalid_reward: 'ข้อมูลของรางวัลไม่ครบ (ชื่อ แต้มที่ใช้ อายุคูปอง 1–1095 วัน และคูปองส่วนลดค่าจอดต้องมีมูลค่า)',
   invalid_tier: 'ข้อมูลระดับไม่ถูกต้อง (ระดับแรกต้องเริ่มที่ 0 บาท และตัวคูณ 0.1–10)',
@@ -311,4 +312,8 @@ export async function givePoints(_: ActionResult, f: FormData): Promise<ActionRe
   if (error) return { error: thai(error.message) };
   revalidatePath('/ops'); revalidatePath('/admin/members');
   return { ok: `${pts > 0 ? 'เพิ่ม' : 'หัก'} ${Math.abs(pts)} แต้มแล้ว · ลูกค้ามี ${data} แต้ม` };
+}
+
+export async function setContact(_: ActionResult, f: FormData): Promise<ActionResult> {
+  return run('admin_set_contact', { p_phone: str(f, 'phone'), p_hours: str(f, 'hours') }, 'บันทึกเบอร์โทรและเวลาติดต่อแล้ว · มีผลกับทุกข้อความทันที', ['/admin/settings']);
 }

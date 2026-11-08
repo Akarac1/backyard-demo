@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 /** Public: prices and rules shown on the booking page (set by the admin in /admin/settings). */
 export async function GET() {
   const { data, error } = await db().from('settings')
-    .select('price_per_day, shuttle_price, extra_price_per_day, hold_minutes, reschedule_min_days, pickup_meeting_point, member_discount, member_discount_min_days, member_discount_needs_shuttle').eq('id', 1).single();
+    .select('price_per_day, shuttle_price, extra_price_per_day, hold_minutes, reschedule_min_days, pickup_meeting_point, member_discount, member_discount_min_days, member_discount_needs_shuttle, shop_phone, admin_hours').eq('id', 1).single();
   if (error) return json({ error: 'unavailable' }, 500);
   return json(data);
 }

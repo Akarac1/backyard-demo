@@ -1,6 +1,6 @@
 import { db } from '@/lib/supabase';
 import { ActionForm, Submit } from '@/components/ActionForm';
-import { updateSettings } from '../actions';
+import { setContact, updateSettings } from '../actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,6 +16,15 @@ export default async function SettingsPage() {
   return (
     <main className="page narrow">
       <header className="page-head"><div><h1>ตั้งค่าร้าน</h1><p>มีผลกับการจองใหม่ทันที การจองที่จ่ายแล้วไม่เปลี่ยนราคา</p></div></header>
+      <section className="panel">
+        <h2>ติดต่อร้าน</h2>
+        <p className="hint">ใช้ทุกจุด: ปุ่มโทรในการ์ด LINE ทุกใบ · ข้อความตอบเรื่องราคาและติดต่อแอดมิน · ข้อความต้อนรับเพื่อนใหม่ · หน้าเรียกรถ · หน้าสมาชิก &amp; การจอง</p>
+        <ActionForm action={setContact} className="form grid2">
+          <label>เบอร์โทรร้าน<input name="phone" type="tel" defaultValue={s.shop_phone ?? ''} placeholder="0812345678" required /><small>ไม่ต้องใส่ขีด ระบบจัดรูปแบบให้</small></label>
+          <label>เวลาตอบแชทของแอดมิน<input name="hours" defaultValue={s.admin_hours ?? '08:00–20:00'} required /><small>เช่น 08:00–20:00 หรือ ทุกวัน 07:00–22:00</small></label>
+          <div className="form-actions span2"><Submit>บันทึกข้อมูลติดต่อ</Submit></div>
+        </ActionForm>
+      </section>
       <ActionForm action={updateSettings} className="stack">
         <section className="panel">
           <h2>ที่จอด</h2>
