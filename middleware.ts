@@ -1,20 +1,23 @@
 import { NextResponse, type NextRequest } from 'next/server';
+import { homeFor, readSession, rolesFor, SESSION_COOKIE } from '@/lib/session';
 
-// Basic auth.
-//   /admin, /api/admin : user "admin", password ADMIN_PASSWORD
-//   /exec              : user "exec",  password EXEC_PASSWORD (the admin login also works)
-export function middleware(req: NextRequest) {
-  const header = req.headers.get('authorization') ?? '';
-  const isExec = req.nextUrl.pathname.startsWith('/exec');
-  if (header.startsWith('Basic ')) {
-    const [user, pwd] = atob(header.slice(6)).split(':');
-    const admin = process.env.ADMIN_PASSWORD;
-    const exec = process.env.EXEC_PASSWORD;
-    if (admin && user === 'admin' && pwd === admin) return NextResponse.next();
-    if (isExec && exec && user === 'exec' && pwd === exec) return NextResponse.next();
-  }
-  const realm = isExec ? 'Backyard Executive' : 'Backyard Admin';
-  return new NextResponse('ต้องเข้าสู่ระบบ', { status: 401, headers: { 'WWW-Authenticate': `Basic realm="${realm}"` } });
+// Staff pages need a signed-in user with the right role.
+//   /admin, /api/admin : admin
+//   /exec, /account    : admin or exec
+export async function middleware(req: NextRequest) {
+  const path = req.nextUrl.pathname;
+  const roles = rolesFor(path);
+  if (!roles) return NextResponse.next();
+
+  const s = await readSession(req.cookies.get(SESSION_COOKIE)?.value);
+  if (s && roles.includes(s.role)) return NextResponse.next();
+
+  if (path.startsWith('/api/')) return NextResponse.json({ error: 'not_allowed' }, { status: 401 });
+  const url = req.nextUrl.clone();
+  if (s) { url.pathname = homeFor(s.role); url.search = ''; return NextResponse.redirect(url); }
+  url.pathname = '/login';
+  url.search = `?next=${encodeURIComponent(path + req.nextUrl.search)}`;
+  return NextResponse.redirect(url);
 }
 
-export const config = { matcher: ['/admin/:path*', '/api/admin/:path*', '/exec/:path*', '/exec'] };
+export const config = { matcher: ['/admin/:path*', '/api/admin/:path*', '/exec/:path*', '/account/:path*'] };

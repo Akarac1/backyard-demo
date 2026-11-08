@@ -44,21 +44,16 @@ export default async function ExecPage({ searchParams }: { searchParams: Promise
   const prevLabel = g.key === 'day' ? 'เมื่อวาน' : `${g.label.replace('ราย', '')}ที่แล้ว`;
 
   return (
-    <main>
-      <div className="hero">
-        <div className="wide" style={{ padding: 0 }}>
-          <span className="chip">Backyard Airport · The Hangar</span>
-          <h1>รายงานผู้บริหาร</h1>
-          <p>ยอดลูกค้าที่เข้าใช้บริการและรายได้ · {g.span}</p>
-          <nav className="tabs" aria-label="เลือกช่วงเวลา">
-            {GRAINS.map((x) => (
-              <Link key={x.key} href={`/exec?p=${x.key}`} className={x.key === g.key ? 'on' : ''} aria-current={x.key === g.key ? 'page' : undefined}>{x.label}</Link>
-            ))}
-          </nav>
-        </div>
-      </div>
-
-      <div className="wide">
+    <main className="page">
+      <header className="page-head">
+        <div><h1>รายงานผู้บริหาร</h1><p>ยอดลูกค้าที่เข้าใช้บริการและรายได้ · {g.span}</p></div>
+      </header>
+      <nav className="seg" aria-label="เลือกช่วงเวลา">
+        {GRAINS.map((x) => (
+          <Link key={x.key} href={`/exec?p=${x.key}`} className={x.key === g.key ? 'on' : ''} aria-current={x.key === g.key ? 'page' : undefined}>{x.label}</Link>
+        ))}
+      </nav>
+      <div>
         {error && <div className="alert bad">โหลดรายงานไม่สำเร็จ: {error}<br />ตรวจว่ารัน supabase/migrations/0003_exec_report.sql แล้ว</div>}
 
         {cur && <>

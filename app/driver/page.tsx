@@ -1,5 +1,5 @@
 import { db } from '@/lib/supabase';
-import { addDays, thDate, thTime, todayBkk } from '@/lib/format';
+import { addDays, bkkDay, thDate, thTime, todayBkk } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,7 +38,7 @@ export default async function DriverPage({ searchParams }: { searchParams: Promi
               <div key={t.id} className="trip">
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <b>{thTime(t.pickup_at)} · {t.direction === 'to_airport' ? 'รับที่ลาน → ส่งชั้น 4' : 'รับชั้น 2 ประตู 4 → ลาน'}</b>
-                  <span className="small">{thDate(t.pickup_at.slice(0, 10))}</span>
+                  <span className="small">{thDate(bkkDay(t.pickup_at))}</span>
                 </div>
                 <div>{t.bookings?.customers?.name} · {t.pax} คน · {t.bookings?.plate}</div>
                 {t.flight_number && <div className="small">ไฟลต์ {t.flight_number} · ทักถามลูกค้าก่อนออกรถ</div>}

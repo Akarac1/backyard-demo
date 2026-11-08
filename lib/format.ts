@@ -40,3 +40,8 @@ export function dbErrorToThai(msg: string): string {
   };
   return map[msg] ?? 'เกิดข้อผิดพลาด ลองใหม่อีกครั้ง';
 }
+
+/** timestamptz -> 'YYYY-MM-DD' in Bangkok (a UTC timestamp's date can be the day before) */
+export function bkkDay(ts: string): string {
+  return new Date(ts).toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });
+}

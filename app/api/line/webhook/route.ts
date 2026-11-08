@@ -1,5 +1,13 @@
 import { reply, verifySignature, type LineMessage } from '@/lib/line';
 import { json } from '@/lib/request';
+import { db } from '@/lib/supabase';
+
+type P = { price_per_day: number; shuttle_price: number; extra_price_per_day: number; reschedule_min_days: number };
+const DEFAULT_P: P = { price_per_day: 100, shuttle_price: 300, extra_price_per_day: 120, reschedule_min_days: 7 };
+async function prices(): Promise<P> {
+  const { data } = await db().from('settings').select('price_per_day, shuttle_price, extra_price_per_day, reschedule_min_days').eq('id', 1).maybeSingle();
+  return (data as P | null) ?? DEFAULT_P;
+}
 
 // Everything here answers with reply messages, which do not count against the LINE OA quota.
 type Event = { type: string; replyToken?: string; message?: { type: string; text?: string } };
@@ -50,18 +58,18 @@ const callButton = (style: 'primary' | 'secondary') => ({
   action: { type: 'uri', label: `โทร ${PHONE_DISPLAY}`, uri: `tel:${PHONE}` },
 });
 
-const priceFlex: LineMessage = {
+const priceFlex = (p: P): LineMessage => ({
   type: 'flex',
-  altText: 'ราคา: ที่จอด 100 บาท/วัน · รถรับส่งไป-กลับ 300 บาท',
+  altText: `ราคา: ที่จอด ${p.price_per_day} บาท/วัน · รถรับส่งไป-กลับ ${p.shuttle_price} บาท`,
   contents: {
     type: 'bubble',
     header: header('ราคาและเงื่อนไข', 'Backyard Airport · The Hangar · ใกล้สุวรรณภูมิ 15 นาที'),
     body: {
       type: 'box', layout: 'vertical', spacing: 'lg', paddingAll: '18px',
       contents: [
-        priceRow('ที่จอดรถ', '100', 'บาท / วัน'),
-        priceRow('รถรับส่งไป-กลับ', '300', 'บาท / การจอง', 'สนามบินสุวรรณภูมิ · ไม่เกิน 7 คน · ต้องจองที่จอดด้วย'),
-        priceRow('จอดเกินหรือเพิ่มวัน', '120', 'บาท / วัน'),
+        priceRow('ที่จอดรถ', String(p.price_per_day), 'บาท / วัน'),
+        priceRow('รถรับส่งไป-กลับ', String(p.shuttle_price), 'บาท / การจอง', 'สนามบินสุวรรณภูมิ · ไม่เกิน 7 คน · ต้องจองที่จอดด้วย'),
+        priceRow('จอดเกินหรือเพิ่มวัน', String(p.extra_price_per_day), 'บาท / วัน'),
         { type: 'separator', color: '#E4E9E5' },
         { type: 'text', text: 'เงื่อนไข', size: 'sm', weight: 'bold', color: GREEN },
         {
@@ -69,7 +77,7 @@ const priceFlex: LineMessage = {
           contents: [
             bullet('นับวันตามปฏิทิน รวมวันเข้าและวันออก'),
             bullet('จ่ายเต็มจำนวนตอนจองผ่าน PromptPay'),
-            bullet('ไม่คืนเงิน เลื่อนวันได้ 1 ครั้ง ล่วงหน้าอย่างน้อย 7 วัน ภายใน 1 ปีนับจากวันจอง'),
+            bullet(`ไม่คืนเงิน เลื่อนวันได้ 1 ครั้ง ล่วงหน้าอย่างน้อย ${p.reschedule_min_days} วัน ภายใน 1 ปีนับจากวันจอง`),
           ],
         },
       ],
@@ -82,7 +90,7 @@ const priceFlex: LineMessage = {
       ],
     },
   },
-};
+});
 
 const adminFlex: LineMessage = {
   type: 'flex',
@@ -114,18 +122,18 @@ const adminFlex: LineMessage = {
   },
 };
 
-const bookFlex: LineMessage = {
+const bookFlex = (p: P): LineMessage => ({
   type: 'flex',
   altText: 'จองที่จอดรถ + รถรับส่งสุวรรณภูมิ',
   contents: {
     type: 'bubble', size: 'kilo',
-    header: header('จองที่จอดรถ', 'จอด 100 บาท/วัน · รถรับส่งไป-กลับ 300 บาท'),
+    header: header('จองที่จอดรถ', `จอด ${p.price_per_day} บาท/วัน · รถรับส่งไป-กลับ ${p.shuttle_price} บาท`),
     footer: {
       type: 'box', layout: 'vertical', paddingAll: '14px',
       contents: [{ type: 'button', style: 'primary', color: GOLD, height: 'sm', action: { type: 'uri', label: 'จองเลย', uri: liffUrl('/book') } }],
     },
   },
-};
+});
 
 export async function POST(req: Request) {
   const body = await req.text();
@@ -141,9 +149,9 @@ export async function POST(req: Request) {
       ]);
     }
     const text = e.type === 'message' && e.message?.type === 'text' ? e.message.text ?? '' : '';
-    if (/ราคา|เงื่อนไข/.test(text)) return reply(e.replyToken, [priceFlex]);
+    if (/ราคา|เงื่อนไข/.test(text)) return reply(e.replyToken, [priceFlex(await prices())]);
     if (/แอดมิน|ติดต่อ|โทร/.test(text)) return reply(e.replyToken, [adminFlex]);
-    if (/จอง/.test(text)) return reply(e.replyToken, [bookFlex]);
+    if (/จอง/.test(text)) return reply(e.replyToken, [bookFlex(await prices())]);
   }));
   return json({ ok: true });
 }

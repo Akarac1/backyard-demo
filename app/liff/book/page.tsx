@@ -3,8 +3,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authHeaders, useLiff } from '../useLiff';
 
-const PRICE_PER_DAY = 100;
-const SHUTTLE_PRICE = 300;
+type Prices = { price_per_day: number; shuttle_price: number; hold_minutes: number; reschedule_min_days: number; pickup_meeting_point: string };
+const DEFAULT_PRICES: Prices = { price_per_day: 100, shuttle_price: 300, hold_minutes: 15, reschedule_min_days: 7, pickup_meeting_point: 'ชั้น 2 ประตู 4' };
 
 function todayBkk() {
   return new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });
@@ -24,13 +24,15 @@ export default function BookPage() {
     shuttle: true, pax: 2, outboundTime: '', returnFlight: '', returnLanding: '', flightType: 'international',
   });
   const [avail, setAvail] = useState<Avail[] | null>(null);
+  const [pr, setPr] = useState<Prices>(DEFAULT_PRICES);
+  useEffect(() => { fetch('/api/prices').then((r) => (r.ok ? r.json() : null)).then((p) => p && setPr(p)).catch(() => {}); }, []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => { if (liff.name && !f.name) setF((x) => ({ ...x, name: liff.name! })); }, [liff.name]); // eslint-disable-line
 
   const days = f.end >= f.start ? daysBetween(f.start, f.end) : 0;
-  const total = days * PRICE_PER_DAY + (f.shuttle ? SHUTTLE_PRICE : 0);
+  const total = days * pr.price_per_day + (f.shuttle ? pr.shuttle_price : 0);
 
   useEffect(() => {
     if (!f.start || !f.end || f.end < f.start) { setAvail(null); return; }
@@ -68,7 +70,7 @@ export default function BookPage() {
       <div className="hero">
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}><img src="/logo.png" alt="Backyard Airport The Hangar" width={56} height={54} /><span className="chip">ใกล้สุวรรณภูมิ · ขับ 15 นาที</span></div>
         <h1>จองที่จอดรถ</h1>
-        <p>จอดวันละ 100 บาท · รถรับส่งไป-กลับ 300 บาท</p>
+        <p>จอดวันละ {pr.price_per_day} บาท · รถรับส่งไป-กลับ {pr.shuttle_price} บาท</p>
       </div>
       <form className="wrap" onSubmit={submit}>
         <div className="card">
@@ -94,7 +96,7 @@ export default function BookPage() {
         <div className="card">
           <h2>รถรับส่งไป-กลับสนามบิน</h2>
           <div className="toggle">
-            <button type="button" className={f.shuttle ? 'on' : ''} onClick={() => setF({ ...f, shuttle: true })}>ใช้ (+300 บาท)</button>
+            <button type="button" className={f.shuttle ? 'on' : ''} onClick={() => setF({ ...f, shuttle: true })}>ใช้ (+{pr.shuttle_price} บาท)</button>
             <button type="button" className={!f.shuttle ? 'on' : ''} onClick={() => setF({ ...f, shuttle: false })}>ไม่ใช้</button>
           </div>
           {f.shuttle && (
@@ -114,18 +116,18 @@ export default function BookPage() {
                     <option value="international">ต่างประเทศ</option><option value="domestic">ในประเทศ</option>
                   </select></div>
               </div>
-              <p className="small">คนขับจะรอรับที่ชั้น 2 ประตู 4 หลังเครื่องลง และจะทักแชทหาคุณก่อนออกรถ</p>
+              <p className="small">คนขับจะรอรับที่{pr.pickup_meeting_point} หลังเครื่องลง และจะทักแชทหาคุณก่อนออกรถ</p>
             </>
           )}
         </div>
 
         <div className="card">
-          <div className="price"><span>ที่จอด {days} วัน × 100</span><span>{days * PRICE_PER_DAY} บาท</span></div>
-          {f.shuttle && <div className="price"><span>รถรับส่งไป-กลับ</span><span>300 บาท</span></div>}
+          <div className="price"><span>ที่จอด {days} วัน × {pr.price_per_day}</span><span>{days * pr.price_per_day} บาท</span></div>
+          {f.shuttle && <div className="price"><span>รถรับส่งไป-กลับ</span><span>{pr.shuttle_price} บาท</span></div>}
           <div className="price total"><span>รวม</span><span>{total.toLocaleString('th-TH')} บาท</span></div>
           {error && <div className="alert bad">{error}</div>}
           <button className="primary" disabled={busy || !!full || days < 1 || !liff.ready}>{busy ? 'กำลังจอง…' : 'จองและชำระเงิน'}</button>
-          <p className="small">ระบบกันที่ให้ 15 นาทีระหว่างชำระเงิน · ไม่คืนเงิน แต่เลื่อนวันได้ 1 ครั้ง (ล่วงหน้า 7 วัน)</p>
+          <p className="small">ระบบกันที่ให้ {pr.hold_minutes} นาทีระหว่างชำระเงิน · ไม่คืนเงิน แต่เลื่อนวันได้ 1 ครั้ง (ล่วงหน้า {pr.reschedule_min_days} วัน)</p>
         </div>
       </form>
     </main>

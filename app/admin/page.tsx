@@ -1,138 +1,192 @@
+import Link from 'next/link';
 import { db } from '@/lib/supabase';
-import { addDays, baht, thDate, thTime, todayBkk } from '@/lib/format';
-import { ActionButton } from './ActionButton';
+import { requireStaff } from '@/lib/auth';
+import { addDays, bkkDay, thDate, thTime, todayBkk } from '@/lib/format';
+import { DIRECTION, StatusTag } from '@/lib/labels';
+import { ActionButton } from '@/components/ActionForm';
+import { autoAssign, confirmSlip, lprDone, quickSearch, setStatus } from './actions';
 
 export const dynamic = 'force-dynamic';
 
-type Occ = { day: string; used: number; total_spots: number; reserve_spots: number; free_total: number };
-type Trip = {
-  id: string; direction: 'to_airport' | 'from_airport'; pax: number; pickup_at: string | null; status: string; flight_number: string | null;
-  vehicles: { name: string } | null; bookings: { code: string; plate: string; customers: { name: string; phone: string } | null } | null;
-};
+type Occ = { day: string; used: number; total_spots: number; reserve_spots: number };
+type Row = { id: string; code: string; plate: string; plate_province: string; status: string; shuttle: boolean; pax: number | null; start_date: string; end_date: string; customers: { name: string; phone: string } | null };
+type Trip = { id: string; direction: string; pax: number; pickup_at: string; flight_number: string | null; vehicles: { name: string } | null; bookings: { id: string; code: string; plate: string; customers: { name: string; phone: string } | null } | null };
 
-export default async function AdminPage() {
+const DAYS = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
+const n = (v: number) => v.toLocaleString('th-TH');
+
+export default async function AdminHome() {
+  const staff = await requireStaff(['admin']);
   const today = todayBkk();
   const sb = db();
-  const [occ, arrivals, departures, payments, lpr, trips] = await Promise.all([
-    sb.from('v_occupancy_30d').select('*'),
-    sb.from('bookings').select('id, code, plate, plate_province, shuttle, pax, status, customers(name, phone)').eq('start_date', today).in('status', ['confirmed', 'checked_in']),
-    sb.from('bookings').select('id, code, plate, status, end_date').eq('end_date', today).in('status', ['confirmed', 'checked_in']),
-    sb.from('payments').select('id, amount, kind, slip_path, created_at, bookings(code, plate, status)').eq('status', 'pending').not('slip_path', 'is', null).order('created_at'),
-    sb.from('lpr_sync').select('id, plate, plate_province, action, valid_from, valid_to, created_at').neq('status', 'done').order('created_at'),
-    sb.from('shuttle_trips').select('id, direction, pax, pickup_at, status, flight_number, vehicles(name), bookings(code, plate, customers(name, phone))')
-      .gte('pickup_at', `${today}T00:00:00+07:00`).lt('pickup_at', `${addDays(today, 3)}T00:00:00+07:00`)
-      .neq('status', 'cancelled').order('pickup_at'),
+  const sel = 'id, code, plate, plate_province, status, shuttle, pax, start_date, end_date, customers(name, phone)';
+  const [occ, arrivals, departures, inLot, slips, lpr, trips, paidToday, owed] = await Promise.all([
+    sb.from('v_occupancy_30d').select('day, used, total_spots, reserve_spots').limit(14),
+    sb.from('bookings').select(sel).eq('start_date', today).in('status', ['confirmed', 'checked_in']).order('created_at'),
+    sb.from('bookings').select(sel).eq('end_date', today).in('status', ['confirmed', 'checked_in', 'checked_out']).order('created_at'),
+    sb.from('bookings').select('id', { count: 'exact', head: true }).eq('status', 'checked_in'),
+    sb.from('payments').select('id, amount, slip_path, created_at, bookings(id, code, plate)').eq('status', 'pending').eq('kind', 'booking').not('slip_path', 'is', null).order('created_at'),
+    sb.from('lpr_sync').select('id, plate, plate_province, action, valid_from, valid_to').neq('status', 'done').order('created_at'),
+    sb.from('shuttle_trips').select('id, direction, pax, pickup_at, flight_number, vehicles(name), bookings(id, code, plate, customers(name, phone))')
+      .gte('pickup_at', `${today}T00:00:00+07:00`).lt('pickup_at', `${addDays(today, 2)}T00:00:00+07:00`).neq('status', 'cancelled').order('pickup_at'),
+    sb.from('payments').select('amount').eq('status', 'verified').gte('paid_at', `${today}T00:00:00+07:00`),
+    sb.from('payments').select('id, amount, bookings(id, code, plate)').eq('status', 'pending').eq('kind', 'overstay'),
   ]);
 
   const days = (occ.data ?? []) as Occ[];
-  const todayOcc = days[0];
-  const unassigned = ((trips.data ?? []) as unknown as Trip[]).filter((t) => !t.vehicles).length;
+  const t0 = days[0];
+  const total = t0?.total_spots ?? 60;
+  const usedToday = t0?.used ?? 0;
+  const arr = (arrivals.data ?? []) as unknown as Row[];
+  const dep = (departures.data ?? []) as unknown as Row[];
+  const tripRows = (trips.data ?? []) as unknown as Trip[];
+  const unassigned = tripRows.filter((t) => !t.vehicles);
+  const revenueToday = (paidToday.data ?? []).reduce((a, p) => a + p.amount, 0);
 
-  // Signed links so the admin can open a slip image.
   const slipLinks: Record<string, string> = {};
-  for (const p of payments.data ?? []) {
-    if (p.slip_path) {
-      const { data } = await sb.storage.from('slips').createSignedUrl(p.slip_path, 3600);
-      if (data) slipLinks[p.id] = data.signedUrl;
-    }
+  for (const p of slips.data ?? []) {
+    const { data } = await sb.storage.from('slips').createSignedUrl(p.slip_path!, 3600);
+    if (data) slipLinks[p.id] = data.signedUrl;
   }
+  const todo = (slips.data?.length ?? 0) + (lpr.data?.length ?? 0) + unassigned.length + (owed.data?.length ?? 0);
+  const d = new Date(today + 'T00:00:00Z');
 
   return (
-    <main className="wide">
-      <h1 style={{ margin: '0 0 4px' }}>Backyard · หน้าแอดมิน</h1>
-      <p className="small" style={{ marginTop: 0 }}>{thDate(today)} · ข้อมูลล่าสุดทุกครั้งที่เปิดหน้า</p>
+    <main className="page">
+      <header className="page-head">
+        <div>
+          <h1>สวัสดี {staff.name}</h1>
+          <p>วัน{DAYS[d.getUTCDay()]}ที่ {thDate(today)} · {todo ? `มี ${todo} เรื่องรอจัดการ` : 'ไม่มีงานค้าง'}</p>
+        </div>
+        <form action={quickSearch} className="search">
+          <input name="q" placeholder="ค้นหา รหัส / ทะเบียน / ชื่อ / เบอร์" aria-label="ค้นหาการจอง" />
+          <button className="b b-primary">ค้นหา</button>
+        </form>
+      </header>
 
-      <div className="stats">
-        <div className="stat">จอดอยู่วันนี้<b>{todayOcc ? `${todayOcc.used}/${todayOcc.total_spots}` : '-'}</b></div>
-        <div className="stat">รถเข้าวันนี้<b>{arrivals.data?.length ?? 0}</b></div>
-        <div className="stat">รถออกวันนี้<b>{departures.data?.length ?? 0}</b></div>
-        <div className="stat">สลิปรอตรวจ<b>{payments.data?.length ?? 0}</b></div>
-        <div className="stat">เที่ยวรถยังไม่มีรถ<b>{unassigned}</b></div>
-      </div>
+      <section className="tiles">
+        <div className="tile">
+          <span>ที่จอดวันนี้</span>
+          <b>{usedToday}<small>/{total} คัน</small></b>
+          <div className="meter" role="img" aria-label={`ใช้ไป ${usedToday} จาก ${total}`}><i style={{ width: `${Math.min(100, (usedToday / total) * 100)}%` }} className={usedToday >= total - (t0?.reserve_spots ?? 5) ? 'full' : ''} /></div>
+          <em>ว่าง {Math.max(0, total - usedToday)} · สำรอง {t0?.reserve_spots ?? 5} ช่อง</em>
+        </div>
+        <div className="tile"><span>รถเข้าวันนี้</span><b>{arr.length}<small> คัน</small></b><em>มาแล้ว {arr.filter((r) => r.status === 'checked_in').length} คัน</em></div>
+        <div className="tile"><span>รถออกวันนี้</span><b>{dep.length}<small> คัน</small></b><em>รับรถแล้ว {dep.filter((r) => r.status === 'checked_out').length} คัน</em></div>
+        <div className="tile"><span>รถอยู่ในลานตอนนี้</span><b>{inLot.count ?? 0}<small> คัน</small></b><em>เช็กอินแล้วยังไม่รับรถ</em></div>
+        <div className="tile"><span>รับเงินวันนี้</span><b>{n(revenueToday)}<small> บาท</small></b><em><Link href="/exec">ดูรายงาน →</Link></em></div>
+      </section>
 
-      <div className="card">
-        <h2>ที่ว่าง 30 วันข้างหน้า</h2>
-        <div className="cal">
-          {days.map((d) => {
-            const cap = d.total_spots - d.reserve_spots;
-            const cls = d.used >= cap ? 'full' : d.used >= cap * 0.8 ? 'mid' : '';
-            return <div key={d.day} className={`day ${cls}`}>{thDate(d.day)}<b>{Math.max(0, cap - d.used)}</b>ว่าง</div>;
+      <section className="panel">
+        <h2>ต้องจัดการ {todo > 0 && <span className="count">{todo}</span>}</h2>
+        {todo === 0 && <p className="empty">ไม่มีงานค้าง เยี่ยมมาก</p>}
+        <ul className="todo">
+          {(slips.data ?? []).map((p) => {
+            const b = p.bookings as unknown as { id: string; code: string; plate: string } | null;
+            return (
+              <li key={p.id}>
+                <span className="todo-kind k-slip">สลิปรอตรวจ</span>
+                <div className="todo-main"><Link href={`/admin/bookings/${b?.id}`}><b>{b?.code}</b> · {b?.plate}</Link><small>{n(p.amount)} บาท · ส่งเมื่อ {thTime(p.created_at)}</small></div>
+                <div className="todo-act">
+                  {slipLinks[p.id] && <a className="b b-plain b-sm" href={slipLinks[p.id]} target="_blank" rel="noreferrer">ดูสลิป</a>}
+                  <ActionButton action={confirmSlip} fields={{ payment_id: p.id }} label="ยืนยันรับเงิน" variant="primary" confirm={`ยืนยันว่าได้รับเงิน ${n(p.amount)} บาทแล้ว?`} />
+                </div>
+              </li>
+            );
           })}
-        </div>
-        <p className="small">นับเฉพาะช่องที่เปิดให้จองล่วงหน้า ({days[0] ? days[0].total_spots - days[0].reserve_spots : 55} ช่อง) ไม่รวมช่องสำรอง</p>
+          {(lpr.data ?? []).map((r) => (
+            <li key={`l${r.id}`}>
+              <span className={`todo-kind ${r.action === 'add' ? 'k-add' : 'k-del'}`}>{r.action === 'add' ? 'เพิ่มทะเบียน' : 'ลบทะเบียน'}</span>
+              <div className="todo-main"><b>{r.plate}</b> {r.plate_province}<small>ระบบไม้กั้น · {r.valid_from && thDate(r.valid_from)} – {r.valid_to && thDate(r.valid_to)}</small></div>
+              <div className="todo-act"><ActionButton action={lprDone} fields={{ id: r.id }} label="ทำแล้ว" /></div>
+            </li>
+          ))}
+          {unassigned.map((t) => (
+            <li key={`t${t.id}`}>
+              <span className="todo-kind k-trip">ยังไม่มีรถ</span>
+              <div className="todo-main"><b>{thDate(bkkDay(t.pickup_at))} {thTime(t.pickup_at)}</b> · {DIRECTION[t.direction]} {t.pax} คน<small>{t.bookings?.customers?.name} · {t.bookings?.code}</small></div>
+              <div className="todo-act">
+                <ActionButton action={autoAssign} fields={{ id: t.id }} label="จัดรถอัตโนมัติ" />
+                <Link className="b b-plain b-sm" href="/admin/trips">เลือกเอง</Link>
+              </div>
+            </li>
+          ))}
+          {(owed.data ?? []).map((p) => {
+            const b = p.bookings as unknown as { id: string; code: string; plate: string } | null;
+            return (
+              <li key={`o${p.id}`}>
+                <span className="todo-kind k-slip">ค้างค่าจอดเพิ่ม</span>
+                <div className="todo-main"><Link href={`/admin/bookings/${b?.id}`}><b>{b?.code}</b> · {b?.plate}</Link><small>{n(p.amount)} บาท</small></div>
+                <div className="todo-act"><Link className="b b-plain b-sm" href={`/admin/bookings/${b?.id}`}>เปิดการจอง</Link></div>
+              </li>
+            );
+          })}
+        </ul>
+      </section>
+
+      <div className="cols">
+        <section className="panel">
+          <h2>รถเข้าวันนี้ <span className="count soft">{arr.length}</span></h2>
+          {!arr.length && <p className="empty">ไม่มีรถเข้าวันนี้</p>}
+          <ul className="list">
+            {arr.map((r) => (
+              <li key={r.id}>
+                <div><Link href={`/admin/bookings/${r.id}`}><b>{r.plate}</b> {r.plate_province}</Link><small>{r.customers?.name} · <a href={`tel:${r.customers?.phone}`}>{r.customers?.phone}</a>{r.shuttle ? ` · รถรับส่ง ${r.pax} คน` : ''}</small></div>
+                {r.status === 'confirmed'
+                  ? <ActionButton action={setStatus} fields={{ id: r.id, status: 'checked_in' }} label="เช็กอิน" variant="primary" />
+                  : <StatusTag status={r.status} />}
+              </li>
+            ))}
+          </ul>
+        </section>
+        <section className="panel">
+          <h2>รถออกวันนี้ <span className="count soft">{dep.length}</span></h2>
+          {!dep.length && <p className="empty">ไม่มีรถออกวันนี้</p>}
+          <ul className="list">
+            {dep.map((r) => (
+              <li key={r.id}>
+                <div><Link href={`/admin/bookings/${r.id}`}><b>{r.plate}</b> {r.plate_province}</Link><small>{r.customers?.name} · <a href={`tel:${r.customers?.phone}`}>{r.customers?.phone}</a></small></div>
+                {r.status === 'checked_in'
+                  ? <ActionButton action={setStatus} fields={{ id: r.id, status: 'checked_out' }} label="รับรถแล้ว" variant="primary" />
+                  : <StatusTag status={r.status} />}
+              </li>
+            ))}
+          </ul>
+        </section>
       </div>
 
-      <div className="grid">
-        <div className="card">
-          <h2>เที่ยวรถรับส่ง 3 วัน</h2>
-          <table>
-            <thead><tr><th>เวลา</th><th>งาน</th><th>ลูกค้า</th><th>รถ</th></tr></thead>
-            <tbody>
-              {((trips.data ?? []) as unknown as Trip[]).map((t) => (
-                <tr key={t.id}>
-                  <td>{thDate(t.pickup_at!.slice(0, 10))}<br />{thTime(t.pickup_at)}</td>
-                  <td>{t.direction === 'to_airport' ? 'ส่งสนามบิน' : 'รับกลับ'} · {t.pax} คน{t.flight_number ? <><br /><span className="small">{t.flight_number}</span></> : null}</td>
-                  <td>{t.bookings?.customers?.name}<br /><span className="small">{t.bookings?.plate}</span></td>
-                  <td>{t.vehicles ? <span className="tag navy">{t.vehicles.name}</span> : <ActionButton url={`/api/admin/trips/${t.id}/assign`} label="จัดรถ" />}</td>
-                </tr>
-              ))}
-              {!trips.data?.length && <tr><td colSpan={4} className="small">ไม่มีเที่ยวรถ</td></tr>}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="card">
-          <h2>ทะเบียนที่ต้องเพิ่ม/ลบในระบบไม้กั้น</h2>
-          <table>
-            <thead><tr><th>ทะเบียน</th><th>งาน</th><th>ช่วงวันที่</th><th></th></tr></thead>
-            <tbody>
-              {(lpr.data ?? []).map((r) => (
-                <tr key={r.id}>
-                  <td>{r.plate}<br /><span className="small">{r.plate_province}</span></td>
-                  <td><span className={`tag ${r.action === 'add' ? 'amber' : ''}`}>{r.action === 'add' ? 'เพิ่ม' : 'ลบ'}</span></td>
-                  <td>{r.valid_from && thDate(r.valid_from)} – {r.valid_to && thDate(r.valid_to)}</td>
-                  <td><ActionButton url={`/api/admin/lpr/${r.id}/done`} label="ทำแล้ว" /></td>
-                </tr>
-              ))}
-              {!lpr.data?.length && <tr><td colSpan={4} className="small">ไม่มีงานค้าง</td></tr>}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="card">
-          <h2>สลิปที่ระบบตรวจไม่ผ่าน</h2>
-          <table>
-            <thead><tr><th>การจอง</th><th>ยอด</th><th>สลิป</th><th></th></tr></thead>
-            <tbody>
-              {(payments.data ?? []).map((p) => {
-                const bk = p.bookings as unknown as { code: string; plate: string } | null;
-                return (
-                  <tr key={p.id}>
-                    <td>{bk?.code}<br /><span className="small">{bk?.plate}</span></td>
-                    <td>{baht(p.amount)}</td>
-                    <td>{slipLinks[p.id] ? <a href={slipLinks[p.id]} target="_blank">ดูสลิป</a> : '-'}</td>
-                    <td><ActionButton url={`/api/admin/payments/${p.id}/confirm`} label="ยืนยัน" confirm="ยืนยันว่าได้รับเงินแล้ว?" /></td>
-                  </tr>
-                );
-              })}
-              {!payments.data?.length && <tr><td colSpan={4} className="small">ไม่มีสลิปรอตรวจ</td></tr>}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="card">
-          <h2>รถเข้าวันนี้</h2>
-          <table>
-            <thead><tr><th>รหัส</th><th>ทะเบียน</th><th>ลูกค้า</th></tr></thead>
-            <tbody>
-              {(arrivals.data ?? []).map((a) => {
-                const c = a.customers as unknown as { name: string; phone: string } | null;
-                return <tr key={a.id}><td>{a.code}</td><td>{a.plate}</td><td>{c?.name}<br /><a className="small" href={`tel:${c?.phone}`}>{c?.phone}</a></td></tr>;
-              })}
-              {!arrivals.data?.length && <tr><td colSpan={3} className="small">ไม่มี</td></tr>}
-            </tbody>
-          </table>
-        </div>
+      <div className="cols">
+        <section className="panel">
+          <div className="panel-head"><h2>รถรับส่ง วันนี้–พรุ่งนี้</h2><Link href="/admin/trips" className="link">ทั้งหมด →</Link></div>
+          {!tripRows.length && <p className="empty">ไม่มีเที่ยวรถ</p>}
+          <ul className="timeline">
+            {tripRows.map((t) => (
+              <li key={t.id} className={t.vehicles ? '' : 'warn'}>
+                <time>{bkkDay(t.pickup_at) === today ? '' : 'พรุ่งนี้ '}{thTime(t.pickup_at)}</time>
+                <div><b>{DIRECTION[t.direction]} · {t.pax} คน</b><small>{t.bookings?.customers?.name}{t.flight_number ? ` · ${t.flight_number}` : ''}</small></div>
+                <span className={t.vehicles ? 'st st-ok' : 'st st-wait'}>{t.vehicles?.name ?? 'ยังไม่มีรถ'}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+        <section className="panel">
+          <h2>ที่ว่าง 14 วันข้างหน้า</h2>
+          <p className="hint">เปิดให้ลูกค้าจอง {total - (t0?.reserve_spots ?? 5)} ช่อง ไม่รวมช่องสำรอง</p>
+          <ul className="avail">
+            {days.map((x) => {
+              const cap = x.total_spots - x.reserve_spots;
+              const free = Math.max(0, cap - x.used);
+              const tone = free === 0 ? 'full' : free <= cap * 0.2 ? 'low' : 'ok';
+              return (
+                <li key={x.day} className={tone}>
+                  <span>{thDate(x.day)}</span>
+                  <div className="bar"><i style={{ width: `${Math.min(100, (x.used / cap) * 100)}%` }} /></div>
+                  <b>{free === 0 ? 'เต็ม' : `ว่าง ${free}`}</b>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
       </div>
     </main>
   );
