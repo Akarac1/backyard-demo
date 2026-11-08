@@ -16,7 +16,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const form = await req.formData();
   const file = form.get('slip');
   if (!(file instanceof File) || file.size === 0) return json({ message: 'กรุณาแนบรูปสลิป' }, 400);
-  if (file.size > 5_000_000) return json({ message: 'รูปใหญ่เกิน 5 MB' }, 400);
+  if (file.size > 4_000_000) return json({ message: 'รูปใหญ่เกิน 4 MB' }, 400);
 
   const { data: payment } = await db().from('payments').select('*')
     .eq('booking_id', id).eq('kind', 'booking').eq('status', 'pending').maybeSingle();
@@ -30,9 +30,10 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   await db().from('bookings').update({ hold_expires_at: new Date(Date.now() + 60 * 60_000).toISOString() })
     .eq('id', id).eq('status', 'pending_payment');
 
-  const result = await verifySlip(file, payment.amount);
+  const result = await verifySlip(file, { amount: payment.amount, notBefore: new Date(payment.created_at), remark: `Backyard ${booking.code}` });
   if (!result.ok) {
-    const pending = result.reason === 'pending' || result.reason === 'error';
+    // pending/error/review: the slip is kept and shows up for the admin to confirm by hand
+    const pending = result.reason === 'pending' || result.reason === 'error' || result.reason === 'review';
     return json({ confirmed: false, pending, message: pending ? `${result.message} (กันที่ไว้ให้ 1 ชั่วโมง)` : result.message });
   }
 
