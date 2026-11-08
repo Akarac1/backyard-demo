@@ -16,8 +16,10 @@ export function useLiff(): LiffState {
       try {
         const liff = (await import('@line/liff')).default;
         await liff.init({ liffId });
-        if (!liff.isInClient() && !liff.isLoggedIn()) {
-          set({ ready: true, idToken: null, name: null, error: null }); // browser demo
+        if (!liff.isLoggedIn()) {
+          // opened from a plain link (LINE's in-app browser or a normal browser): sign in with LINE first,
+          // then LINE sends the customer back to this same page
+          liff.login({ redirectUri: window.location.href });
           return;
         }
         const profile = await liff.getProfile().catch(() => null);
