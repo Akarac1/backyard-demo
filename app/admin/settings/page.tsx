@@ -1,6 +1,7 @@
 import { db } from '@/lib/supabase';
 import { ActionForm, Submit } from '@/components/ActionForm';
 import { setContact, updateSettings } from '../actions';
+import { Vehicles } from './Vehicles';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,6 +26,7 @@ export default async function SettingsPage() {
           <div className="form-actions span2"><Submit>บันทึกข้อมูลติดต่อ</Submit></div>
         </ActionForm>
       </section>
+      <Vehicles />
       <ActionForm action={updateSettings} className="stack">
         <section className="panel">
           <h2>ที่จอด</h2>

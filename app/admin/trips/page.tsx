@@ -29,7 +29,7 @@ export default async function TripsPage({ searchParams }: { searchParams: Promis
       .select('id, direction, pax, pickup_at, flight_number, status, vehicle_id, assignment_locked, departed_at, arrived_at, completed_at, driver_note, note_resolved, called_at, welcome_sent_at, landing_at, bookings(id, code, plate, status, customers(name, phone))')
       .gte('pickup_at', `${day}T00:00:00+07:00`).lt('pickup_at', `${addDays(day, 1)}T00:00:00+07:00`)
       .neq('status', 'cancelled').order('pickup_at'),
-    sb.from('vehicles').select('id, name, seats').eq('active', true).order('seats'),
+    sb.from('vehicles').select('id, name, seats, plate').eq('active', true).order('seats'),
   ]);
   const trips = (data ?? []) as unknown as Trip[];
   const tabs = [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(today, i));
@@ -76,7 +76,7 @@ export default async function TripsPage({ searchParams }: { searchParams: Promis
               <label>รถ
                 <select name="vehicle_id" defaultValue={t.vehicle_id ?? ''}>
                   <option value="">— ยังไม่เลือก —</option>
-                  {(vehicles ?? []).map((v) => <option key={v.id} value={v.id} disabled={v.seats < t.pax}>{v.name} · {v.seats} ที่{v.seats < t.pax ? ' (ไม่พอ)' : ''}</option>)}
+                  {(vehicles ?? []).map((v) => <option key={v.id} value={v.id} disabled={v.seats < t.pax}>{v.name}{v.plate ? ` (${v.plate})` : ''} · {v.seats} ที่{v.seats < t.pax ? ' (ไม่พอ)' : ''}</option>)}
                 </select>
               </label>
               {t.direction === 'from_airport' && (

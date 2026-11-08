@@ -13,6 +13,9 @@ export type ActionResult = { ok?: string; error?: string } | null;
 const ERR: Record<string, string> = {
   not_allowed: 'ไม่มีสิทธิ์ทำรายการนี้ ลองออกจากระบบแล้วเข้าใหม่',
   not_found: 'ไม่พบข้อมูล อาจถูกลบหรือเปลี่ยนไปแล้ว',
+  invalid_vehicle: 'กรอกชื่อรถ และจำนวนที่นั่ง 1–30 ที่',
+  plate_taken: 'ทะเบียนนี้มีอยู่ในระบบแล้ว',
+  last_vehicle: 'ต้องมีรถที่ใช้งานอยู่อย่างน้อย 1 คัน',
   invalid_range: 'วันออกต้องไม่ก่อนวันเข้า',
   invalid_pax: 'จำนวนผู้โดยสารต้องอยู่ระหว่าง 1–7 คน',
   bad_status_change: 'เปลี่ยนสถานะแบบนี้ไม่ได้',
@@ -46,6 +49,8 @@ const ERR: Record<string, string> = {
 function thai(msg: string): string {
   if (msg.startsWith('full:')) return `วันที่ ${thDate(msg.slice(5))} ที่จอดเต็มแล้ว (รวมช่องสำรอง)`;
   if (msg.startsWith('full_after_hold_expired:')) return `หมดเวลากันที่ และวันที่ ${thDate(msg.split(':')[1])} เต็มแล้ว`;
+  if (msg.startsWith('vehicle_has_trips:')) return `รถคันนี้ยังมีงานรับส่งที่ยังไม่เสร็จ ${msg.split(':')[1]} งาน ย้ายงานไปคันอื่นในหน้ารถรับส่งก่อน แล้วค่อยลบ`;
+  if (msg.startsWith('seats_too_few:')) return `ลดที่นั่งไม่ได้ มีงานที่จัดให้คันนี้ไว้แล้ว ${msg.split(':')[1]} คน ย้ายงานนั้นก่อน หรือใส่ที่นั่งอย่างน้อย ${msg.split(':')[1]}`;
   return ERR[msg] ?? 'ทำรายการไม่สำเร็จ ลองใหม่อีกครั้ง';
 }
 
@@ -317,4 +322,22 @@ export async function givePoints(_: ActionResult, f: FormData): Promise<ActionRe
 
 export async function setContact(_: ActionResult, f: FormData): Promise<ActionResult> {
   return run('admin_set_contact', { p_phone: str(f, 'phone'), p_hours: str(f, 'hours') }, 'บันทึกเบอร์โทรและเวลาติดต่อแล้ว · มีผลกับทุกข้อความทันที', ['/admin/settings']);
+}
+
+// ---------- vehicles ----------
+export async function saveVehicle(_: ActionResult, f: FormData): Promise<ActionResult> {
+  const id = str(f, 'id') || null;
+  return run('admin_save_vehicle', {
+    p_id: id, p_name: str(f, 'name'), p_plate: str(f, 'plate'), p_model: str(f, 'model'), p_seats: num(f, 'seats'),
+    p_active: f.get('active') === 'on', p_note: str(f, 'note'),
+  }, id ? 'บันทึกข้อมูลรถแล้ว' : 'เพิ่มรถแล้ว', ['/admin/settings', '/admin/trips', '/admin/users', '/driver']);
+}
+
+export async function deleteVehicle(_: ActionResult, f: FormData): Promise<ActionResult> {
+  let actor: string;
+  try { actor = (await staffForAction(['admin'])).uid; } catch { return { error: ERR.not_allowed }; }
+  const { data, error } = await db().rpc('admin_delete_vehicle', { p_actor: actor, p_id: str(f, 'id') });
+  if (error) return { error: thai(error.message) };
+  ['/admin/settings', '/admin/trips', '/admin/users', '/driver'].forEach((p) => revalidatePath(p));
+  return { ok: data === 'retired' ? 'ลบรถแล้ว (ประวัติงานเดิมของคันนี้ยังอยู่ในรายงาน)' : 'ลบรถแล้ว' };
 }

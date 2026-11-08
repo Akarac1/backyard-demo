@@ -12,6 +12,8 @@ type Ctx = {
   flight: string | null;
   driver: string;
   driverPhone: string | null;
+  /** the shuttle: 'Toyota Commuter สีขาว · ฮห 1234' (empty when unknown) */
+  van: string;
   code: string;
   plate: string;
   name: string;
@@ -36,16 +38,23 @@ const dayTime = (ts: string) => `${thDate(bkkDay(ts))} · ${thTime(ts)} น.`;
 export async function tripContext(tripId: string, driverId: string, driverName: string): Promise<Ctx | null> {
   const sb = db();
   const { data: t } = await sb.from('shuttle_trips')
-    .select('id, booking_id, direction, pax, pickup_at, flight_number, called_at, bookings(code, plate, customers(name, line_user_id))')
+    .select('id, booking_id, direction, pax, pickup_at, flight_number, called_at, vehicle_id, bookings(code, plate, customers(name, line_user_id))')
     .eq('id', tripId).maybeSingle();
   if (!t) return null;
   const b = t.bookings as unknown as { code: string; plate: string; customers: { name: string; line_user_id: string } | null } | null;
   const [{ data: ret }, { data: st }, { data: me }] = await Promise.all([
     sb.from('shuttle_trips').select('pickup_at, flight_number').eq('booking_id', t.booking_id).eq('direction', 'from_airport').neq('status', 'cancelled').maybeSingle(),
     sb.from('settings').select('pickup_meeting_point, shop_phone').eq('id', 1).single(),
-    driverId ? sb.from('staff_users').select('phone').eq('id', driverId).maybeSingle() : Promise.resolve({ data: null }),
+    driverId ? sb.from('staff_users').select('phone, vehicle_id').eq('id', driverId).maybeSingle() : Promise.resolve({ data: null }),
   ]);
+  // the trip's vehicle, or the one the driver pressing the button drives
+  const vehicleId = (t.vehicle_id as string | null) ?? (me as { vehicle_id?: string | null } | null)?.vehicle_id ?? null;
+  const { data: v } = vehicleId
+    ? await sb.from('vehicles').select('plate, model').eq('id', vehicleId).maybeSingle()
+    : { data: null };
+  const van = [v?.model, v?.plate].filter(Boolean).join(' · ');
   return {
+    van,
     direction: t.direction, pax: t.pax, pickupAt: t.pickup_at, flight: t.flight_number,
     driver: driverName.replace(/\s*\(.*\)$/, ''), driverPhone: me?.phone ?? null,
     code: b?.code ?? '', plate: b?.plate ?? '', name: b?.customers?.name ?? '', lineUserId: b?.customers?.line_user_id ?? null,
@@ -132,7 +141,8 @@ function callButtons(c: Ctx, primaryDriver: boolean): Button[] {
   return out;
 }
 
-const driverRow = (c: Ctx): Row => ['คนขับ', c.driver];
+/** driver name, then the van (model · plate) when known */
+const driverRows = (c: Ctx): Row[] => [['คนขับ', c.driver], ...(c.van ? [['รถรับส่ง', c.van] as Row] : [])];
 
 /** The card sent to the customer when the driver changes the trip status. */
 export function statusMessage(c: Ctx, step: TripStep): LineMessage {
@@ -141,12 +151,12 @@ export function statusMessage(c: Ctx, step: TripStep): LineMessage {
   if (c.direction === 'to_airport') {
     if (step === 'arrived') return card({
       alt: 'รถรับส่งพร้อมแล้วที่ลาน Backyard', icon: '🚐', title: 'รถรับส่งพร้อมแล้ว', subtitle: 'เชิญขึ้นรถที่ลาน Backyard ได้เลย',
-      rows: [['ผู้โดยสาร', `${c.pax} ท่าน`], driverRow(c), ['รหัสการจอง', c.code]],
+      rows: [['ผู้โดยสาร', `${c.pax} ท่าน`], ...driverRows(c), ['รหัสการจอง', c.code]],
       buttons: callButtons(c, true),
     });
     if (step === 'en_route') return card({
       alt: 'กำลังเดินทางไปสนามบินสุวรรณภูมิ', icon: '🛫', title: 'กำลังไปสนามบิน', subtitle: 'ถึงสุวรรณภูมิในประมาณ 15 นาที',
-      rows: [['รถของคุณ', `${c.plate} · จอดปลอดภัยที่ลาน`], driverRow(c)],
+      rows: [['รถของคุณ', `${c.plate} · จอดปลอดภัยที่ลาน`], ...driverRows(c)],
     });
     return card({
       alt: `ถึงสนามบินแล้ว ขอให้เดินทางปลอดภัย${c.returnPickupAt ? ` · วันกลับ ${dayTime(c.returnPickupAt)}` : ''}`,
@@ -162,19 +172,19 @@ export function statusMessage(c: Ctx, step: TripStep): LineMessage {
     const eta = new Date(Date.now() + 15 * 60_000).toISOString();
     return card({
       alt: `คนขับรับทราบแล้ว กำลังไปจุดนัดรับ จะถึงประมาณ ${thTime(eta)} น.`, icon: '🚐', title: 'คนขับรับทราบแล้ว', subtitle: 'กำลังไปจุดนัดรับ ถึงในประมาณ 15 นาที',
-      rows: [['ถึงประมาณ', `${thTime(eta)} น.`], ['จุดนัดรับ', c.meetingPoint], driverRow(c)],
+      rows: [['ถึงประมาณ', `${thTime(eta)} น.`], ['จุดนัดรับ', c.meetingPoint], ...driverRows(c)],
       message: 'รอที่จุดนัดได้เลย คนขับจะส่งข้อความอีกครั้งเมื่อรถถึง',
       buttons: callButtons(c, false),
     });
   }
   if (step === 'en_route') return card({
     alt: `คนขับออกไปรับที่สนามบินแล้ว · จุดนัด ${c.meetingPoint}`, icon: '🚐', title: 'คนขับออกไปรับแล้ว', subtitle: `${c.driver} กำลังเดินทางไปสุวรรณภูมิ`,
-    rows: [['จุดนัดรับ', c.meetingPoint], ...(c.pickupAt ? [['เวลานัด', `${thTime(c.pickupAt)} น.`] as Row] : []), driverRow(c)],
+    rows: [['จุดนัดรับ', c.meetingPoint], ...(c.pickupAt ? [['เวลานัด', `${thTime(c.pickupAt)} น.`] as Row] : []), ...driverRows(c)],
     buttons: callButtons(c, false),
   });
   if (step === 'arrived') return card({
     alt: `รถถึงจุดนัดรับแล้ว · ${c.meetingPoint}`, icon: '📍', title: 'รถถึงจุดนัดรับแล้ว', subtitle: 'ออกจากโถงผู้โดยสารแล้วมาที่จุดนัดได้เลย',
-    rows: [['จุดนัดรับ', c.meetingPoint], ['ผู้โดยสาร', `${c.pax} ท่าน`], driverRow(c)],
+    rows: [['จุดนัดรับ', c.meetingPoint], ['ผู้โดยสาร', `${c.pax} ท่าน`], ...driverRows(c)],
     buttons: callButtons(c, true),
   });
   return card({
@@ -200,7 +210,7 @@ export function welcomeMessage(c: Ctx): LineMessage {
 export function noteMessage(c: Ctx, note: string): LineMessage {
   return card({
     alt: `แจ้งจากคนขับ: ${note}`, icon: '📢', title: 'แจ้งจากคนขับ', subtitle: c.direction === 'to_airport' ? 'รถรับส่งขาไปสนามบิน' : 'รถรับส่งขากลับ',
-    message: note, rows: [driverRow(c)], buttons: callButtons(c, true),
+    message: note, rows: driverRows(c), buttons: callButtons(c, true),
   });
 }
 
