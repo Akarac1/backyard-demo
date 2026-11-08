@@ -245,7 +245,7 @@ export async function saveTier(_: ActionResult, f: FormData): Promise<ActionResu
 export async function setTierOverride(_: ActionResult, f: FormData): Promise<ActionResult> {
   const bid = str(f, 'booking_id');
   return run('admin_set_tier_override', { p_customer: str(f, 'customer_id'), p_tier: str(f, 'tier') },
-    str(f, 'tier') ? 'กำหนดระดับให้ลูกค้าแล้ว' : 'กลับไปใช้ระดับตามยอดใช้จ่าย', [`/admin/bookings/${bid}`, '/admin/campaigns']);
+    str(f, 'tier') ? 'กำหนดระดับให้ลูกค้าแล้ว' : 'กลับไปใช้ระดับตามยอดใช้จ่าย', [...(bid ? [`/admin/bookings/${bid}`] : []), '/admin/campaigns', '/admin/members']);
 }
 
 // 'YYYY-MM-DD' (start of day, or end of day for an end date) or 'YYYY-MM-DDTHH:MM', Bangkok time

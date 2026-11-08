@@ -1,6 +1,6 @@
 import { db } from '@/lib/supabase';
 import { ActionButton, ActionForm, Submit } from '@/components/ActionForm';
-import { cancelCoupon, importMembers, removeMember, saveReward, setMemberDiscount, setMemberDiscountRules, setPointsSettings, takeCoupon } from '../actions';
+import { cancelCoupon, importMembers, removeMember, saveReward, setMemberDiscount, setMemberDiscountRules, setPointsSettings, setTierOverride, takeCoupon } from '../actions';
 import { thDate, bkkDay } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
@@ -10,8 +10,10 @@ type Disc = { id: string; code: string; discount_amount: number; discount_reason
 
 const fmtPhone = (p: string) => p.length === 10 ? `${p.slice(0, 3)}-${p.slice(3, 6)}-${p.slice(6)}` : p;
 
-export default async function MembersPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
-  const { q } = await searchParams;
+type Found = { id: string; name: string; phone: string; member_no: string | null; tier: string; tier_name: string; manual: boolean; spend: number; points: number; bookings: number; last_start: string | null };
+
+export default async function MembersPage({ searchParams }: { searchParams: Promise<{ q?: string; c?: string }> }) {
+  const { q, c } = await searchParams;
   const sb = db();
   const digits = (q ?? '').replace(/\D/g, '');
   let list = sb.from('member_phones').select('phone, name, created_at', { count: 'exact' }).order('created_at', { ascending: false }).limit(50);
@@ -62,6 +64,12 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
     </ActionForm>
   );
   const rows = (used ?? []) as unknown as Disc[];
+  const cq = (c ?? '').replace(/[%,()\\]/g, ' ').trim().slice(0, 40);
+  const [{ data: found }, { data: tierList }] = await Promise.all([
+    sb.rpc('customer_lookup', { p_q: cq || null, p_only_manual: !cq }),
+    sb.from('member_tiers').select('code, name, min_spend').order('sort'),
+  ]);
+  const people = (found ?? []) as Found[];
   const referral = rows.filter((r) => r.discount_reason === 'referral');
   const sum = rows.reduce((a, r) => a + r.discount_amount, 0);
 
@@ -70,6 +78,41 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
       <header className="page-head">
         <div><h1>สมาชิก แต้ม และส่วนลด</h1><p>ลูกค้าเก่า หรือลูกค้าใหม่ที่กรอกเบอร์ลูกค้าเก่าที่แนะนำ ได้ส่วนลดอัตโนมัติตอนจอง</p></div>
       </header>
+
+      <section className="panel" id="tier">
+        <div className="panel-head">
+          <h2>ระดับสมาชิกรายคน</h2>
+          <form className="search" action="/admin/members#tier"><input name="c" defaultValue={c ?? ''} placeholder="ชื่อ / เบอร์โทร / เลขสมาชิก (BY…)" aria-label="ค้นหาลูกค้า" /><button className="b b-primary">ค้นหา</button></form>
+        </div>
+        <p className="hint">ปกติระดับคิดจากยอดใช้บริการ 12 เดือนอัตโนมัติ · กำหนดเองได้สำหรับลูกค้า VIP หรือกรณีพิเศษ ระดับที่กำหนดเองจะไม่ขึ้นลงตามยอดจนกว่าจะกด “ตามยอดใช้จ่าย”</p>
+        {!cq && <h3 style={{ margin: '4px 0 8px' }}>ลูกค้าที่กำหนดระดับเอง ({people.length})</h3>}
+        {!people.length ? <p className="empty">{cq ? `ไม่พบลูกค้าที่ตรงกับ “${cq}”` : 'ยังไม่มีลูกค้าที่กำหนดระดับเอง · ค้นหาด้วยชื่อหรือเบอร์โทรด้านบน'}</p> : (
+          <table className="tbl">
+            <thead><tr><th>ลูกค้า</th><th>ระดับตอนนี้</th><th className="r">ยอด 12 เดือน</th><th className="r">แต้ม</th><th className="r">จอง</th><th>กำหนดระดับ</th></tr></thead>
+            <tbody>
+              {people.map((p) => (
+                <tr key={p.id}>
+                  <td><b>{p.name}</b><small>{p.phone}{p.member_no ? ` · ${p.member_no}` : ''}</small></td>
+                  <td><span className={`tier-tag tier-${p.tier}`}>{p.tier_name}</span>{p.manual && <small>กำหนดเอง</small>}</td>
+                  <td className="r">{p.spend.toLocaleString('th-TH')}</td>
+                  <td className="r">{p.points.toLocaleString('th-TH')}</td>
+                  <td className="r">{p.bookings}{p.last_start && <small>ล่าสุด {thDate(p.last_start)}</small>}</td>
+                  <td>
+                    <ActionForm action={setTierOverride} className="tier-row">
+                      <input type="hidden" name="customer_id" value={p.id} />
+                      <select name="tier" defaultValue={p.manual ? p.tier : ''} aria-label={`ระดับของ ${p.name}`}>
+                        <option value="">ตามยอดใช้จ่าย (อัตโนมัติ)</option>
+                        {(tierList ?? []).map((t) => <option key={t.code} value={t.code}>{t.name}</option>)}
+                      </select>
+                      <Submit small variant="plain">บันทึก</Submit>
+                    </ActionForm>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </section>
 
       <section className="tiles">
         <div className="tile"><span>ส่วนลดตอนนี้</span><b>{(s?.member_discount ?? 0).toLocaleString('th-TH')}<small> บาท/การจอง</small></b><em>{s?.member_discount ? 'เปิดใช้อยู่' : 'ปิดอยู่'}</em></div>
