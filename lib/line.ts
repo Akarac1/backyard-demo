@@ -51,10 +51,23 @@ export async function userIdFromToken(idToken: string | null | undefined): Promi
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({ id_token: idToken, client_id: process.env.LINE_LOGIN_CHANNEL_ID ?? '' }),
   });
-  if (!res.ok) throw new Error('unauthorized');
+  if (!res.ok) throw new Error(`id_token: ${res.status} ${await res.text().catch(() => '')}`);
   const data = (await res.json()) as { sub?: string };
   if (!data.sub) throw new Error('unauthorized');
   return data.sub;
+}
+
+/** Verify a LIFF access token (issued for our LINE Login channel) and return the LINE user id. */
+export async function userIdFromAccessToken(accessToken: string): Promise<string> {
+  const v = await fetch(`https://api.line.me/oauth2/v2.1/verify?access_token=${encodeURIComponent(accessToken)}`);
+  if (!v.ok) throw new Error(`access_token: ${v.status}`);
+  const info = (await v.json()) as { client_id?: string; expires_in?: number };
+  if (info.client_id !== process.env.LINE_LOGIN_CHANNEL_ID || !info.expires_in || info.expires_in <= 0) throw new Error('access_token: wrong channel or expired');
+  const p = await fetch('https://api.line.me/v2/profile', { headers: { Authorization: `Bearer ${accessToken}` } });
+  if (!p.ok) throw new Error(`profile: ${p.status}`);
+  const prof = (await p.json()) as { userId?: string };
+  if (!prof.userId) throw new Error('unauthorized');
+  return prof.userId;
 }
 
 /** Booking confirmation as a Flex message. */

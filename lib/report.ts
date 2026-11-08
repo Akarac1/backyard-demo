@@ -44,3 +44,24 @@ export function bucketLabel(grain: Grain, start: string, end: string): string {
   if (grain === 'month') return `${M[m - 1]} ${String(y + 543).slice(2)}`;
   return `${y + 543}`;
 }
+
+export type ShuttleRow = {
+  bucket: string; bucket_end: string; trips: number; trips_to: number; trips_from: number; pax: number;
+  avg_wait_min: number | null; late_over_15: number; called_trips: number; peak_in_hour: number; busy_hours: number; vehicles: number;
+};
+export type DriverRow = { driver: string; trips: number; trips_to: number; trips_from: number; pax: number; avg_wait_min: number | null; late_over_15: number };
+
+const nums = <T,>(rows: Record<string, unknown>[], keep: string[]): T[] =>
+  rows.map((r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [k, keep.includes(k) || v === null ? v : Number(v)])) as T);
+
+export async function getShuttleReport(grain: Grain, periods: number): Promise<ShuttleRow[]> {
+  const { data, error } = await db().rpc('shuttle_report', { p_grain: grain, p_periods: periods });
+  if (error) throw new Error(error.message);
+  return nums<ShuttleRow>(data as Record<string, unknown>[], ['bucket', 'bucket_end']);
+}
+
+export async function getDriverStats(from: string, to: string): Promise<DriverRow[]> {
+  const { data, error } = await db().rpc('shuttle_driver_stats', { p_from: from, p_to: to });
+  if (error) throw new Error(error.message);
+  return nums<DriverRow>(data as Record<string, unknown>[], ['driver']);
+}

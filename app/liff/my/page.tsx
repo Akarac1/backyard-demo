@@ -13,9 +13,15 @@ const STATUS: Record<string, [string, string]> = {
 export default function MyBookings() {
   const liff = useLiff();
   const [rows, setRows] = useState<Row[] | null>(null);
+  const [denied, setDenied] = useState(false);
   useEffect(() => {
     if (!liff.ready) return;
-    fetch('/api/my', { headers: authHeaders(liff.idToken) }).then((r) => r.json()).then(setRows).catch(() => setRows([]));
+    fetch('/api/my', { headers: authHeaders(liff.idToken) })
+      .then(async (r) => {
+        if (r.status === 401) { setDenied(true); setRows([]); return; }
+        setRows(r.ok ? await r.json() : []);
+      })
+      .catch(() => setRows([]));
   }, [liff.ready, liff.idToken]);
 
   return (
@@ -23,7 +29,8 @@ export default function MyBookings() {
       <div className="hero"><span className="chip">Backyard Airport</span><h1>การจองของฉัน</h1></div>
       <div className="wrap">
         {!rows && <p className="small">กำลังโหลด…</p>}
-        {rows?.length === 0 && <div className="card">ยังไม่มีการจอง <Link className="btn primary" href="/liff/book">จองที่จอดรถ</Link></div>}
+        {denied && <div className="alert bad">ยืนยันตัวตนกับ LINE ไม่สำเร็จ กรุณาปิดหน้านี้แล้วกด “การจองของฉัน” จากเมนูใน LINE อีกครั้ง</div>}
+        {!denied && rows?.length === 0 && <div className="card">ยังไม่มีการจอง <Link className="btn primary" href="/liff/book">จองที่จอดรถ</Link></div>}
         {rows?.map((r) => {
           const [label, tone] = STATUS[r.status] ?? [r.status, ''];
           return (

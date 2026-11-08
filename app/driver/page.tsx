@@ -30,11 +30,12 @@ const STEPS = {
 const waiting = (t: { direction: string; called_at: string | null; status: string }) =>
   t.direction === 'from_airport' && !!t.called_at && !['en_route', 'arrived', 'done'].includes(t.status);
 
-export default async function DriverPage({ searchParams }: { searchParams: Promise<{ d?: string; v?: string }> }) {
+export default async function DriverPage({ searchParams }: { searchParams: Promise<{ d?: string; v?: string; view?: string }> }) {
   const me = await requireStaff(['admin', 'driver']);
   const sp = await searchParams;
   const today = todayBkk();
-  const day = sp.d === 'tomorrow' ? addDays(today, 1) : today;
+  const day = sp.d === 'tomorrow' ? addDays(today, 1) : sp.d === 'yesterday' ? addDays(today, -1) : sp.d && /^\d{4}-\d{2}-\d{2}$/.test(sp.d) ? sp.d : today;
+  const showDone = sp.view === 'done';
   const sb = db();
   const [{ data: vehicles }, { data: st }] = await Promise.all([
     sb.from('vehicles').select('id, name').eq('active', true).order('seats'),
@@ -54,11 +55,27 @@ export default async function DriverPage({ searchParams }: { searchParams: Promi
   const open = trips.filter((t) => t.status !== 'done').sort((a, b) => Number(waiting(b)) - Number(waiting(a)));
   const urgent = open.filter(waiting).length;
   const done = trips.filter((t) => t.status === 'done');
-  const href = (d: string | undefined, v: string | undefined) => {
+  // a just-finished job stays on the to-do list for 3 minutes so the driver sees the result message
+  const recent = done.filter((t) => t.completed_at && Date.now() - Date.parse(t.completed_at) < 3 * 60_000);
+  const href = (d: string | undefined, v: string | undefined, view = sp.view) => {
     const u = new URLSearchParams();
     if (d) u.set('d', d);
     if (v) u.set('v', v);
+    if (view) u.set('view', view);
     return `/driver${u.size ? `?${u}` : ''}`;
+  };
+  const doneRow = (t: Trip) => {
+    const c = t.bookings?.customers;
+    return (
+      <li key={t.id}>
+        <time>{t.pickup_at ? thTime(t.pickup_at) : '—'}</time>
+        <div>
+          <b>{t.direction === 'to_airport' ? 'ส่งสนามบิน' : 'รับกลับ'} · {c?.name} · {t.pax} คน</b>
+          <small>{t.driver?.display_name ?? 'ไม่ระบุคนขับ'} · {t.vehicles?.name ?? '-'}{t.called_at && t.arrived_at ? ` · ลูกค้ารอ ${Math.max(0, Math.round((Date.parse(t.arrived_at) - Date.parse(t.called_at)) / 60_000))} นาที` : ''}</small>
+        </div>
+        <span className="st st-done">เสร็จ {t.completed_at ? thTime(t.completed_at) : ''}</span>
+      </li>
+    );
   };
 
   const card = (t: Trip) => {
@@ -117,9 +134,21 @@ export default async function DriverPage({ searchParams }: { searchParams: Promi
           <p>{thDate(day)} · {myVehicle ? myVehicle.name : 'ทุกคัน'} · เหลือ {open.length} งาน{urgent ? ` · ลูกค้าเรียกรถ ${urgent} งาน` : ''} · อัปเดตเองทุก 30 วินาที</p>
         </div>
       </header>
+      <nav className="seg view-tabs">
+        <Link href={href(sp.d === 'yesterday' ? undefined : sp.d, sp.v, '')} className={!showDone ? 'on' : ''}>งานที่ต้องทำ ({open.length})</Link>
+        <Link href={href(sp.d === 'tomorrow' ? undefined : sp.d, sp.v, 'done')} className={showDone ? 'on' : ''}>เสร็จแล้ว ({done.length})</Link>
+      </nav>
       <nav className="seg">
-        <Link href={href(undefined, sp.v)} className={day === today ? 'on' : ''}>วันนี้</Link>
-        <Link href={href('tomorrow', sp.v)} className={day !== today ? 'on' : ''}>พรุ่งนี้</Link>
+        {showDone
+          ? <>
+              <Link href={href('yesterday', sp.v)} className={day === addDays(today, -1) ? 'on' : ''}>เมื่อวาน</Link>
+              <Link href={href(undefined, sp.v)} className={day === today ? 'on' : ''}>วันนี้</Link>
+              <form action="/driver" className="day-pick"><input type="hidden" name="view" value="done" />{sp.v && <input type="hidden" name="v" value={sp.v} />}<input type="date" name="d" defaultValue={day} max={today} aria-label="เลือกวัน" /><button className="b b-plain b-sm">ดู</button></form>
+            </>
+          : <>
+              <Link href={href(undefined, sp.v)} className={day === today ? 'on' : ''}>วันนี้</Link>
+              <Link href={href('tomorrow', sp.v)} className={day === addDays(today, 1) ? 'on' : ''}>พรุ่งนี้</Link>
+            </>}
         {<>
           <span className="seg-gap" />
           <Link href={href(sp.d, undefined)} className={!sp.v ? 'on' : ''}>ทุกคัน</Link>
@@ -127,9 +156,19 @@ export default async function DriverPage({ searchParams }: { searchParams: Promi
         </>}
       </nav>
 
-      {!trips.length && <section className="panel"><p className="empty">ไม่มีงาน{day === today ? 'วันนี้' : 'พรุ่งนี้'}</p></section>}
-      {/* one keyed list, so a card keeps its message when it moves to "done" */}
-      {[...open.map(card), ...(done.length ? [<h2 key="done-head" className="sec">เสร็จแล้ว ({done.length})</h2>] : []), ...done.map(card)]}
+      {!showDone && <>
+        {!open.length && !recent.length && <section className="panel"><p className="empty">{done.length ? `งาน${thDate(day)}เสร็จครบแล้ว ${done.length} งาน` : 'ไม่มีงาน'}</p></section>}
+        {/* one keyed list, so a card keeps its message for a moment after it is finished */}
+        {[...open.map(card), ...recent.map(card)]}
+      </>}
+      {showDone && (
+        <section className="panel">
+          <h2>งานที่เสร็จแล้ว · {thDate(day)} <span className="count soft">{done.length}</span></h2>
+          {!done.length && <p className="empty">ยังไม่มีงานที่เสร็จ</p>}
+          <ul className="done-list">{done.map(doneRow)}</ul>
+          {done.length > 0 && <p className="hint">ผู้โดยสารรวม {done.reduce((a, t) => a + t.pax, 0)} คน · ขาไป {done.filter((t) => t.direction === 'to_airport').length} · ขากลับ {done.filter((t) => t.direction === 'from_airport').length}</p>}
+        </section>
+      )}
       <p className="hint" style={{ textAlign: 'center' }}>{thDate(bkkDay(new Date().toISOString()))} · ดึงหน้าลงเพื่อรีเฟรช</p>
     </main>
   );

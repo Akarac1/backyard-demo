@@ -1,6 +1,7 @@
 import Link from 'next/link';
 import { GRAINS, bucketLabel, getReport, grainOf, type ReportRow } from '@/lib/report';
 import { BarChart, LineChart, type Point } from './Charts';
+import { ReportTabs } from './ReportTabs';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,6 +49,7 @@ export default async function ExecPage({ searchParams }: { searchParams: Promise
       <header className="page-head">
         <div><h1>รายงานผู้บริหาร</h1><p>ยอดลูกค้าที่เข้าใช้บริการและรายได้ · {g.span}</p></div>
       </header>
+      <ReportTabs active="money" grain={g.key} />
       <nav className="seg" aria-label="เลือกช่วงเวลา">
         {GRAINS.map((x) => (
           <Link key={x.key} href={`/exec?p=${x.key}`} className={x.key === g.key ? 'on' : ''} aria-current={x.key === g.key ? 'page' : undefined}>{x.label}</Link>

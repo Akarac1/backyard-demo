@@ -21,6 +21,7 @@ export function useLiff(): LiffState {
           return;
         }
         const profile = await liff.getProfile().catch(() => null);
+        accessToken = liff.getAccessToken();
         set({ ready: true, idToken: liff.getIDToken(), name: profile?.displayName ?? null, error: null });
       } catch (e) {
         set({ ready: true, idToken: null, name: null, error: String(e) });
@@ -37,5 +38,10 @@ export async function closeLiff() {
   } catch { /* not in LINE */ }
 }
 
-export const authHeaders = (idToken: string | null): Record<string, string> =>
-  idToken ? { 'x-id-token': idToken } : {};
+// The ID token can be expired when LINE reuses an old LIFF session, so the access token is sent too.
+let accessToken: string | null = null;
+
+export const authHeaders = (idToken: string | null): Record<string, string> => ({
+  ...(idToken ? { 'x-id-token': idToken } : {}),
+  ...(accessToken ? { 'x-access-token': accessToken } : {}),
+});
