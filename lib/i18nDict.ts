@@ -196,6 +196,15 @@ const D: Record<string, [string, string]> = {
 
   'บัตรสมาชิก Backyard ระดับ {x}': ['Backyard member card, {x} tier', 'Backyard 会员卡，{x} 等级'],
   'กำลังเปิด…': ['Opening…', '正在打开…'],
+  // ---- use points on review ----
+  'ใช้แต้ม / คูปองลดค่าบริการ': ['Use points / coupons', '使用积分 / 优惠券'],
+  'มี {n} แต้ม': ['{n} points', '有 {n} 积分'],
+  'คูปองที่แลกไว้แล้ว': ['Your coupon', '已兑换的优惠券'],
+  'ใช้ {a} แต้ม ลด {b}': ['Use {a} points for {b} off', '使用 {a} 积分，立减 {b}'],
+  'เหลือ {n} แต้มหลังจอง': ['{n} points left after booking', '预订后剩余 {n} 积分'],
+  'ขาดอีก {n} แต้ม': ['{n} more points needed', '还差 {n} 积分'],
+  'ส่วนลดมากกว่ายอดที่ต้องจ่าย ส่วนที่เกินจะไม่ได้คืนเป็นแต้ม': ['The discount is more than the amount due; the extra isn’t returned as points', '折扣超过应付金额，超出部分不退回积分'],
+  'ใช้ {n} แต้ม': ['{n} points used', '使用 {n} 积分'],
   // ---- trip rating ----
   'รถส่งไปสนามบิน': ['Ride to the airport', '送机接驳'],
   'ให้คะแนนการเดินทาง': ['Rate your ride', '为行程评分'],

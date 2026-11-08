@@ -17,6 +17,8 @@ function daysBetween(a: string, b: string) {
 type Avail = { day: string; used: number; cap: number; available: boolean };
 
 
+const r_waste = (value: number, payable: number) => value > payable;
+
 export default function BookPage() {
   const liff = useLiff();
   const router = useRouter();
@@ -34,8 +36,10 @@ export default function BookPage() {
   const [review, setReview] = useState(false);
   const [agree, setAgree] = useState(false);
   type Coupon = { id: string; code: string; title: string; value: number; expiresAt: string };
-  const [disc, setDisc] = useState<{ amount: number; reason: string | null; coupons?: Coupon[]; campaign?: { name: string; amount: number; stackable: boolean } | null } | null>(null);
-  const [couponId, setCouponId] = useState<string>('');
+  type Reward = { id: string; title: string; value: number; cost: number };
+  const [disc, setDisc] = useState<{ amount: number; reason: string | null; coupons?: Coupon[]; campaign?: { name: string; amount: number; stackable: boolean } | null; points?: number; rewards?: Reward[] } | null>(null);
+  // '' = none, 'c:<coupon id>' = a coupon already redeemed, 'r:<reward id>' = spend points now
+  const [pick, setPick] = useState<string>('');
 
   useEffect(() => { if (liff.name && !f.name) setF((x) => ({ ...x, name: liff.name! })); }, [liff.name]); // eslint-disable-line
 
@@ -49,8 +53,12 @@ export default function BookPage() {
   if (camp && !camp.stackable && discount > 0) { if (campAmount > discount) discount = 0; else campAmount = 0; }
   // a parking-discount coupon (the server checks it again)
   const coupons = disc?.coupons ?? [];
-  const coupon = coupons.find((c) => c.id === couponId);
-  const couponAmount = coupon ? Math.min(coupon.value, subtotal - discount) : 0;
+  const rewards = disc?.rewards ?? [];
+  const points = disc?.points ?? 0;
+  const coupon = pick.startsWith('c:') ? coupons.find((c) => c.id === pick.slice(2)) : undefined;
+  const reward = pick.startsWith('r:') ? rewards.find((r) => r.id === pick.slice(2) && r.cost <= points) : undefined;
+  const pickValue = coupon?.value ?? reward?.value ?? 0;
+  const couponAmount = Math.max(0, Math.min(pickValue, subtotal - discount));
   campAmount = Math.max(0, Math.min(campAmount, subtotal - discount - couponAmount));
   const total = subtotal - discount - couponAmount - campAmount;
 
@@ -84,7 +92,7 @@ export default function BookPage() {
     fetch('/api/discount', {
       method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders(liff.idToken) },
       body: JSON.stringify({ phone: f.phone, refPhone: f.refPhone, days, shuttle: f.shuttle, start: f.start }),
-    }).then((r) => (r.ok ? r.json() : null)).then((j) => { setDisc(j ?? { amount: 0, reason: null }); setCouponId(j?.coupons?.[0]?.id ?? ''); }).catch(() => setDisc({ amount: 0, reason: null }));
+    }).then((r) => (r.ok ? r.json() : null)).then((j) => { setDisc(j ?? { amount: 0, reason: null }); setPick(j?.coupons?.[0]?.id ? `c:${j.coupons[0].id}` : ''); }).catch(() => setDisc({ amount: 0, reason: null }));
   }
 
   // dates entered for the shuttle that do not match the parking dates: show as a warning on the summary
@@ -101,7 +109,7 @@ export default function BookPage() {
     const r = await fetch('/api/bookings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders(liff.idToken) },
-      body: JSON.stringify({ ...f, couponId: coupon?.id ?? null }),
+      body: JSON.stringify({ ...f, couponId: coupon?.id ?? null, rewardId: reward?.id ?? null }),
     });
     const j = await r.json();
     setBusy(false);
@@ -148,15 +156,35 @@ export default function BookPage() {
             {f.shuttle && <div className="price"><span>{t('รถรับส่งไป-กลับ')}</span><span>{money(pr.shuttle_price)}</span></div>}
             {discount > 0 && <div className="price discount"><span>{disc?.reason === 'referral' ? t('ส่วนลดเพื่อนแนะนำ') : t('ส่วนลดลูกค้าเก่า')}</span><span>−{money(discount)}</span></div>}
             {campAmount > 0 && <div className="price discount"><span>{t('แคมเปญ')} {camp?.name}</span><span>−{money(campAmount)}</span></div>}
-            {coupons.length > 0 && (
-              <label className="coupon-pick">{t('คูปองส่วนลดของคุณ')}
-                <select value={couponId} onChange={(e) => setCouponId(e.target.value)}>
-                  <option value="">{t('ไม่ใช้คูปอง')}</option>
-                  {coupons.map((c) => <option key={c.id} value={c.id}>{c.title} · {c.code}</option>)}
-                </select>
-              </label>
+            {(coupons.length > 0 || rewards.length > 0) && subtotal - discount > 0 && (
+              <fieldset className="use-points">
+                <legend>{t('ใช้แต้ม / คูปองลดค่าบริการ')} {disc?.points != null && <span className="pts-bal">{t('มี {n} แต้ม', { n: points })}</span>}</legend>
+                <label className={`up-opt${pick === '' ? ' on' : ''}`}>
+                  <input type="radio" name="use" checked={pick === ''} onChange={() => setPick('')} />
+                  <span className="up-main">{t('ไม่ใช้')}</span>
+                </label>
+                {coupons.map((c) => (
+                  <label key={c.id} className={`up-opt${pick === `c:${c.id}` ? ' on' : ''}`}>
+                    <input type="radio" name="use" checked={pick === `c:${c.id}`} onChange={() => setPick(`c:${c.id}`)} />
+                    <span className="up-main">{t('คูปองที่แลกไว้แล้ว')} · {t(c.title)}<small>{c.code} · {t('ใช้ได้ถึง {d}', { d: thDay(c.expiresAt) })}</small></span>
+                    <b>−{money(Math.min(c.value, subtotal - discount))}</b>
+                  </label>
+                ))}
+                {rewards.map((r) => {
+                  const can = r.cost <= points;
+                  return (
+                    <label key={r.id} className={`up-opt${pick === `r:${r.id}` ? ' on' : ''}${can ? '' : ' off'}`}>
+                      <input type="radio" name="use" disabled={!can} checked={pick === `r:${r.id}`} onChange={() => setPick(`r:${r.id}`)} />
+                      <span className="up-main">{t('ใช้ {a} แต้ม ลด {b}', { a: r.cost, b: money(r.value) })}
+                        <small>{can ? t('เหลือ {n} แต้มหลังจอง', { n: points - r.cost }) : t('ขาดอีก {n} แต้ม', { n: r.cost - points })}</small></span>
+                      {can && <b>−{money(Math.min(r.value, subtotal - discount))}</b>}
+                    </label>
+                  );
+                })}
+                {reward && r_waste(reward.value, subtotal - discount) && <p className="small up-warn">{t('ส่วนลดมากกว่ายอดที่ต้องจ่าย ส่วนที่เกินจะไม่ได้คืนเป็นแต้ม')}</p>}
+              </fieldset>
             )}
-            {couponAmount > 0 && <div className="price discount"><span>{t('คูปอง')} {coupon?.code}</span><span>−{money(couponAmount)}</span></div>}
+            {couponAmount > 0 && <div className="price discount"><span>{coupon ? `${t('คูปอง')} ${coupon.code}` : t('ใช้ {n} แต้ม', { n: reward?.cost ?? 0 })}</span><span>−{money(couponAmount)}</span></div>}
             <div className="price total"><span>{t('ยอดชำระ')}</span><span>{disc ? money(total) : t('กำลังคำนวณ…')}</span></div>
             {disc && !discount && (pr.member_discount ?? 0) > 0 && (days < (pr.member_discount_min_days ?? 3) || ((pr.member_discount_needs_shuttle ?? true) && !f.shuttle))
               ? <p className="small" style={{ margin: '4px 0 0' }}>{t('ส่วนลดลูกค้าเก่า/เพื่อนแนะนำ ใช้ได้เมื่อจอง {n} วันขึ้นไป', { n: pr.member_discount_min_days ?? 3 })}{(pr.member_discount_needs_shuttle ?? true) ? t(' และใช้รถรับส่ง') : ''}</p>

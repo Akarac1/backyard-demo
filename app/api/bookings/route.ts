@@ -7,7 +7,7 @@ import { afterConfirmed } from '@/lib/confirm';
 type Body = {
   start: string; end: string; name: string; phone: string; plate: string; province: string;
   shuttle: boolean; pax: number; outboundTime?: string; returnFlight?: string; returnLanding?: string;
-  flightType?: 'domestic' | 'international'; refPhone?: string; couponId?: string;
+  flightType?: 'domestic' | 'international'; refPhone?: string; couponId?: string; rewardId?: string;
 };
 
 export async function POST(req: Request) {
@@ -25,7 +25,10 @@ export async function POST(req: Request) {
     returnPickup = new Date(Date.parse(bkkLocalToIso(b.returnLanding)!) + exit * 60_000).toISOString();
   }
 
-  const { data, error } = await db().rpc('create_booking', {
+  const isId = (v?: string) => !!v && /^[0-9a-f-]{36}$/.test(v);
+  // points used on the review page: redeem + book in one transaction (create_booking_with_reward)
+  const useReward = isId(b.rewardId) && !isId(b.couponId);
+  const { data, error } = await db().rpc(useReward ? 'create_booking_with_reward' : 'create_booking', {
     p_line_user_id: uid,
     p_name: b.name.trim(),
     p_phone: b.phone.trim(),
@@ -40,7 +43,7 @@ export async function POST(req: Request) {
     p_return_flight: b.shuttle ? b.returnFlight || null : null,
     p_return_time: returnPickup,
     p_ref_phone: b.refPhone?.trim() || null,
-    p_coupon: b.couponId && /^[0-9a-f-]{36}$/.test(b.couponId) ? b.couponId : null,
+    ...(useReward ? { p_reward: b.rewardId } : { p_coupon: isId(b.couponId) ? b.couponId : null }),
   });
   if (error) return json({ error: dbErrorToThai(error.message, L.lang) }, 409);
   const id = (data as { id: string }).id;
