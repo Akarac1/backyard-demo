@@ -10,7 +10,7 @@
 
 create or replace function gen_booking_code() returns text
 language plpgsql volatile
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   alphabet constant text := 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
