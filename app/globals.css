@@ -644,3 +644,34 @@ table.report.log-table th.r, table.report.log-table td.pos, table.report.log-tab
 .veh-add summary { cursor: pointer; font-weight: 600; color: var(--navy); }
 .veh-add[open] summary { margin-bottom: 12px; }
 @media (max-width: 600px) { .veh-grid { grid-template-columns: 1fr; } }
+
+/* trip rating (customer) */
+.stars { display: flex; justify-content: center; gap: 6px; margin: 4px 0 2px; }
+.stars button { background: none; padding: 2px 4px; font-size: 44px; line-height: 1; color: #D6DDD8; border-radius: 10px; transition: transform .12s, color .12s; }
+.stars button.lit { color: #E0B04A; }
+.stars button:active { transform: scale(.9); }
+.stars button:focus-visible { outline: 2px solid var(--navy); }
+.rate-word { text-align: center; margin: 0 0 14px; font-weight: 600; color: var(--navy); min-height: 1.4em; }
+.rate-text { width: 100%; font: inherit; font-size: 15px; padding: 10px 12px; border: 1.5px solid #D5DCE6; border-radius: 12px; resize: vertical; margin-top: 6px; box-sizing: border-box; }
+.rate-big { text-align: center; font-size: 40px; color: #E0B04A; letter-spacing: 4px; }
+.rate-done { text-align: center; }
+
+/* driver ratings (exec) */
+.stars-sm { color: #E0B04A; letter-spacing: 1px; font-size: 15px; }
+.stars-sm i { font-style: normal; color: #DDE3DF; }
+.star1 { color: #E0B04A; }
+table.report.log-table td.pos-n { text-align: right; }
+.dist { display: flex; width: 180px; height: 10px; border-radius: 5px; overflow: hidden; gap: 2px; background: #fff; }
+.dist i { display: block; min-width: 3px; }
+.dist .d5 { background: #1F7A4A; } .dist .d4 { background: #6FAE84; } .dist .d3 { background: #C9C2A8; }
+.dist .d2 { background: #E39A6B; } .dist .d1 { background: #C2413A; }
+tr.sel-row td { background: #FBF6E8; }
+.rate-list-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+.rate-list-head h2 { margin: 0; }
+.seg-sm a { font-size: 13px; padding: 5px 11px; }
+.rate-list { list-style: none; padding: 0; margin: 12px 0 0; display: grid; gap: 10px; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); }
+.rate-list li { border: 1px solid #E3E9E5; border-radius: 12px; padding: 12px 14px; background: #fff; }
+.rate-list li.low { border-color: #EBC4C1; background: #FFF8F7; }
+.rl-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.rl-text { margin: 6px 0 4px; color: var(--ink); line-height: 1.45; }
+.rate-list p { margin: 4px 0 0; }

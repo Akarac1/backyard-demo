@@ -43,6 +43,9 @@ export function dbErrorToThai(msg: string, lang: Lang = 'th'): string {
     reward_closed: 'ของรางวัลนี้ปิดแลกแล้ว',
     out_of_stock: 'ของรางวัลนี้หมดแล้ว',
     not_found: 'ไม่พบของรางวัลนี้',
+    trip_not_done: 'ให้คะแนนได้เมื่อการเดินทางเสร็จแล้ว',
+    invalid_rating: 'กรุณาเลือกดาว 1–5 ดวง',
+    rating_closed: 'เลยเวลาแก้ไขคะแนนแล้ว (แก้ได้ภายใน 7 วัน)',
   };
   return tr(lang, map[msg] ?? 'เกิดข้อผิดพลาด ลองใหม่อีกครั้ง');
 }

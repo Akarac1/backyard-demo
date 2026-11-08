@@ -84,6 +84,8 @@ function row([label, value]: Row) {
 function card(o: {
   alt: string; icon: string; title: string; subtitle: string; rows?: Row[];
   highlight?: { title: string; lines: string[] }; message?: string; buttons?: Button[];
+  /** 1–5 stars that open the rating page: who is being rated and the trip */
+  rate?: { tripId: string; driver: string };
 }): LineMessage {
   const body: unknown[] = [];
   if (o.message) body.push({ type: 'text', text: o.message, size: 'sm', color: GREEN, wrap: true });
@@ -94,6 +96,24 @@ function card(o: {
       contents: [
         { type: 'text', text: o.highlight.title, size: 'sm', weight: 'bold', color: '#7A5200' },
         ...o.highlight.lines.map((l, i) => ({ type: 'text', text: l, size: i === 0 ? 'md' : 'sm', weight: i === 0 ? 'bold' : 'regular', color: GREEN, wrap: true })),
+      ],
+    });
+  }
+  if (o.rate) {
+    const url = (n: number) => liff(`/rate/${o.rate!.tripId}?s=${n}`);
+    body.push({
+      type: 'box', layout: 'vertical', spacing: 'sm', paddingTop: '4px',
+      contents: [
+        { type: 'separator', color: '#E3E9E5' },
+        { type: 'text', text: o.rate.driver ? `ให้คะแนนคนขับ ${o.rate.driver}` : 'ให้คะแนนการเดินทางครั้งนี้', size: 'sm', weight: 'bold', color: GREEN, align: 'center', margin: 'lg', wrap: true },
+        {
+          type: 'box', layout: 'horizontal', spacing: 'none', margin: 'sm', justifyContent: 'center',
+          contents: [1, 2, 3, 4, 5].map((n) => ({
+            type: 'text', text: '★', size: '3xl', color: GOLD, align: 'center', flex: 0,
+            action: { type: 'uri', label: `${n} ดาว`, uri: url(n) },
+          })),
+        },
+        { type: 'text', text: 'แตะดาวเพื่อให้คะแนนและติชม (ไม่บังคับ)', size: 'xxs', color: MUTED, align: 'center', wrap: true },
       ],
     });
   }
@@ -166,6 +186,7 @@ export function statusMessage(c: Ctx, step: TripStep): LineMessage {
         ? { title: 'นัดรับวันกลับ', lines: [dayTime(c.returnPickupAt), `จุดนัดรับ: ${c.meetingPoint}`, ...(c.returnFlight ? [`หลังเที่ยวบิน ${c.returnFlight} ลง`] : []), 'เที่ยวบินเปลี่ยน แจ้งในแชทนี้ได้เลย'] }
         : { title: 'วันกลับ', lines: ['แจ้งเวลาเครื่องลงในแชทนี้', `คนขับจะไปรับที่${c.meetingPoint}`] },
       buttons: [{ label: 'สมาชิก & การจอง', uri: liff('/my'), primary: true }, { label: `โทรหาร้าน ${fmtPhone(c.shopPhone)}`, uri: `tel:${c.shopPhone}` }],
+      rate: { tripId: c.tripId, driver: c.driver },
     });
   }
   if (step === 'en_route' && c.calledAt) {
@@ -192,6 +213,7 @@ export function statusMessage(c: Ctx, step: TripStep): LineMessage {
     rows: [['รถของคุณ', c.plate], ['รหัสการจอง', c.code]],
     message: `ขอบคุณ${who} ที่ไว้วางใจ Backyard Airport · The Hangar หวังว่าจะได้ดูแลอีกในทริปหน้า`,
     buttons: [{ label: 'จองครั้งต่อไป', uri: liff('/book'), primary: true }],
+    rate: { tripId: c.tripId, driver: c.driver },
   });
 }
 
