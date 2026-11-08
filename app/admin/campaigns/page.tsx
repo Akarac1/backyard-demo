@@ -1,6 +1,7 @@
 import { db } from '@/lib/supabase';
 import { ActionForm, Submit } from '@/components/ActionForm';
 import { MemberCard } from '@/components/MemberCard';
+import { CampaignForm } from '@/components/CampaignForm';
 import { recordPurchase, saveCampaign, saveTier } from '../actions';
 import { thDate, bkkDay } from '@/lib/format';
 
@@ -39,42 +40,9 @@ export default async function CampaignsPage() {
   for (const r of (tc ?? []) as { tier: string; n: number }[]) counts[r.tier] = Number(r.n);
   const per = st?.points_per_baht ?? 100;
 
-  const campaignForm = (c?: Campaign) => (
-    <ActionForm action={saveCampaign} className="form grid2" resetOnOk={!c}>
-      {c && <input type="hidden" name="id" value={c.id} />}
-      <label className="span2">ชื่อแคมเปญ<input name="name" defaultValue={c?.name} placeholder="เช่น สงกรานต์แต้ม x2" required /></label>
-      <label className="span2">รายละเอียด (ลูกค้าเห็นบนบัตรสมาชิก)<input name="description" defaultValue={c?.description ?? ''} /></label>
-      <label>ธุรกิจ
-        <select name="business" defaultValue={c?.business ?? 'all'}>{Object.entries(BIZ).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
-      </label>
-      <label>ประเภท
-        <select name="kind" defaultValue={c?.kind ?? 'multiplier'}>{Object.entries(KIND).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select>
-      </label>
-      <label>แต้มคูณ<span className="with-unit"><input name="multiplier" type="number" step="0.1" min={1} max={10} defaultValue={c?.multiplier ?? 2} /><em>เท่า</em></span><small>ใช้กับประเภทแต้มคูณ (คูณเพิ่มจากตัวคูณของระดับ)</small></label>
-      <label>แต้มโบนัส<span className="with-unit"><input name="bonus" type="number" min={0} defaultValue={c?.bonus_points ?? 0} /><em>แต้ม/ครั้ง</em></span><small>ใช้กับประเภทแต้มโบนัส</small></label>
-      <fieldset className="span2 camp-disc">
-        <legend>สำหรับแคมเปญส่วนลด (ที่จอดรถเท่านั้น)</legend>
-        <label>จองอย่างน้อย<span className="with-unit"><input name="min_days" type="number" min={0} defaultValue={c?.min_days ?? 10} /><em>วัน</em></span></label>
-        <label>ฟรี<span className="with-unit"><input name="free_days" type="number" min={0} defaultValue={c?.free_days ?? 1} /><em>วัน</em></span><small>แบบ “จอดครบ ฟรีวัน”</small></label>
-        <label>ลด<span className="with-unit"><input name="amount_off" type="number" min={0} defaultValue={c?.amount_off ?? 0} /><em>บาท</em></span><small>แบบ “จอดครบ ลดเงิน”</small></label>
-        <label>ลด<span className="with-unit"><input name="percent_off" type="number" min={0} max={100} defaultValue={c?.percent_off ?? 0} /><em>%</em></span><small>แบบ “ลดค่าจอด %” (ไม่รวมรถรับส่ง)</small></label>
-        <label className="check"><input type="checkbox" name="stackable" defaultChecked={c?.stackable ?? true} /> ใช้ร่วมกับส่วนลดลูกค้าเก่า 100 บาทได้</label>
-      </fieldset>
-      <fieldset className="span2 camp-disc">
-        <legend>ช่วงวันเข้าจอด (เช่น ปีใหม่ สงกรานต์) · เว้นว่าง = ทุกวัน</legend>
-        <label>วันเข้าจอดตั้งแต่<input name="stay_from" type="date" defaultValue={c?.stay_from ?? ''} /></label>
-        <label>ถึง<input name="stay_to" type="date" defaultValue={c?.stay_to ?? ''} /></label>
-        <small className="hint" style={{ gridColumn: '1 / -1', margin: 0 }}>ได้สิทธิ์เมื่อวันเข้าจอดอยู่ในช่วงนี้ ใช้ได้ทั้งแคมเปญส่วนลดและแต้มคูณ/โบนัสของที่จอดรถ</small>
-      </fieldset>
-      <label>เปิดให้จองตั้งแต่<input name="starts" type="datetime-local" defaultValue={localInput(c?.starts_at ?? null)} /></label>
-      <label>ปิดรับจอง<input name="ends" type="datetime-local" defaultValue={localInput(c?.ends_at ?? null)} /><small>เว้นว่าง = ไม่มีวันจบ</small></label>
-      <div className="span2 tier-checks">ระดับที่ได้สิทธิ์ (ไม่เลือก = ทุกระดับ)
-        <div>{T.map((t) => <label key={t.code} className="check"><input type="checkbox" name="tiers" value={t.code} defaultChecked={c?.tiers?.includes(t.code)} /> {t.name}</label>)}</div>
-      </div>
-      <label className="check span2"><input type="checkbox" name="active" defaultChecked={c?.active ?? true} /> เปิดใช้แคมเปญ</label>
-      <div className="form-actions span2"><Submit small>{c ? 'บันทึก' : 'สร้างแคมเปญ'}</Submit></div>
-    </ActionForm>
-  );
+  const tierList = T.map((t) => ({ code: t.code, name: t.name }));
+  const campaignForm = (c?: Campaign) => <CampaignForm action={saveCampaign} tiers={tierList} init={c ? { ...c, multiplier: Number(c.multiplier) } : undefined} />;
+
 
   return (
     <main className="page">
@@ -143,7 +111,7 @@ export default async function CampaignsPage() {
             </tbody>
           </table>
         )}
-        <details className="add-reward" style={{ marginTop: 12 }}><summary className="b b-plain b-sm">+ สร้างแคมเปญ</summary><div style={{ marginTop: 10, maxWidth: 640 }}>{campaignForm()}</div></details>
+        <details className="add-reward" style={{ marginTop: 12 }}><summary className="b b-plain b-sm">+ สร้างแคมเปญ</summary><div style={{ marginTop: 10, maxWidth: 760 }}>{campaignForm()}</div></details>
       </section>
 
       <div className="cols">

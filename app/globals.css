@@ -459,3 +459,43 @@ table.report th:first-child, table.report td:first-child { text-align: left; }
 .camp-disc { border: 1px dashed #D5DCE6; border-radius: 12px; padding: 10px 12px 12px; display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
 .camp-disc legend { font-size: 13px; color: var(--muted); padding: 0 6px; }
 .price span:last-child { white-space: nowrap; padding-left: 10px; }
+
+/* ---------- campaign form ---------- */
+.cform { display: flex; flex-direction: column; gap: 12px; }
+.cform-presets { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; font-size: 13px; color: var(--muted); }
+.chip-btn { border: 1px solid #D5DCE6; background: #fff; border-radius: 99px; padding: 6px 12px; font-size: 13px; cursor: pointer; }
+.chip-btn:hover { border-color: #1F5A3A; color: #1F5A3A; }
+.cform-step { font-weight: 700; font-size: 15px; display: flex; align-items: center; gap: 8px; margin-top: 4px; }
+.cform-step b { display: inline-grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #0E3320; color: #E0B04A; font-size: 12px; }
+.cform-step small { font-weight: 400; color: var(--muted); }
+.cform-types { display: grid; gap: 8px; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); }
+.cform-types button { text-align: left; border: 1.5px solid #E1E7E3; background: #fff; border-radius: 12px; padding: 10px 12px; cursor: pointer; display: flex; flex-direction: column; gap: 2px; }
+.cform-types button span { font-size: 20px; }
+.cform-types button b { font-size: 14px; }
+.cform-types button small { font-size: 12px; color: var(--muted); }
+.cform-types button.on { border-color: #0E3320; background: #F2F7F3; box-shadow: inset 0 0 0 1px #0E3320; }
+.cform-grid { display: grid; gap: 10px 14px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+.cform-grid label { font-size: 13.5px; font-weight: 600; display: flex; flex-direction: column; gap: 4px; }
+.cform-grid label.check { flex-direction: row; align-items: center; gap: 8px; font-weight: 400; }
+.cform-grid input, .cform-grid select { font: inherit; font-size: 15px; padding: 9px 11px; border: 1.5px solid #D5DCE6; border-radius: 10px; font-weight: 400; }
+.cform-grid .cf-wide { grid-column: 1 / -1; }
+.cform-grid small { font-weight: 400; color: var(--muted); font-size: 12px; }
+.cform-more { align-self: flex-start; text-decoration: none; font-size: 13.5px; }
+.cform-extra { background: #F7F9F8; border-radius: 12px; padding: 12px; }
+.tier-pills { display: flex; gap: 8px; margin-top: 6px; }
+.pill { border: 1.5px solid #D5DCE6; background: #fff; border-radius: 99px; padding: 6px 14px; cursor: pointer; font-weight: 600; font-size: 13px; }
+.pill.on.pill-bronze { background: #A86A3D; border-color: #A86A3D; color: #fff; }
+.pill.on.pill-silver { background: #9AA4AE; border-color: #9AA4AE; color: #fff; }
+.pill.on.pill-gold { background: #D4A63A; border-color: #D4A63A; color: #2f2104; }
+.cform-preview { background: #0E3320; color: #fff; border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 2px; }
+.cform-preview span { font-size: 12px; color: #E0B04A; }
+.cform-preview b { font-size: 15px; line-height: 1.5; }
+.cform-preview small { opacity: .8; }
+.inline-edit-body .cform { width: 100%; }
+.inline-edit-body { width: 680px; }
+.cform-types button.on b { color: #0E3320; }
+.cform-types button.on small { color: var(--muted); }
+.cform-grid label { margin: 0; color: var(--ink); }
+.cform-extra label.check { align-self: end; }
+.cform-grid label.check { justify-content: flex-start; }
+.cform-grid label.check input { width: auto; padding: 0; margin: 0; }
