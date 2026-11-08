@@ -23,7 +23,7 @@ const menu = {
   chatBarText: 'จองที่จอดรถ',
   areas: [
     { bounds: { x: 40, y: 40, width: 1580, height: 1046 }, action: { type: 'uri', label: 'จองที่จอดรถ', uri: `https://liff.line.me/${liffId}/book` } },
-    { bounds: { x: 1660, y: 40, width: 800, height: 1046 }, action: { type: 'uri', label: 'การจองของฉัน', uri: `https://liff.line.me/${liffId}/my` } },
+    { bounds: { x: 1660, y: 40, width: 800, height: 1046 }, action: { type: 'uri', label: 'สมาชิก & การจอง', uri: `https://liff.line.me/${liffId}/my` } },
     { bounds: { x: 40, y: 1126, width: 780, height: 520 }, action: { type: 'message', label: 'ราคา', text: 'ราคาและเงื่อนไข' } },
     { bounds: { x: 860, y: 1126, width: 780, height: 520 }, action: { type: 'uri', label: 'วิธีเดินทาง', uri: mapUrl } },
     { bounds: { x: 1680, y: 1126, width: 780, height: 520 }, action: { type: 'message', label: 'ติดต่อแอดมิน', text: 'ขอคุยกับแอดมิน' } },
@@ -44,3 +44,14 @@ if (!img.ok) { console.error('image upload failed', img.status, await img.text()
 
 const def = await fetch(`https://api.line.me/v2/bot/user/all/richmenu/${richMenuId}`, { method: 'POST', headers: auth });
 console.log(def.ok ? 'set as default ✔' : `set default failed ${def.status}`);
+
+// A rich menu's image cannot be replaced, so every run makes a new menu: remove the older Backyard menus.
+if (def.ok) {
+  const list = await fetch('https://api.line.me/v2/bot/richmenu/list', { headers: auth }).then((r) => r.json()).catch(() => ({ richmenus: [] }));
+  for (const m of list.richmenus ?? []) {
+    if (m.name === menu.name && m.richMenuId !== richMenuId) {
+      const del = await fetch(`https://api.line.me/v2/bot/richmenu/${m.richMenuId}`, { method: 'DELETE', headers: auth });
+      console.log(del.ok ? `removed old menu ${m.richMenuId}` : `could not remove ${m.richMenuId} (${del.status})`);
+    }
+  }
+}
