@@ -20,7 +20,7 @@ export default async function AdminHome() {
   const today = todayBkk();
   const sb = db();
   const sel = 'id, code, plate, plate_province, status, shuttle, pax, start_date, end_date, customers(name, phone)';
-  const [occ, arrivals, departures, inLot, slips, lpr, trips, paidToday, owed, notes] = await Promise.all([
+  const [occ, arrivals, departures, inLot, slips, lpr, trips, paidToday, owed, notes, calls] = await Promise.all([
     sb.from('v_occupancy_30d').select('day, used, total_spots, reserve_spots').limit(14),
     sb.from('bookings').select(sel).eq('start_date', today).in('status', ['confirmed', 'checked_in']).order('created_at'),
     sb.from('bookings').select(sel).eq('end_date', today).in('status', ['confirmed', 'checked_in', 'checked_out']).order('created_at'),
@@ -32,6 +32,7 @@ export default async function AdminHome() {
     sb.from('payments').select('amount').eq('status', 'verified').gte('paid_at', `${today}T00:00:00+07:00`),
     sb.from('payments').select('id, amount, bookings(id, code, plate)').eq('status', 'pending').eq('kind', 'overstay'),
     sb.from('shuttle_trips').select('id, direction, driver_note, note_at, vehicles(name), bookings(id, code)').eq('note_resolved', false).order('note_at'),
+    sb.from('shuttle_trips').select('id, pax, called_at, called_by, bookings(id, code, customers(name, phone))').not('called_at', 'is', null).in('status', ['unassigned', 'assigned']).order('called_at'),
   ]);
 
   const days = (occ.data ?? []) as Occ[];
@@ -49,7 +50,7 @@ export default async function AdminHome() {
     const { data } = await sb.storage.from('slips').createSignedUrl(p.slip_path!, 3600);
     if (data) slipLinks[p.id] = data.signedUrl;
   }
-  const todo = (slips.data?.length ?? 0) + (lpr.data?.length ?? 0) + unassigned.length + (owed.data?.length ?? 0) + (notes.data?.length ?? 0);
+  const todo = (slips.data?.length ?? 0) + (lpr.data?.length ?? 0) + unassigned.length + (owed.data?.length ?? 0) + (notes.data?.length ?? 0) + (calls.data?.length ?? 0);
   const d = new Date(today + 'T00:00:00Z');
 
   return (
@@ -82,6 +83,16 @@ export default async function AdminHome() {
         <h2>ต้องจัดการ {todo > 0 && <span className="count">{todo}</span>}</h2>
         {todo === 0 && <p className="empty">ไม่มีงานค้าง เยี่ยมมาก</p>}
         <ul className="todo">
+          {(calls.data ?? []).map((t) => {
+            const b = t.bookings as unknown as { id: string; code: string; customers: { name: string; phone: string } | null } | null;
+            return (
+              <li key={`c${t.id}`}>
+                <span className="todo-kind k-slip">ลูกค้าเรียกรถ</span>
+                <div className="todo-main"><b>{b?.customers?.name} · {t.pax} คน · รอคนขับรับงาน</b><small>เรียกเมื่อ {thTime(t.called_at)}{t.called_by === 'staff' ? ' (โทรมา)' : ''} · ควรถึง {thTime(new Date(Date.parse(t.called_at!) + 15 * 60_000).toISOString())} · <a href={`tel:${b?.customers?.phone}`}>{b?.customers?.phone}</a></small></div>
+                <div className="todo-act"><Link className="b b-primary b-sm" href="/driver">เปิดหน้าคนขับ</Link></div>
+              </li>
+            );
+          })}
           {(notes.data ?? []).map((t) => {
             const b = t.bookings as unknown as { id: string; code: string } | null;
             const v = t.vehicles as unknown as { name: string } | null;

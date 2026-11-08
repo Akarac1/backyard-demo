@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic';
 type Trip = {
   id: string; direction: string; pax: number; pickup_at: string | null; flight_number: string | null; status: string;
   vehicle_id: string | null; assignment_locked: boolean;
-  departed_at: string | null; arrived_at: string | null; completed_at: string | null; driver_note: string | null; note_resolved: boolean;
+  departed_at: string | null; arrived_at: string | null; completed_at: string | null; driver_note: string | null; note_resolved: boolean; called_at: string | null; welcome_sent_at: string | null;
   bookings: { id: string; code: string; plate: string; status: string; customers: { name: string; phone: string } | null } | null;
 };
 
@@ -26,7 +26,7 @@ export default async function TripsPage({ searchParams }: { searchParams: Promis
   const sb = db();
   const [{ data }, { data: vehicles }] = await Promise.all([
     sb.from('shuttle_trips')
-      .select('id, direction, pax, pickup_at, flight_number, status, vehicle_id, assignment_locked, departed_at, arrived_at, completed_at, driver_note, note_resolved, bookings(id, code, plate, status, customers(name, phone))')
+      .select('id, direction, pax, pickup_at, flight_number, status, vehicle_id, assignment_locked, departed_at, arrived_at, completed_at, driver_note, note_resolved, called_at, welcome_sent_at, bookings(id, code, plate, status, customers(name, phone))')
       .gte('pickup_at', `${day}T00:00:00+07:00`).lt('pickup_at', `${addDays(day, 1)}T00:00:00+07:00`)
       .neq('status', 'cancelled').order('pickup_at'),
     sb.from('vehicles').select('id, name, seats').eq('active', true).order('seats'),
@@ -58,6 +58,8 @@ export default async function TripsPage({ searchParams }: { searchParams: Promis
             </div>
             <div className="trip-progress">
               <span className={`st ${t.status === 'done' ? 'st-done' : t.status === 'en_route' || t.status === 'arrived' ? 'st-in' : t.vehicle_id ? 'st-ok' : 'st-wait'}`}>{TRIP_STATUS[t.status] ?? t.status}</span>
+              {t.welcome_sent_at && <small>ส่งข้อความต้อนรับ {thTime(t.welcome_sent_at)}</small>}
+              {t.called_at && <small><b>ลูกค้าเรียกรถ {thTime(t.called_at)}</b></small>}
               {t.departed_at && <small>ออกเดินทาง {thTime(t.departed_at)}</small>}
               {t.arrived_at && <small>ถึงจุดนัด {thTime(t.arrived_at)}</small>}
               {t.completed_at && <small>เสร็จ {thTime(t.completed_at)}</small>}

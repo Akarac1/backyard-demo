@@ -19,6 +19,8 @@ type Ctx = {
   meetingPoint: string;
   returnPickupAt: string | null;
   returnFlight: string | null;
+  tripId: string;
+  calledAt: string | null;
 };
 
 const GREEN = '#0E3320';
@@ -34,14 +36,14 @@ const dayTime = (ts: string) => `${thDate(bkkDay(ts))} · ${thTime(ts)} น.`;
 export async function tripContext(tripId: string, driverId: string, driverName: string): Promise<Ctx | null> {
   const sb = db();
   const { data: t } = await sb.from('shuttle_trips')
-    .select('id, booking_id, direction, pax, pickup_at, flight_number, bookings(code, plate, customers(name, line_user_id))')
+    .select('id, booking_id, direction, pax, pickup_at, flight_number, called_at, bookings(code, plate, customers(name, line_user_id))')
     .eq('id', tripId).maybeSingle();
   if (!t) return null;
   const b = t.bookings as unknown as { code: string; plate: string; customers: { name: string; line_user_id: string } | null } | null;
   const [{ data: ret }, { data: st }, { data: me }] = await Promise.all([
     sb.from('shuttle_trips').select('pickup_at, flight_number').eq('booking_id', t.booking_id).eq('direction', 'from_airport').neq('status', 'cancelled').maybeSingle(),
     sb.from('settings').select('pickup_meeting_point').eq('id', 1).single(),
-    sb.from('staff_users').select('phone').eq('id', driverId).maybeSingle(),
+    driverId ? sb.from('staff_users').select('phone').eq('id', driverId).maybeSingle() : Promise.resolve({ data: null }),
   ]);
   return {
     direction: t.direction, pax: t.pax, pickupAt: t.pickup_at, flight: t.flight_number,
@@ -49,6 +51,7 @@ export async function tripContext(tripId: string, driverId: string, driverName: 
     code: b?.code ?? '', plate: b?.plate ?? '', name: b?.customers?.name ?? '', lineUserId: b?.customers?.line_user_id ?? null,
     meetingPoint: st?.pickup_meeting_point ?? 'ชั้น 2 ประตู 4',
     returnPickupAt: ret?.pickup_at ?? null, returnFlight: ret?.flight_number ?? null,
+    tripId: t.id, calledAt: t.called_at ?? null,
   };
 }
 
@@ -154,6 +157,15 @@ export function statusMessage(c: Ctx, step: TripStep): LineMessage {
       buttons: [{ label: 'ดูการจองของฉัน', uri: liff('/my'), primary: true }, { label: `โทรหาร้าน ${fmtPhone(PHONE)}`, uri: `tel:${PHONE}` }],
     });
   }
+  if (step === 'en_route' && c.calledAt) {
+    const eta = new Date(Date.now() + 15 * 60_000).toISOString();
+    return card({
+      alt: `คนขับรับทราบแล้ว กำลังไปจุดนัดรับ จะถึงประมาณ ${thTime(eta)} น.`, icon: '🚐', title: 'คนขับรับทราบแล้ว', subtitle: 'กำลังไปจุดนัดรับ ถึงในประมาณ 15 นาที',
+      rows: [['ถึงประมาณ', `${thTime(eta)} น.`], ['จุดนัดรับ', c.meetingPoint], driverRow(c)],
+      message: 'รอที่จุดนัดได้เลย คนขับจะส่งข้อความอีกครั้งเมื่อรถถึง',
+      buttons: callButtons(c, false),
+    });
+  }
   if (step === 'en_route') return card({
     alt: `คนขับออกไปรับที่สนามบินแล้ว · จุดนัด ${c.meetingPoint}`, icon: '🚐', title: 'คนขับออกไปรับแล้ว', subtitle: `${c.driver} กำลังเดินทางไปสุวรรณภูมิ`,
     rows: [['จุดนัดรับ', c.meetingPoint], ...(c.pickupAt ? [['เวลานัด', `${thTime(c.pickupAt)} น.`] as Row] : []), driverRow(c)],
@@ -169,6 +181,18 @@ export function statusMessage(c: Ctx, step: TripStep): LineMessage {
     rows: [['รถของคุณ', c.plate], ['รหัสการจอง', c.code]],
     message: `ขอบคุณ${who} ที่ไว้วางใจ Backyard Airport · The Hangar หวังว่าจะได้ดูแลอีกในทริปหน้า`,
     buttons: [{ label: 'จองครั้งต่อไป', uri: liff('/book'), primary: true }],
+  });
+}
+
+/** "Welcome to Suvarnabhumi": sent at the landing time, with the button that calls the van. */
+export function welcomeMessage(c: Ctx): LineMessage {
+  const who = c.name ? `คุณ${/^[A-Za-z]/.test(c.name) ? ' ' : ''}${c.name}` : 'คุณลูกค้า';
+  return card({
+    alt: 'ยินดีต้อนรับสู่สุวรรณภูมิ · ได้กระเป๋าแล้วกดเรียกรถมารับได้เลย', icon: '🛬', title: 'ยินดีต้อนรับสู่สุวรรณภูมิ', subtitle: `ยินดีต้อนรับกลับบ้าน ${who}`,
+    message: 'เมื่อรับกระเป๋าเรียบร้อยและพร้อมออกจากโถงผู้โดยสาร กดปุ่ม “เรียกรถมารับ” ด้านล่าง คนขับจะไปถึงจุดนัดภายในประมาณ 15 นาที',
+    rows: [['จุดนัดรับ', c.meetingPoint], ['ผู้โดยสาร', `${c.pax} ท่าน`], ...(c.flight ? [['เที่ยวบิน', c.flight] as Row] : [])],
+    highlight: { title: 'ยังรอกระเป๋าอยู่?', lines: ['ไม่ต้องรีบ กดเรียกรถเมื่อพร้อมออกจากโถงได้เลย', 'เที่ยวบินล่าช้า ไม่ต้องแจ้ง ระบบรอให้คุณกด'] },
+    buttons: [{ label: 'เรียกรถมารับ', uri: liff(`/call/${c.tripId}`), primary: true }, { label: `โทรหาร้าน ${fmtPhone(PHONE)}`, uri: `tel:${PHONE}` }],
   });
 }
 

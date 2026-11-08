@@ -38,5 +38,10 @@ export async function POST(req: Request) {
     p_return_time: returnPickup,
   });
   if (error) return json({ error: dbErrorToThai(error.message) }, 409);
-  return json({ id: (data as { id: string }).id });
+  const id = (data as { id: string }).id;
+  // keep the landing time: the "welcome to Suvarnabhumi" card is sent at this time
+  if (b.shuttle && b.returnLanding) {
+    await db().from('shuttle_trips').update({ landing_at: bkkLocalToIso(b.returnLanding) }).eq('booking_id', id).eq('direction', 'from_airport');
+  }
+  return json({ id });
 }

@@ -321,3 +321,31 @@ table.report th:first-child, table.report td:first-child { text-align: left; }
 .handler.mine { color: #1E6B40; font-weight: 500; }
 .takeover { display: flex; align-items: center; gap: 8px; background: #FFF6E0; color: #7A5200; border-radius: 10px; padding: 8px 10px; margin: 0 0 10px; font-size: 13.5px; font-weight: 400; }
 .takeover input { width: 18px; height: 18px; margin: 0; }
+
+/* ---------- call the van (LIFF) + confirm dialogs ---------- */
+.call-card h2 { margin-bottom: 6px; }
+.meet { display: flex; justify-content: space-between; align-items: center; background: #F4F7F4; border-radius: 12px; padding: 12px 14px; margin-top: 10px; }
+.meet span { color: var(--muted); font-size: 14px; }
+.meet b { font-size: 17px; }
+.btn.primary.big { font-size: 20px; padding: 18px; margin: 16px 0 10px; }
+.call-status { border-radius: 14px; padding: 16px; text-align: center; }
+.call-status b { display: block; font-size: 19px; }
+.call-status span { display: block; margin-top: 4px; font-size: 15px; }
+.call-status.s-called { background: #FFF5E3; color: #7A5200; }
+.call-status.s-coming { background: var(--navy); color: #fff; }
+.call-status.s-coming span { color: var(--amber); }
+.call-status.s-arrived { background: #E3F1E8; color: #1E6B40; }
+.modal-bg { position: fixed; inset: 0; background: rgba(8, 24, 15, .55); display: grid; place-items: center; padding: 20px; z-index: 50; }
+.modal { background: #fff; border-radius: 18px; padding: 22px 20px 18px; width: 100%; max-width: 380px; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
+.modal h2 { margin: 0 0 8px; font-size: 20px; }
+.modal p { margin: 0 0 10px; font-size: 15.5px; line-height: 1.5; }
+.modal-preview { background: #F4F7F4; border-left: 4px solid var(--amber); border-radius: 8px; padding: 10px 12px; font-size: 14.5px; margin: 0 0 10px; }
+.modal-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 14px; }
+.modal-actions .btn, .modal-actions .b { width: 100%; }
+.job-urgent { box-shadow: 0 0 0 3px #C9971F, 0 6px 20px rgba(201,151,31,.25); }
+.call-alert { display: flex; justify-content: space-between; align-items: center; gap: 10px; background: #C9971F; color: #fff; border-radius: 12px; padding: 10px 12px; margin: 0 0 12px; font-size: 14px; }
+.call-alert b { white-space: nowrap; font-size: 16px; }
+.call-wait { background: #F4F7F4; border-radius: 12px; padding: 10px 12px; margin: 0 0 12px; font-size: 13.5px; color: var(--muted); }
+.call-tools { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+.call-tools form { margin: 0; }
+.call-tools .msg { flex-basis: 100%; margin: 4px 0 0; }

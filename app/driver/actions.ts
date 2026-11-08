@@ -2,7 +2,7 @@
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/supabase';
 import { staffForAction } from '@/lib/auth';
-import { noteMessage, sendToCustomer, statusMessage, tripContext, type TripStep } from '@/lib/tripMessages';
+import { noteMessage, sendToCustomer, statusMessage, tripContext, welcomeMessage, type TripStep } from '@/lib/tripMessages';
 import type { ActionResult } from '@/app/admin/actions';
 
 const ERR: Record<string, string> = {
@@ -11,10 +11,12 @@ const ERR: Record<string, string> = {
   bad_status: 'สถานะไม่ถูกต้อง',
   trip_cancelled: 'งานนี้ถูกยกเลิกแล้ว',
   empty_note: 'พิมพ์ข้อความก่อนส่ง',
+  not_return_trip: 'ใช้ได้กับรถรับขากลับเท่านั้น',
+  trip_closed: 'งานนี้เสร็จหรือถูกยกเลิกแล้ว',
 };
 const LABEL: Record<string, Record<string, string>> = {
   to_airport: { arrived: 'บันทึกว่าพร้อมรับที่ลาน', en_route: 'บันทึกว่าออกเดินทางไปสนามบิน', done: 'บันทึกว่าส่งถึงสนามบินแล้ว' },
-  from_airport: { en_route: 'บันทึกว่าออกไปรับ', arrived: 'บันทึกว่าถึงจุดนัดรับ', done: 'บันทึกว่าส่งถึงลานแล้ว' },
+  from_airport: { en_route: 'บันทึกว่ากำลังไปรับ', arrived: 'บันทึกว่าถึงจุดนัดรับ', done: 'บันทึกว่าส่งถึงลานแล้ว' },
 };
 const SENT: Record<string, string> = { sent: 'ส่งข้อความหาลูกค้าแล้ว', no_line: 'ลูกค้าไม่ได้จองผ่าน LINE ไม่ได้ส่งข้อความ', failed: 'ส่งข้อความไม่สำเร็จ โทรแจ้งลูกค้าแทน' };
 
@@ -66,4 +68,25 @@ export async function addTripNote(_: ActionResult, f: FormData): Promise<ActionR
   }
   revalidatePath('/driver'); revalidatePath('/admin/trips'); revalidatePath('/admin');
   return result;
+}
+
+export async function sendWelcome(_: ActionResult, f: FormData): Promise<ActionResult> {
+  let me;
+  try { me = await staffForAction(['driver', 'admin']); } catch { return { error: ERR.not_allowed }; }
+  const tripId = String(f.get('id'));
+  const { error } = await db().rpc('staff_mark_welcome', { p_actor: me.uid, p_trip_id: tripId });
+  if (error) return { error: ERR[error.message] ?? 'ส่งไม่สำเร็จ ลองใหม่อีกครั้ง' };
+  const ctx = await tripContext(tripId, '', 'ทีมงาน Backyard');
+  const r = ctx ? await sendToCustomer(ctx, welcomeMessage(ctx)) : 'failed';
+  revalidatePath('/driver');
+  return r === 'sent' ? { ok: 'ส่งข้อความต้อนรับแล้ว' } : { error: SENT[r] };
+}
+
+export async function recordCall(_: ActionResult, f: FormData): Promise<ActionResult> {
+  let me;
+  try { me = await staffForAction(['driver', 'admin']); } catch { return { error: ERR.not_allowed }; }
+  const { error } = await db().rpc('staff_call_trip', { p_actor: me.uid, p_trip_id: String(f.get('id')) });
+  if (error) return { error: ERR[error.message] ?? 'บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง' };
+  revalidatePath('/driver'); revalidatePath('/admin');
+  return { ok: 'บันทึกแล้ว ลูกค้าพร้อมให้ไปรับ' };
 }
