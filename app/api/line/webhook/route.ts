@@ -146,4 +146,4 @@ export async function POST(req: Request) {
     if (/จอง/.test(text)) return reply(e.replyToken, [bookFlex]);
   }));
   return json({ ok: true });
-}git add app/api/line/webhook/route.ts
+}
