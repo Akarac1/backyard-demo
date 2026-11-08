@@ -607,3 +607,23 @@ html[lang="zh-CN"] body { font-family: 'Kanit', 'PingFang SC', 'Noto Sans SC', '
   padding: 6px 9px; border-radius: 999px; color: #3C4A42; }
 .lang-switch button.on { background: var(--navy); color: #fff; }
 .lang-switch button:focus-visible { outline: 2px solid var(--navy); outline-offset: 1px; }
+
+/* points log (exec) */
+.log-filter { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; }
+.log-filter > div { display: flex; flex-direction: column; min-width: 150px; }
+.log-filter > div.grow { flex: 1 1 260px; }
+.log-filter label { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
+.log-filter button.primary { width: auto; margin-top: 0; padding: 10px 20px; }
+table.report.log-table td.l, table.report.log-table th { text-align: left; }
+table.report.log-table th.r, table.report.log-table td.pos, table.report.log-table td.neg { text-align: right; }
+.log-filter + .alert, .log-filter + .kpis { margin-top: 14px; }
+.log-table td small { display: block; color: var(--muted); font-size: 12px; }
+.log-table td.wrap { white-space: normal; min-width: 180px; max-width: 320px; }
+.log-table td.pos { color: #1F7A4A; font-weight: 600; }
+.log-table td.neg { color: #B23A33; font-weight: 600; }
+.log-table tr.muted-row td { opacity: .55; }
+.kind { display: inline-block; font-size: 12.5px; padding: 2px 8px; border-radius: 999px; background: #EEF2EF; color: #33433A; }
+.kind-payment, .kind-purchase { background: #E3F1E8; color: #1F5E3B; }
+.kind-admin_add { background: #FBF0D6; color: #7A5A12; }
+.kind-referral { background: #E4EEF7; color: #2C5A82; }
+.kind-admin_take { background: #F8E3E1; color: #8F2F29; }
