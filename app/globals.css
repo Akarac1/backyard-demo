@@ -501,3 +501,29 @@ table.report th:first-child, table.report td:first-child { text-align: left; }
 .cform-grid label.check input { width: auto; padding: 0; margin: 0; }
 .seg-n { display: inline-block; min-width: 20px; padding: 0 6px; margin-left: 4px; border-radius: 99px; background: rgba(14,51,32,.08); font-size: 12px; text-align: center; }
 .seg a.on .seg-n { background: rgba(255,255,255,.25); }
+
+/* ---------- on-site screen ---------- */
+.ops-list { list-style: none; padding: 0; margin: 0; }
+.ops-row { display: grid; grid-template-columns: 120px 1fr auto; gap: 12px; align-items: center; padding: 12px 0; border-top: 1px solid #EEF2EF; }
+.ops-row:first-child { border-top: 0; }
+.ops-plate b { display: block; font-size: 18px; letter-spacing: .5px; }
+.ops-plate small, .ops-main small { display: block; color: var(--muted); font-size: 12.5px; }
+.ops-main > div { font-size: 14.5px; }
+.ops-note { color: #8a5a00 !important; }
+.ops-act { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.ops-warn { border-left: 4px solid #E0B04A; }
+.ops-warn h3 { margin: 12px 0 2px; font-size: 15px; }
+.tile-warn { box-shadow: inset 0 0 0 2px #E0B04A; }
+.narrow-panel { max-width: 720px; }
+.ops-one-head { display: flex; justify-content: space-between; align-items: flex-start; }
+.big-plate { display: block; font-size: 34px; letter-spacing: 1px; }
+.ops-dl { display: grid; grid-template-columns: 110px 1fr; gap: 6px 12px; margin: 14px 0; font-size: 15px; }
+.ops-dl dt { color: var(--muted); }
+.ops-dl dd { margin: 0; }
+.ops-big { display: flex; flex-direction: column; gap: 10px; }
+.ops-big .inline-form button { width: 100%; padding: 16px; font-size: 18px; }
+@media (max-width: 640px) { .ops-row { grid-template-columns: 1fr; } .ops-act { flex-direction: row; align-items: center; justify-content: space-between; } }
+.booking-qr { display: flex; gap: 12px; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #E1E7E3; }
+.booking-qr img { width: 96px; height: 96px; }
+.booking-qr p { margin: 0; font-size: 13px; color: var(--muted); }
+.alert-strip { display: block; background: #FFF6DE; border: 1px solid #F0D58C; color: #6b4b00; border-radius: 12px; padding: 10px 14px; margin-bottom: 14px; text-decoration: none; font-size: 14.5px; }

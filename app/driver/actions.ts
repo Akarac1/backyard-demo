@@ -22,7 +22,7 @@ const SENT: Record<string, string> = { sent: 'ส่งข้อความห�
 
 export async function setTripStatus(_: ActionResult, f: FormData): Promise<ActionResult> {
   let me;
-  try { me = await staffForAction(['driver', 'admin']); } catch { return { error: ERR.not_allowed }; }
+  try { me = await staffForAction(['driver', 'admin', 'ops']); } catch { return { error: ERR.not_allowed }; }
   const tripId = String(f.get('id'));
   const step = String(f.get('status')) as TripStep;
   const { error } = await db().rpc('driver_set_trip_status', { p_actor: me.uid, p_trip_id: tripId, p_status: step, p_takeover: f.get('takeover') === 'on' });
@@ -51,7 +51,7 @@ export async function setTripStatus(_: ActionResult, f: FormData): Promise<Actio
 
 export async function addTripNote(_: ActionResult, f: FormData): Promise<ActionResult> {
   let me;
-  try { me = await staffForAction(['driver', 'admin']); } catch { return { error: ERR.not_allowed }; }
+  try { me = await staffForAction(['driver', 'admin', 'ops']); } catch { return { error: ERR.not_allowed }; }
   const tripId = String(f.get('id'));
   const note = String(f.get('note') ?? '').trim();
   const { data: evId, error } = await db().rpc('driver_add_note', { p_actor: me.uid, p_trip_id: tripId, p_note: note });
@@ -72,7 +72,7 @@ export async function addTripNote(_: ActionResult, f: FormData): Promise<ActionR
 
 export async function sendWelcome(_: ActionResult, f: FormData): Promise<ActionResult> {
   let me;
-  try { me = await staffForAction(['driver', 'admin']); } catch { return { error: ERR.not_allowed }; }
+  try { me = await staffForAction(['driver', 'admin', 'ops']); } catch { return { error: ERR.not_allowed }; }
   const tripId = String(f.get('id'));
   const { error } = await db().rpc('staff_mark_welcome', { p_actor: me.uid, p_trip_id: tripId });
   if (error) return { error: ERR[error.message] ?? 'ส่งไม่สำเร็จ ลองใหม่อีกครั้ง' };
@@ -84,7 +84,7 @@ export async function sendWelcome(_: ActionResult, f: FormData): Promise<ActionR
 
 export async function recordCall(_: ActionResult, f: FormData): Promise<ActionResult> {
   let me;
-  try { me = await staffForAction(['driver', 'admin']); } catch { return { error: ERR.not_allowed }; }
+  try { me = await staffForAction(['driver', 'admin', 'ops']); } catch { return { error: ERR.not_allowed }; }
   const { error } = await db().rpc('staff_call_trip', { p_actor: me.uid, p_trip_id: String(f.get('id')) });
   if (error) return { error: ERR[error.message] ?? 'บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง' };
   revalidatePath('/driver'); revalidatePath('/admin');

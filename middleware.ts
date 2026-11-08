@@ -4,7 +4,8 @@ import { homeFor, readSession, rolesFor, SESSION_COOKIE } from '@/lib/session';
 // Staff pages need a signed-in user with the right role.
 //   /admin, /api/admin : admin
 //   /exec              : admin or exec
-//   /driver            : admin or driver
+//   /ops               : admin or ops (on-site staff)
+//   /driver            : admin, driver or ops
 //   /account           : any staff
 export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
@@ -22,4 +23,4 @@ export async function middleware(req: NextRequest) {
   return NextResponse.redirect(url);
 }
 
-export const config = { matcher: ['/admin/:path*', '/api/admin/:path*', '/exec/:path*', '/driver/:path*', '/account/:path*'] };
+export const config = { matcher: ['/admin/:path*', '/api/admin/:path*', '/exec/:path*', '/driver/:path*', '/ops/:path*', '/account/:path*'] };

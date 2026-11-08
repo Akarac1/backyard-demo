@@ -15,11 +15,17 @@ type Trip = { id: string; direction: string; pax: number; pickup_at: string; fli
 const DAYS = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
 const n = (v: number) => v.toLocaleString('th-TH');
 
+const sb0 = () => db();
+
 export default async function AdminHome() {
   const staff = await requireStaff(['admin']);
   const today = todayBkk();
   const sb = db();
   const sel = 'id, code, plate, plate_province, status, shuttle, pax, start_date, end_date, customers(name, phone)';
+  const [{ count: lateIn }, { count: overOut }] = await Promise.all([
+    sb0().from('bookings').select('id', { count: 'exact', head: true }).eq('status', 'confirmed').lt('start_date', today),
+    sb0().from('bookings').select('id', { count: 'exact', head: true }).eq('status', 'checked_in').lt('end_date', today),
+  ]);
   const [occ, arrivals, departures, inLot, slips, lpr, trips, paidToday, owed, notes, calls] = await Promise.all([
     sb.from('v_occupancy_30d').select('day, used, total_spots, reserve_spots').limit(14),
     sb.from('bookings').select(sel).eq('start_date', today).in('status', ['confirmed', 'checked_in']).order('created_at'),
@@ -66,6 +72,9 @@ export default async function AdminHome() {
         </form>
       </header>
 
+      {((lateIn ?? 0) + (overOut ?? 0)) > 0 && (
+        <Link href="/ops" className="alert-strip">⚠ ต้องตรวจสอบ: เลยวันเข้าแต่ยังไม่มีบันทึกรถเข้า {lateIn ?? 0} รายการ · เลยวันรับรถแต่รถยังอยู่ในลาน {overOut ?? 0} รายการ → ดูที่หน้างาน</Link>
+      )}
       <section className="tiles">
         <div className="tile">
           <span>ที่จอดวันนี้</span>

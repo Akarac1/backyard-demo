@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/supabase';
 import { staffForAction } from '@/lib/auth';
+import type { Role } from '@/lib/session';
 import { afterConfirmed } from '@/lib/confirm';
 import { bkkLocalToIso } from '@/lib/request';
 import { thDate } from '@/lib/format';
@@ -20,7 +21,8 @@ const ERR: Record<string, string> = {
   invalid_days: 'จำนวนวันต้องอยู่ระหว่าง 1–60',
   vehicle_busy: 'รถคันนี้มีเที่ยวอื่นในช่วงเวลาใกล้กัน',
   not_enough_points: 'แต้มของลูกค้าไม่พอให้หัก',
-  invalid_points: 'จำนวนแต้มไม่ถูกต้อง',
+  invalid_points: 'จำนวนแต้มไม่ถูกต้อง หรือยังไม่ได้ใส่เหตุผล',
+  points_over_limit: 'เกินจำนวนแต้มที่หัวหน้าหน้างานให้ได้ต่อครั้ง ให้แอดมินเป็นคนให้',
   invalid_reward: 'ข้อมูลของรางวัลไม่ครบ (ชื่อ แต้มที่ใช้ อายุคูปอง 1–1095 วัน และคูปองส่วนลดค่าจอดต้องมีมูลค่า)',
   invalid_tier: 'ข้อมูลระดับไม่ถูกต้อง (ระดับแรกต้องเริ่มที่ 0 บาท และตัวคูณ 0.1–10)',
   invalid_tier_order: 'ระดับที่สูงกว่าต้องใช้ยอดมากกว่าระดับก่อนหน้า',
@@ -47,7 +49,7 @@ function thai(msg: string): string {
 }
 
 /** Run a database function as the signed-in admin; actor id is always taken from the session. */
-async function run(fn: string, args: Record<string, unknown>, okText: string, paths: string[], roles: ('admin' | 'exec' | 'driver')[] = ['admin']): Promise<ActionResult> {
+async function run(fn: string, args: Record<string, unknown>, okText: string, paths: string[], roles: Role[] = ['admin']): Promise<ActionResult> {
   let actor: string;
   try { actor = (await staffForAction(roles)).uid; } catch { return { error: ERR.not_allowed }; }
   const { error } = await db().rpc(fn, { p_actor: actor, ...args });
@@ -280,4 +282,33 @@ export async function recordPurchase(_: ActionResult, f: FormData): Promise<Acti
 export async function setMemberDiscountRules(_: ActionResult, f: FormData): Promise<ActionResult> {
   return run('admin_set_member_discount_rules', { p_min_days: num(f, 'min_days'), p_needs_shuttle: f.get('needs_shuttle') === 'on' },
     'บันทึกเงื่อนไขแล้ว', ['/admin/members']);
+}
+
+// ---------- on-site staff (ops) ----------
+export async function opsSetStatus(_: ActionResult, f: FormData): Promise<ActionResult> {
+  const id = str(f, 'id');
+  const status = str(f, 'status');
+  const labels: Record<string, string> = { checked_in: 'บันทึกรถเข้าแล้ว', checked_out: 'บันทึกรับรถแล้ว', confirmed: 'ย้อนกลับเป็นยังไม่เข้าแล้ว' };
+  return run('admin_set_booking_status', { p_id: id, p_status: status }, labels[status] ?? 'บันทึกแล้ว',
+    ['/ops', `/ops/b`, `/admin/bookings/${id}`, '/admin', '/admin/bookings'], ['admin', 'ops']);
+}
+
+export async function givePoints(_: ActionResult, f: FormData): Promise<ActionResult> {
+  let actor: string;
+  try { actor = (await staffForAction(['admin', 'ops'])).uid; } catch { return { error: ERR.not_allowed }; }
+  const who = str(f, 'who');
+  let customer = str(f, 'customer_id');
+  if (!customer && who) {
+    const digits = who.replace(/\D/g, '');
+    const { data } = await db().from('customers').select('id, phone, member_no, created_at')
+      .or(`member_no.eq.${who.toUpperCase().replace(/[^A-Z0-9]/g, '')}${digits.length >= 9 ? `,phone.ilike.%${digits.slice(-9)}` : ''}`)
+      .order('created_at', { ascending: false }).limit(1);
+    customer = data?.[0]?.id ?? '';
+  }
+  if (!customer) return { error: 'ไม่พบสมาชิกจากเบอร์หรือเลขสมาชิกนี้' };
+  const pts = Math.trunc(num(f, 'points'));
+  const { data, error } = await db().rpc('staff_give_points', { p_actor: actor, p_customer: customer, p_points: pts, p_note: str(f, 'note') });
+  if (error) return { error: thai(error.message) };
+  revalidatePath('/ops'); revalidatePath('/admin/members');
+  return { ok: `${pts > 0 ? 'เพิ่ม' : 'หัก'} ${Math.abs(pts)} แต้มแล้ว · ลูกค้ามี ${data} แต้ม` };
 }

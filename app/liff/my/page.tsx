@@ -3,6 +3,17 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { authHeaders, useLiff } from '../useLiff';
 import { MemberCard } from '@/components/MemberCard';
+import QRCode from 'qrcode';
+
+/** QR for staff at the lot: opens the booking on the on-site screen (staff must be signed in). */
+function BookingQr({ code }: { code: string }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    QRCode.toDataURL(`${window.location.origin}/ops/b/${code}`, { margin: 1, width: 240, color: { dark: '#0E3320' } }).then(setSrc).catch(() => {});
+  }, [code]);
+  if (!src) return null;
+  return <div className="booking-qr"><img src={src} alt={`QR การจอง ${code}`} /><p>แสดง QR นี้ให้พนักงานที่ลานจอด<br />เมื่อนำรถเข้าและมารับรถ</p></div>;
+}
 
 type Row = { id: string; code: string; plate: string; start_date: string; end_date: string; days: number; total_amount: number; status: string; shuttle: boolean; pax: number | null; rescheduled_at: string | null };
 
@@ -83,6 +94,7 @@ export default function MyBookings() {
               <div style={{ display: 'flex', justifyContent: 'space-between' }}><b>{r.code}</b><span className={`tag ${tone}`}>{label}</span></div>
               <p style={{ margin: '6px 0' }}>{r.plate} · {r.start_date} ถึง {r.end_date} ({r.days} วัน)</p>
               <p className="small" style={{ margin: 0 }}>{r.shuttle ? `รถรับส่ง ${r.pax} คน · ` : ''}{r.total_amount.toLocaleString('th-TH')} บาท{r.rescheduled_at ? ' · ใช้สิทธิ์เลื่อนแล้ว' : ''}</p>
+              {['confirmed', 'checked_in'].includes(r.status) && !r.shuttle && <BookingQr code={r.code} />}
               {r.status === 'pending_payment' && <Link className="btn primary" href={`/liff/pay/${r.id}`}>ชำระเงิน / ส่งสลิป</Link>}
             </div>
           );
