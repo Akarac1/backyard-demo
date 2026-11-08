@@ -154,7 +154,7 @@ export function statusMessage(c: Ctx, step: TripStep): LineMessage {
       highlight: c.returnPickupAt
         ? { title: 'นัดรับวันกลับ', lines: [dayTime(c.returnPickupAt), `จุดนัดรับ: ${c.meetingPoint}`, ...(c.returnFlight ? [`หลังเที่ยวบิน ${c.returnFlight} ลง`] : []), 'เที่ยวบินเปลี่ยน แจ้งในแชทนี้ได้เลย'] }
         : { title: 'วันกลับ', lines: ['แจ้งเวลาเครื่องลงในแชทนี้', `คนขับจะไปรับที่${c.meetingPoint}`] },
-      buttons: [{ label: 'ดูการจองของฉัน', uri: liff('/my'), primary: true }, { label: `โทรหาร้าน ${fmtPhone(PHONE)}`, uri: `tel:${PHONE}` }],
+      buttons: [{ label: 'สมาชิก & การจอง', uri: liff('/my'), primary: true }, { label: `โทรหาร้าน ${fmtPhone(PHONE)}`, uri: `tel:${PHONE}` }],
     });
   }
   if (step === 'en_route' && c.calledAt) {

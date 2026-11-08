@@ -112,7 +112,7 @@ export default function Rewards() {
           </>
         )}
 
-        <Link href="/liff/my" className="btn back-btn">กลับไปการจองของฉัน</Link>
+        <Link href="/liff/my" className="btn back-btn">กลับไปหน้าสมาชิก &amp; การจอง</Link>
       </div>
 
       {pick && (

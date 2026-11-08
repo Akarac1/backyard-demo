@@ -10,7 +10,7 @@ async function prices(): Promise<P> {
 }
 
 // Everything here answers with reply messages, which do not count against the LINE OA quota.
-type Event = { type: string; replyToken?: string; message?: { type: string; text?: string } };
+type Event = { type: string; replyToken?: string; message?: { type: string; text?: string }; source?: { userId?: string } };
 
 const GREEN = '#0E3320';
 const GOLD = '#E0B04A';
@@ -149,6 +149,8 @@ export async function POST(req: Request) {
       ]);
     }
     const text = e.type === 'message' && e.message?.type === 'text' ? e.message.text ?? '' : '';
+    // type "myid" in the chat to get your LINE user id (for ALERT_LINE_USER_IDS). Reply messages are free.
+    if (/^\s*myid\s*$/i.test(text) && e.source?.userId) return reply(e.replyToken, [{ type: 'text', text: `LINE user ID ของคุณ:\n${e.source.userId}` }]);
     if (/ราคา|เงื่อนไข/.test(text)) return reply(e.replyToken, [priceFlex(await prices())]);
     if (/แอดมิน|ติดต่อ|โทร/.test(text)) return reply(e.replyToken, [adminFlex]);
     if (/จอง/.test(text)) return reply(e.replyToken, [bookFlex(await prices())]);

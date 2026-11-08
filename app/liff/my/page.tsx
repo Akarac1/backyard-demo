@@ -49,7 +49,7 @@ export default function MyBookings() {
 
   return (
     <main>
-      <div className="hero"><span className="chip">Backyard Airport</span><h1>การจองของฉัน</h1></div>
+      <div className="hero"><span className="chip">Backyard Member</span><h1>สมาชิก &amp; การจอง</h1></div>
       <div className="wrap">
         {mem && (
           <div className="member-box">
@@ -85,7 +85,7 @@ export default function MyBookings() {
           </div>
         )}
         {!rows && <p className="small">กำลังโหลด…</p>}
-        {denied && <div className="alert bad">ยืนยันตัวตนกับ LINE ไม่สำเร็จ กรุณาปิดหน้านี้แล้วกด “การจองของฉัน” จากเมนูใน LINE อีกครั้ง</div>}
+        {denied && <div className="alert bad">ยืนยันตัวตนกับ LINE ไม่สำเร็จ กรุณาปิดหน้านี้แล้วกด “สมาชิก & การจอง” จากเมนูใน LINE อีกครั้ง</div>}
         {!denied && rows?.length === 0 && <div className="card">ยังไม่มีการจอง <Link className="btn primary" href="/liff/book">จองที่จอดรถ</Link></div>}
         {rows?.map((r) => {
           const [label, tone] = STATUS[r.status] ?? [r.status, ''];

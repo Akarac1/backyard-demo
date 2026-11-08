@@ -114,7 +114,7 @@ export function confirmationFlex(b: {
           type: 'button', style: 'primary', color: '#E0B04A',
           // open as a LIFF app (liff.line.me/<id>/my) so the page knows who the customer is;
           // a plain https link opens LINE's normal in-app browser with no LINE login
-          action: { type: 'uri', label: 'ดูการจองของฉัน', uri: process.env.NEXT_PUBLIC_LIFF_ID ? `https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID}/my` : `${baseUrl}/liff/my` },
+          action: { type: 'uri', label: 'สมาชิก & การจอง', uri: process.env.NEXT_PUBLIC_LIFF_ID ? `https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID}/my` : `${baseUrl}/liff/my` },
         }],
       },
     },

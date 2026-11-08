@@ -66,7 +66,7 @@ export default function PayPage({ params }: { params: Promise<{ id: string }> })
             <div className="alert ok">ยืนยันการจองแล้ว ส่งรายละเอียดไปในแชท LINE ของคุณแล้ว</div>
             {b.shuttle && <p>รถรับส่งไป-กลับ {b.pax} คน · คนขับจะทักแชทก่อนออกรถ</p>}
             <button className="primary" onClick={closeLiff}>กลับไปที่แชท</button>
-            <Link className="btn" style={{ width: '100%', marginTop: 10 }} href="/liff/my">การจองของฉัน</Link>
+            <Link className="btn" style={{ width: '100%', marginTop: 10 }} href="/liff/my">สมาชิก &amp; การจอง</Link>
           </div>
         ) : b.status === 'expired' ? (
           <div className="card"><div className="alert bad">หมดเวลาชำระเงิน กรุณาจองใหม่</div><Link className="btn primary" href="/liff/book">จองใหม่</Link></div>
