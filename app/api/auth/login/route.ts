@@ -15,7 +15,13 @@ export async function POST(req: Request) {
   const u = (data as { id: string; username: string; display_name: string; role: Role }[] | null)?.[0];
   if (!u) return NextResponse.json({ error: 'ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง' }, { status: 401 });
 
-  const token = await signSession({ uid: u.id, role: u.role, name: u.display_name, username: u.username });
+  let token: string;
+  try {
+    token = await signSession({ uid: u.id, role: u.role, name: u.display_name, username: u.username });
+  } catch (e) {
+    console.error('signSession', String(e));
+    return NextResponse.json({ error: 'ระบบยังไม่ได้ตั้งค่า SESSION_SECRET (ต้องยาว 32 ตัวขึ้นไป) ใน Vercel แล้ว Redeploy' }, { status: 500 });
+  }
   // only same-site relative paths, and only ones this role may open
   const safeNext = next && next.startsWith('/') && !next.startsWith('//') &&
     (u.role === 'admin' || next.startsWith('/exec') || next.startsWith('/account')) ? next : homeFor(u.role);
