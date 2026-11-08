@@ -4,7 +4,7 @@ import { db } from '@/lib/supabase';
 import { bkkDay, thDate, thTime } from '@/lib/format';
 import { DIRECTION, STATUS, StatusTag } from '@/lib/labels';
 import { ActionButton, ActionForm, Submit } from '@/components/ActionForm';
-import { addExtraDays, adjustPoints, markPaid, setStatus, updateBooking } from '../../actions';
+import { addExtraDays, adjustPoints, markPaid, setStatus, setTierOverride, updateBooking } from '../../actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +28,14 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
   ]);
   if (!b) notFound();
   const c = b.customers as { name: string; phone: string; line_user_id: string } | null;
-  const { data: balance } = await sb.rpc('points_balance', { p_customer: b.customer_id });
+  const [{ data: balance }, { data: tierRow }, { data: spend }, { data: tiers }, { data: cust }] = await Promise.all([
+    sb.rpc('points_balance', { p_customer: b.customer_id }),
+    sb.rpc('customer_tier', { p_customer: b.customer_id }),
+    sb.rpc('customer_spend', { p_customer: b.customer_id }),
+    sb.from('member_tiers').select('code, name').order('sort'),
+    sb.from('customers').select('member_no, tier_override').eq('id', b.customer_id).single(),
+  ]);
+  const tier = (Array.isArray(tierRow) ? tierRow[0] : tierRow) as { code: string; name: string; multiplier: number } | null;
   const vname = (vid: string | null) => vehicles?.find((v) => v.id === vid)?.name;
   const paid = (pays ?? []).filter((p) => p.status === 'verified').reduce((a, p) => a + p.amount, 0);
   const pendingBooking = (pays ?? []).find((p) => p.kind === 'booking' && p.status === 'pending');
@@ -139,7 +146,17 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
               {b.coupon_amount > 0 ? ` · คูปอง −${n(b.coupon_amount)}` : ''}
             </p>
           )}
-          <h3 style={{ marginTop: 16 }}>แต้มของลูกค้า: {n(Number(balance ?? 0))} แต้ม</h3>
+          <h3 style={{ marginTop: 16 }}>สมาชิก {cust?.member_no} · ระดับ {tier?.name}{cust?.tier_override ? ' (กำหนดเอง)' : ''} · แต้ม {n(Number(balance ?? 0))}</h3>
+          <p className="hint" style={{ margin: '0 0 6px' }}>ยอดใช้บริการ 12 เดือน {n(Number(spend ?? 0))} บาท · ได้แต้ม x{Number(tier?.multiplier ?? 1)}</p>
+          <ActionForm action={setTierOverride} className="tier-row" >
+            <input type="hidden" name="customer_id" value={b.customer_id} />
+            <input type="hidden" name="booking_id" value={b.id} />
+            <select name="tier" defaultValue={cust?.tier_override ?? ''} aria-label="กำหนดระดับ">
+              <option value="">ตามยอดใช้จ่าย (อัตโนมัติ)</option>
+              {(tiers ?? []).map((t) => <option key={t.code} value={t.code}>กำหนดเป็น {t.name}</option>)}
+            </select>
+            <Submit small variant="plain">บันทึกระดับ</Submit>
+          </ActionForm>
           <ActionForm action={adjustPoints} className="form grid2" resetOnOk>
             <input type="hidden" name="customer_id" value={b.customer_id} />
             <input type="hidden" name="booking_id" value={b.id} />

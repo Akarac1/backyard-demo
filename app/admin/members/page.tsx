@@ -1,6 +1,6 @@
 import { db } from '@/lib/supabase';
 import { ActionButton, ActionForm, Submit } from '@/components/ActionForm';
-import { cancelCoupon, importMembers, removeMember, saveReward, setMemberDiscount, setPointsSettings, takeCoupon } from '../actions';
+import { cancelCoupon, importMembers, removeMember, saveReward, setMemberDiscount, setMemberDiscountRules, setPointsSettings, takeCoupon } from '../actions';
 import { thDate, bkkDay } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
@@ -18,7 +18,7 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
   if (q?.trim()) list = digits.length >= 3 ? list.like('phone', `%${digits}%`) : list.ilike('name', `%${q.trim()}%`);
   const monthStart = new Date().toLocaleString('sv-SE', { timeZone: 'Asia/Bangkok' }).slice(0, 8) + '01';
   const [{ data: s }, { data: members, count }, { data: used }, { data: lots }, { data: spentMonth }, { data: rewards }, { data: couponsMonth }] = await Promise.all([
-    sb.from('settings').select('member_discount, points_enabled, points_per_baht, point_value, referral_points, points_expiry_months').eq('id', 1).single(),
+    sb.from('settings').select('member_discount, member_discount_min_days, member_discount_needs_shuttle, points_enabled, points_per_baht, point_value, referral_points, points_expiry_months').eq('id', 1).single(),
     list,
     sb.from('bookings').select('id, code, discount_amount, discount_reason, referrer_phone, booked_at, created_at, customers(name, phone)')
       .gt('discount_amount', 0).in('status', ['confirmed', 'checked_in', 'checked_out', 'no_show'])
@@ -175,6 +175,12 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
           <ActionForm action={setMemberDiscount} className="form">
             <label>ส่วนลด<span className="with-unit"><input name="amount" type="number" min={0} max={10000} defaultValue={s?.member_discount ?? 100} required /><em>บาท</em></span></label>
             <div className="form-actions"><Submit>บันทึก</Submit></div>
+          </ActionForm>
+          <h3 style={{ marginTop: 18 }}>เงื่อนไขการจอง</h3>
+          <ActionForm action={setMemberDiscountRules} className="form grid2">
+            <label>จองอย่างน้อย<span className="with-unit"><input name="min_days" type="number" min={1} max={60} defaultValue={s?.member_discount_min_days ?? 3} required /><em>วัน</em></span></label>
+            <label className="check" style={{ alignSelf: 'end' }}><input type="checkbox" name="needs_shuttle" defaultChecked={s?.member_discount_needs_shuttle ?? true} /> ต้องใช้รถรับส่ง</label>
+            <div className="form-actions span2"><Submit small variant="plain">บันทึกเงื่อนไข</Submit></div>
           </ActionForm>
           <h3 style={{ marginTop: 18 }}>ใครได้ส่วนลด</h3>
           <ul className="hint" style={{ paddingLeft: 18, margin: 0 }}>

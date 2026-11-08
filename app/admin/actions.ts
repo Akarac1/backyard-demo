@@ -22,6 +22,11 @@ const ERR: Record<string, string> = {
   not_enough_points: 'แต้มของลูกค้าไม่พอให้หัก',
   invalid_points: 'จำนวนแต้มไม่ถูกต้อง',
   invalid_reward: 'ข้อมูลของรางวัลไม่ครบ (ชื่อ แต้มที่ใช้ อายุคูปอง 1–1095 วัน และคูปองส่วนลดค่าจอดต้องมีมูลค่า)',
+  invalid_tier: 'ข้อมูลระดับไม่ถูกต้อง (ระดับแรกต้องเริ่มที่ 0 บาท และตัวคูณ 0.1–10)',
+  invalid_tier_order: 'ระดับที่สูงกว่าต้องใช้ยอดมากกว่าระดับก่อนหน้า',
+  invalid_campaign: 'ข้อมูลแคมเปญไม่ครบ (แต้มคูณต้องมากกว่า 1, โบนัสอย่างน้อย 1 แต้ม, วันสิ้นสุดต้องหลังวันเริ่ม)',
+  invalid_purchase: 'ยอดเงินไม่ถูกต้อง',
+  member_not_found: 'ไม่พบสมาชิกจากเบอร์หรือเลขสมาชิกนี้',
   coupon_not_found: 'ไม่พบรหัสคูปองนี้',
   coupon_used: 'คูปองนี้ถูกใช้หรือยกเลิกไปแล้ว',
   coupon_expired: 'คูปองนี้หมดอายุแล้ว',
@@ -227,4 +232,44 @@ export async function takeCoupon(_: ActionResult, f: FormData): Promise<ActionRe
 
 export async function cancelCoupon(_: ActionResult, f: FormData): Promise<ActionResult> {
   return run('admin_cancel_coupon', { p_code: str(f, 'code') }, 'ยกเลิกคูปองและคืนแต้มแล้ว', ['/admin/members']);
+}
+
+// ---------- tiers & campaigns ----------
+export async function saveTier(_: ActionResult, f: FormData): Promise<ActionResult> {
+  return run('admin_save_tier', { p_code: str(f, 'code'), p_name: str(f, 'name'), p_min: num(f, 'min'), p_mult: num(f, 'mult') },
+    'บันทึกระดับแล้ว', ['/admin/campaigns']);
+}
+
+export async function setTierOverride(_: ActionResult, f: FormData): Promise<ActionResult> {
+  const bid = str(f, 'booking_id');
+  return run('admin_set_tier_override', { p_customer: str(f, 'customer_id'), p_tier: str(f, 'tier') },
+    str(f, 'tier') ? 'กำหนดระดับให้ลูกค้าแล้ว' : 'กลับไปใช้ระดับตามยอดใช้จ่าย', [`/admin/bookings/${bid}`, '/admin/campaigns']);
+}
+
+const bkkInput = (v: string) => (v ? new Date(`${v}:00+07:00`).toISOString() : null);
+
+export async function saveCampaign(_: ActionResult, f: FormData): Promise<ActionResult> {
+  return run('admin_save_campaign', {
+    p_id: str(f, 'id') || null, p_name: str(f, 'name'), p_description: str(f, 'description'),
+    p_business: str(f, 'business'), p_tiers: f.getAll('tiers').map(String), p_kind: str(f, 'kind'),
+    p_multiplier: num(f, 'multiplier') || 1, p_bonus: num(f, 'bonus') || 0,
+    p_starts: bkkInput(str(f, 'starts')), p_ends: bkkInput(str(f, 'ends')), p_active: f.get('active') === 'on',
+  }, 'บันทึกแคมเปญแล้ว', ['/admin/campaigns']);
+}
+
+export async function recordPurchase(_: ActionResult, f: FormData): Promise<ActionResult> {
+  let actor: string;
+  try { actor = (await staffForAction(['admin'])).uid; } catch { return { error: ERR.not_allowed }; }
+  const { data, error } = await db().rpc('admin_record_purchase', {
+    p_actor: actor, p_who: str(f, 'who'), p_business: str(f, 'business'), p_amount: num(f, 'amount'), p_note: str(f, 'note'),
+  });
+  if (error) return { error: thai(error.message) };
+  revalidatePath('/admin/campaigns');
+  const r = (Array.isArray(data) ? data[0] : data) as { customer_name: string; points: number; tier: string };
+  return { ok: `บันทึกแล้ว · ${r.customer_name} ได้ ${r.points} แต้ม (ระดับ ${r.tier})` };
+}
+
+export async function setMemberDiscountRules(_: ActionResult, f: FormData): Promise<ActionResult> {
+  return run('admin_set_member_discount_rules', { p_min_days: num(f, 'min_days'), p_needs_shuttle: f.get('needs_shuttle') === 'on' },
+    'บันทึกเงื่อนไขแล้ว', ['/admin/members']);
 }

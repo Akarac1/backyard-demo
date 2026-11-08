@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authHeaders, useLiff } from '../useLiff';
 
-type Prices = { price_per_day: number; shuttle_price: number; hold_minutes: number; reschedule_min_days: number; pickup_meeting_point: string; member_discount?: number };
+type Prices = { price_per_day: number; shuttle_price: number; hold_minutes: number; reschedule_min_days: number; pickup_meeting_point: string; member_discount?: number; member_discount_min_days?: number; member_discount_needs_shuttle?: boolean };
 const DEFAULT_PRICES: Prices = { price_per_day: 100, shuttle_price: 300, hold_minutes: 15, reschedule_min_days: 7, pickup_meeting_point: 'ชั้น 2 ประตู 4' };
 
 function todayBkk() {
@@ -80,7 +80,7 @@ export default function BookPage() {
     // the final price is decided by the server when booking; this only shows it ahead
     fetch('/api/discount', {
       method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders(liff.idToken) },
-      body: JSON.stringify({ phone: f.phone, refPhone: f.refPhone }),
+      body: JSON.stringify({ phone: f.phone, refPhone: f.refPhone, days, shuttle: f.shuttle }),
     }).then((r) => (r.ok ? r.json() : null)).then((j) => { setDisc(j ?? { amount: 0, reason: null }); setCouponId(j?.coupons?.[0]?.id ?? ''); }).catch(() => setDisc({ amount: 0, reason: null }));
   }
 
@@ -154,7 +154,9 @@ export default function BookPage() {
             )}
             {couponAmount > 0 && <div className="price discount"><span>คูปอง {coupon?.code}</span><span>−{couponAmount.toLocaleString('th-TH')} บาท</span></div>}
             <div className="price total"><span>ยอดชำระ</span><span>{disc ? `${total.toLocaleString('th-TH')} บาท` : 'กำลังคำนวณ…'}</span></div>
-            {disc && !discount && f.refPhone.trim() && <p className="small" style={{ margin: '4px 0 0' }}>ไม่พบเบอร์ลูกค้าที่แนะนำในระบบ จึงยังไม่มีส่วนลด กด “แก้ไข” เพื่อตรวจเบอร์ได้</p>}
+            {disc && !discount && (pr.member_discount ?? 0) > 0 && (days < (pr.member_discount_min_days ?? 3) || ((pr.member_discount_needs_shuttle ?? true) && !f.shuttle))
+              ? <p className="small" style={{ margin: '4px 0 0' }}>ส่วนลดลูกค้าเก่า/เพื่อนแนะนำ ใช้ได้เมื่อจอง {pr.member_discount_min_days ?? 3} วันขึ้นไป{(pr.member_discount_needs_shuttle ?? true) ? ' และใช้รถรับส่ง' : ''}</p>
+              : disc && !discount && f.refPhone.trim() && <p className="small" style={{ margin: '4px 0 0' }}>ไม่พบเบอร์ลูกค้าที่แนะนำในระบบ จึงยังไม่มีส่วนลด กด “แก้ไข” เพื่อตรวจเบอร์ได้</p>}
             <label className="agree">
               <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
               <span>ข้อมูลถูกต้อง และยอมรับเงื่อนไข: ชำระเต็มจำนวน ไม่คืนเงิน เลื่อนวันได้ 1 ครั้ง (ล่วงหน้า {pr.reschedule_min_days} วัน)</span>
@@ -196,7 +198,7 @@ export default function BookPage() {
           <label htmlFor="name">ชื่อผู้จอง</label><input id="name" value={f.name} onChange={set('name')} required />
           <label htmlFor="phone">เบอร์โทร</label><input id="phone" type="tel" inputMode="tel" value={f.phone} onChange={set('phone')} required />
           <label htmlFor="ref">เบอร์ลูกค้าเก่าที่แนะนำ (ถ้ามี)</label><input id="ref" type="tel" inputMode="tel" placeholder="ลูกค้าใหม่ที่เพื่อนแนะนำ ใส่เบอร์เพื่อน" value={f.refPhone} onChange={set('refPhone')} />
-          {(pr.member_discount ?? 0) > 0 && <p className="small" style={{ margin: '6px 0 0' }}>ลูกค้าเก่า หรือลูกค้าที่เพื่อนแนะนำ ลด {pr.member_discount} บาท · ดูยอดสุดท้ายในหน้าถัดไป</p>}
+          {(pr.member_discount ?? 0) > 0 && <p className="small" style={{ margin: '6px 0 0' }}>ลูกค้าเก่า หรือลูกค้าที่เพื่อนแนะนำ ลด {pr.member_discount} บาท เมื่อจอง {pr.member_discount_min_days ?? 3} วันขึ้นไป{(pr.member_discount_needs_shuttle ?? true) ? ' และใช้รถรับส่ง' : ''} · ดูยอดสุดท้ายในหน้าถัดไป</p>}
         </div>
 
         <div className="card">

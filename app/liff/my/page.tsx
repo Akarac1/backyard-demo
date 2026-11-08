@@ -2,10 +2,12 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { authHeaders, useLiff } from '../useLiff';
+import { MemberCard } from '@/components/MemberCard';
 
 type Row = { id: string; code: string; plate: string; start_date: string; end_date: string; days: number; total_amount: number; status: string; shuttle: boolean; pax: number | null; rescheduled_at: string | null };
 
 type Points = { points: number; pointValue: number; enabled: boolean; expiring: number; expiringAt: string | null; moves: { at: string; points: number; label: string }[]; perBaht: number; referral: number; months: number };
+type Member = { memberNo: string | null; name: string | null; tier: string; tierName: string; multiplier: number; spend: number; windowMonths: number; nextTierName: string | null; nextMin: number | null; points: number; manual: boolean; campaigns: { name: string; description: string | null; business: string; effect: string | null; endsAt: string | null }[] };
 const thShort = (ts: string) => new Date(ts).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short', year: '2-digit' });
 
 const STATUS: Record<string, [string, string]> = {
@@ -19,6 +21,7 @@ export default function MyBookings() {
   const [denied, setDenied] = useState(false);
   const [pts, setPts] = useState<Points | null>(null);
   const [showMoves, setShowMoves] = useState(false);
+  const [mem, setMem] = useState<Member | null>(null);
   useEffect(() => {
     if (!liff.ready) return;
     fetch('/api/my', { headers: authHeaders(liff.idToken) })
@@ -27,6 +30,8 @@ export default function MyBookings() {
         setRows(r.ok ? await r.json() : []);
       })
       .catch(() => setRows([]));
+    fetch('/api/member', { headers: authHeaders(liff.idToken) })
+      .then((r) => (r.ok ? r.json() : null)).then((j) => j && setMem(j)).catch(() => {});
     fetch('/api/points', { headers: authHeaders(liff.idToken) })
       .then((r) => (r.ok ? r.json() : null)).then((j) => j && setPts(j)).catch(() => {});
   }, [liff.ready, liff.idToken]);
@@ -35,11 +40,28 @@ export default function MyBookings() {
     <main>
       <div className="hero"><span className="chip">Backyard Airport</span><h1>การจองของฉัน</h1></div>
       <div className="wrap">
+        {mem && (
+          <div className="member-box">
+            <MemberCard tier={mem.tier} tierName={mem.tierName} name={mem.name} memberNo={mem.memberNo} points={mem.points} multiplier={mem.multiplier} />
+            <div className="member-progress">
+              {mem.nextTierName && mem.nextMin != null && !mem.manual ? (
+                <>
+                  <p>ยอดใช้บริการ {mem.windowMonths} เดือนล่าสุด <b>{mem.spend.toLocaleString('th-TH')}</b> บาท</p>
+                  <div className="bar"><i style={{ width: `${Math.min(100, Math.round((mem.spend / mem.nextMin) * 100))}%` }} /></div>
+                  <p className="small" style={{ margin: 0 }}>ใช้บริการอีก {(mem.nextMin - mem.spend).toLocaleString('th-TH')} บาท เพื่อเป็น {mem.nextTierName}</p>
+                </>
+              ) : <p>ระดับ <b>{mem.tierName}</b>{mem.manual ? ' (มอบโดยร้าน)' : ' · ระดับสูงสุด'} · ได้แต้ม x{mem.multiplier}</p>}
+            </div>
+            {mem.campaigns.map((c) => (
+              <div className="camp" key={c.name}>
+                <b>{c.name}</b>{c.effect ? ` · ${c.effect}` : ''}
+                <small>{c.description ? `${c.description} · ` : ''}{c.business}{c.endsAt ? ` · ถึง ${thShort(c.endsAt)}` : ''}</small>
+              </div>
+            ))}
+          </div>
+        )}
         {pts?.enabled && (
           <div className="card points-card">
-            <div className="points-top">
-              <div><span>แต้มสะสม</span><b>{pts.points.toLocaleString('th-TH')}<small> แต้ม</small></b></div>
-            </div>
             <div className="points-actions"><Link href="/liff/rewards">แลกของรางวัล / คูปองของฉัน</Link></div>
             {pts.expiring > 0 && pts.expiringAt && <p className="small warn-text">{pts.expiring} แต้มจะหมดอายุ {thShort(pts.expiringAt)}</p>}
             <p className="small" style={{ margin: '6px 0 0' }}>ทุก {pts.perBaht} บาทที่ชำระได้ 1 แต้ม{pts.referral > 0 ? ` · แนะนำเพื่อนให้ใส่เบอร์คุณตอนจอง รับ ${pts.referral} แต้ม` : ''} · แต้มมีอายุ {pts.months % 12 === 0 ? `${pts.months / 12} ปี` : `${pts.months} เดือน`}</p>

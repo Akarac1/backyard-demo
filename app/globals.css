@@ -409,3 +409,50 @@ table.report th:first-child, table.report td:first-child { text-align: left; }
 .inline-edit summary::-webkit-details-marker, .add-reward summary::-webkit-details-marker { display: none; }
 .inline-edit[open] { position: relative; }
 .inline-edit-body { position: absolute; right: 0; z-index: 20; width: 520px; max-width: 80vw; background: #fff; border-radius: 14px; padding: 16px; box-shadow: 0 12px 40px rgba(0,0,0,.18); text-align: left; }
+
+/* ---------- Backyard member card ---------- */
+.mcard { position: relative; overflow: hidden; width: 100%; max-width: 420px; aspect-ratio: 1.586; border-radius: 18px; padding: 18px 20px; box-sizing: border-box;
+  display: flex; flex-direction: column; justify-content: space-between; box-shadow: 0 10px 30px rgba(10,30,20,.28), inset 0 0 0 1px rgba(255,255,255,.18); font-family: inherit; }
+.mcard::before { content: ''; position: absolute; inset: 0; background:
+  repeating-linear-gradient(115deg, rgba(255,255,255,.06) 0 2px, transparent 2px 14px); pointer-events: none; }
+.mcard::after { content: ''; position: absolute; right: -60px; bottom: -80px; width: 260px; height: 260px; border-radius: 50%;
+  border: 26px solid rgba(255,255,255,.10); pointer-events: none; }
+.mcard-shine { position: absolute; inset: -40% -10% auto auto; width: 70%; height: 120%; transform: rotate(25deg);
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.22), transparent); pointer-events: none; }
+.mcard-top { position: relative; display: flex; align-items: center; gap: 10px; z-index: 1; }
+.mcard-top img { border-radius: 50%; background: rgba(255,255,255,.85); padding: 2px; }
+.mcard-brand { display: flex; flex-direction: column; line-height: 1.05; }
+.mcard-brand b { font-size: 18px; letter-spacing: 3px; }
+.mcard-brand span { font-size: 10.5px; letter-spacing: 5px; opacity: .85; }
+.mcard-tier { margin-left: auto; font-size: 19px; font-weight: 800; letter-spacing: 3px; }
+.mcard-chip { position: relative; z-index: 1; width: 42px; height: 32px; border-radius: 7px; margin-top: 4px;
+  background: linear-gradient(135deg, #f7e7a8, #c9a24a 55%, #f1d98b); box-shadow: inset 0 0 0 1px rgba(0,0,0,.18); }
+.mcard-chip::after { content: ''; position: absolute; inset: 7px 9px; border: 1px solid rgba(0,0,0,.25); border-radius: 3px; }
+.mcard-bottom { position: relative; z-index: 1; display: flex; justify-content: space-between; align-items: flex-end; gap: 10px; }
+.mcard-name { font-size: 16px; font-weight: 700; letter-spacing: .5px; max-width: 220px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mcard-no { font-size: 13px; letter-spacing: 2.5px; opacity: .85; font-variant-numeric: tabular-nums; margin-top: 2px; }
+.mcard-pts { text-align: right; display: flex; flex-direction: column; align-items: flex-end; line-height: 1.1; }
+.mcard-pts b { font-size: 26px; font-weight: 800; }
+.mcard-pts span { font-size: 10px; letter-spacing: 3px; opacity: .85; }
+.mcard-pts em { font-style: normal; font-size: 11px; margin-top: 4px; padding: 2px 8px; border-radius: 99px; background: rgba(255,255,255,.25); }
+.mcard-foot { position: absolute; left: 20px; bottom: 6px; font-size: 8.5px; letter-spacing: 3px; opacity: .55; z-index: 1; }
+.mcard-bronze { color: #fff7ef; background: linear-gradient(135deg, #4a2a12 0%, #8c5428 35%, #c98a56 58%, #a86a3d 75%, #5e3517 100%); }
+.mcard-silver { color: #1d2a33; background: linear-gradient(135deg, #6c7782 0%, #b8c2cb 32%, #f3f6f8 55%, #c4ccd3 72%, #7d8893 100%); }
+.mcard-gold   { color: #2f2104; background: linear-gradient(135deg, #6e4f10 0%, #c0912a 30%, #f6dc8a 55%, #d4a63a 75%, #8a6416 100%); }
+.mcard-silver .mcard-pts em, .mcard-gold .mcard-pts em { background: rgba(255,255,255,.45); }
+
+.member-box { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
+.member-progress { background: #fff; border-radius: 14px; padding: 12px 14px; }
+.member-progress .bar { height: 8px; border-radius: 99px; background: #E6ECE8; overflow: hidden; margin: 8px 0 6px; }
+.member-progress .bar i { display: block; height: 100%; border-radius: 99px; background: linear-gradient(90deg, #1F5A3A, #E0B04A); }
+.member-progress p { margin: 0; font-size: 13.5px; }
+.camp { background: #FFF8E6; border: 1px solid #F0D58C; border-radius: 12px; padding: 10px 12px; font-size: 14px; }
+.camp b { color: #0E3320; }
+.camp small { display: block; color: #6b5a2a; margin-top: 2px; }
+.cards-row { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.tier-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.tier-row input { width: 120px; }
+.tier-row .with-unit input { width: 110px; margin-top: 0; }
+.tier-row .with-unit em { margin-top: 0; }
+.tier-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; vertical-align: middle; margin-right: 4px; }
+.tier-checks > div { display: flex; gap: 16px; margin-top: 6px; font-weight: 400; }
