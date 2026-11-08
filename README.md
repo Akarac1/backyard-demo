@@ -17,7 +17,7 @@
 1. สร้างโปรเจกต์ใหม่ (region Singapore)
 2. SQL Editor: รัน `supabase/migrations/0001_init.sql` แล้วตามด้วย `0002_storage_and_jobs.sql`
    - ถ้าจะให้ระบบปล่อยที่ที่ไม่จ่ายเงินอัตโนมัติ ให้เปิด extension `pg_cron` ก่อนรัน 0002
-3. รัน `supabase/migrations/0003_exec_report.sql` (รายงานผู้บริหาร)
+3. รัน `supabase/migrations/0003_exec_report.sql` (รายงานผู้บริหาร) และ `0004_booking_code.sql` (รหัสการจองไม่ซ้ำ)
 4. ถ้าอยากให้หน้าแอดมินมีข้อมูลตัวอย่าง: รัน `supabase/seed_demo.sql` และถ้าอยากให้รายงานผู้บริหารมีข้อมูลย้อนหลัง 2 ปี รัน `supabase/seed_history.sql` ต่อ (ห้ามรันในฐานข้อมูลจริง)
 5. Project Settings › API: คัดลอก Project URL กับ `service_role` key
 
