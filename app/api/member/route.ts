@@ -18,10 +18,11 @@ export async function GET(req: Request) {
     memberNo: m.member_no, name: m.name, tier: m.tier, tierName: m.tier_name, multiplier: Number(m.multiplier),
     spend: m.spend, windowMonths: m.window_months, nextTierName: m.next_tier_name, nextMin: m.next_min,
     points: m.points, manual: m.manual,
-    campaigns: ((camps ?? []) as { name: string; description: string | null; business: string; kind: string; multiplier: number; bonus_points: number; ends_at: string | null }[])
+    campaigns: ((camps ?? []) as { name: string; description: string | null; business: string; kind: string; multiplier: number; bonus_points: number; ends_at: string | null; min_days: number; free_days: number; amount_off: number }[])
       .map((c) => ({
         name: c.name, description: c.description, business: BIZ[c.business] ?? c.business, endsAt: c.ends_at,
-        effect: c.kind === 'multiplier' ? `แต้ม x${Number(c.multiplier)}` : c.kind === 'bonus' ? `+${c.bonus_points} แต้มต่อการใช้บริการ` : null,
+        effect: c.kind === 'multiplier' ? `แต้ม x${Number(c.multiplier)}` : c.kind === 'bonus' ? `+${c.bonus_points} แต้มต่อการใช้บริการ`
+          : c.kind === 'free_days' ? `จอด ${c.min_days} วันขึ้นไป ฟรี ${c.free_days} วัน` : c.kind === 'amount_off' ? `จอด ${c.min_days} วันขึ้นไป ลด ${c.amount_off.toLocaleString('th-TH')} บาท` : null,
       })),
   });
 }

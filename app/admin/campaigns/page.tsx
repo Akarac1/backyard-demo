@@ -7,10 +7,12 @@ import { thDate, bkkDay } from '@/lib/format';
 export const dynamic = 'force-dynamic';
 
 type Tier = { code: string; name: string; min_spend: number; multiplier: number; color: string; sort: number };
-type Campaign = { id: string; name: string; description: string | null; business: string; tiers: string[] | null; kind: string; multiplier: number; bonus_points: number; starts_at: string; ends_at: string | null; active: boolean };
+type Campaign = { id: string; name: string; description: string | null; business: string; tiers: string[] | null; kind: string; multiplier: number; bonus_points: number; starts_at: string; ends_at: string | null; active: boolean; min_days: number; free_days: number; amount_off: number; stackable: boolean };
 
 const BIZ: Record<string, string> = { all: 'ทุกธุรกิจ', parking: 'ที่จอดรถ', cafe: 'คาเฟ่', stay: 'ที่พัก' };
-const KIND: Record<string, string> = { multiplier: 'แต้มคูณ', bonus: 'แต้มโบนัส', announce: 'ประกาศ/โปรโมชัน' };
+const KIND: Record<string, string> = { free_days: 'ส่วนลด: จอดครบ ฟรีวัน', amount_off: 'ส่วนลด: จอดครบ ลดเงิน', multiplier: 'แต้มคูณ', bonus: 'แต้มโบนัส', announce: 'ประกาศ/โปรโมชัน' };
+const effect = (c: Campaign) => c.kind === 'multiplier' ? `แต้ม x${Number(c.multiplier)}` : c.kind === 'bonus' ? `+${c.bonus_points} แต้ม`
+  : c.kind === 'free_days' ? `จอด ${c.min_days}+ วัน ฟรี ${c.free_days} วัน` : c.kind === 'amount_off' ? `จอด ${c.min_days}+ วัน ลด ${c.amount_off.toLocaleString('th-TH')} บาท` : 'ประกาศ';
 const localInput = (ts: string | null) => (ts ? new Date(ts).toLocaleString('sv-SE', { timeZone: 'Asia/Bangkok' }).slice(0, 16).replace(' ', 'T') : '');
 
 function campaignState(c: Campaign): [string, string] {
@@ -49,6 +51,13 @@ export default async function CampaignsPage() {
       </label>
       <label>แต้มคูณ<span className="with-unit"><input name="multiplier" type="number" step="0.1" min={1} max={10} defaultValue={c?.multiplier ?? 2} /><em>เท่า</em></span><small>ใช้กับประเภทแต้มคูณ (คูณเพิ่มจากตัวคูณของระดับ)</small></label>
       <label>แต้มโบนัส<span className="with-unit"><input name="bonus" type="number" min={0} defaultValue={c?.bonus_points ?? 0} /><em>แต้ม/ครั้ง</em></span><small>ใช้กับประเภทแต้มโบนัส</small></label>
+      <fieldset className="span2 camp-disc">
+        <legend>สำหรับแคมเปญส่วนลด (ที่จอดรถเท่านั้น)</legend>
+        <label>จองอย่างน้อย<span className="with-unit"><input name="min_days" type="number" min={0} defaultValue={c?.min_days ?? 10} /><em>วัน</em></span></label>
+        <label>ฟรี<span className="with-unit"><input name="free_days" type="number" min={0} defaultValue={c?.free_days ?? 1} /><em>วัน</em></span><small>แบบ “จอดครบ ฟรีวัน”</small></label>
+        <label>ลด<span className="with-unit"><input name="amount_off" type="number" min={0} defaultValue={c?.amount_off ?? 0} /><em>บาท</em></span><small>แบบ “จอดครบ ลดเงิน”</small></label>
+        <label className="check"><input type="checkbox" name="stackable" defaultChecked={c?.stackable ?? true} /> ใช้ร่วมกับส่วนลดลูกค้าเก่า 100 บาทได้</label>
+      </fieldset>
       <label>เริ่ม<input name="starts" type="datetime-local" defaultValue={localInput(c?.starts_at ?? null)} /></label>
       <label>สิ้นสุด<input name="ends" type="datetime-local" defaultValue={localInput(c?.ends_at ?? null)} /><small>เว้นว่าง = ไม่มีวันจบ</small></label>
       <div className="span2 tier-checks">ระดับที่ได้สิทธิ์ (ไม่เลือก = ทุกระดับ)
@@ -104,7 +113,7 @@ export default async function CampaignsPage() {
 
       <section className="panel">
         <div className="panel-head"><h2>แคมเปญ</h2></div>
-        <p className="hint">แต้มคูณ: ถ้ามีหลายแคมเปญพร้อมกัน ใช้ตัวที่คูณมากที่สุด · แต้มโบนัส: บวกทุกแคมเปญ · ประกาศ: แสดงบนบัตรสมาชิกใน LINE อย่างเดียว (เช่น โปรคาเฟ่ โปรห้องพัก)</p>
+        <p className="hint">ส่วนลดการจอง (จอดครบ ฟรีวัน / ลดเงิน): ระบบหักให้เองตอนจอง ถ้าเข้าได้หลายแคมเปญใช้ตัวที่ลดมากที่สุด · แต้มคูณ: ใช้ตัวที่คูณมากที่สุด · แต้มโบนัส: บวกทุกแคมเปญ · ประกาศ: แสดงบนบัตรสมาชิกใน LINE อย่างเดียว</p>
         {!camps?.length ? <p className="empty">ยังไม่มีแคมเปญ</p> : (
           <table className="tbl">
             <thead><tr><th>แคมเปญ</th><th>ธุรกิจ</th><th>ระดับ</th><th>สิทธิ์</th><th>ช่วงเวลา</th><th>สถานะ</th><th></th></tr></thead>
@@ -116,7 +125,7 @@ export default async function CampaignsPage() {
                     <td><b>{c.name}</b>{c.description && <small className="hint" style={{ display: 'block', margin: 0 }}>{c.description}</small>}</td>
                     <td>{BIZ[c.business] ?? c.business}</td>
                     <td>{c.tiers?.length ? c.tiers.map((x) => T.find((t) => t.code === x)?.name ?? x).join(', ') : 'ทุกระดับ'}</td>
-                    <td>{c.kind === 'multiplier' ? `แต้ม x${Number(c.multiplier)}` : c.kind === 'bonus' ? `+${c.bonus_points} แต้ม` : 'ประกาศ'}</td>
+                    <td>{effect(c)}{['free_days', 'amount_off'].includes(c.kind) && !c.stackable && <small className="hint" style={{ display: 'block', margin: 0 }}>ไม่ใช้ร่วมกับส่วนลดลูกค้าเก่า</small>}</td>
                     <td>{thDate(bkkDay(c.starts_at))} – {c.ends_at ? thDate(bkkDay(c.ends_at)) : 'ไม่กำหนด'}</td>
                     <td><span className={`st ${cls}`}>{label}</span></td>
                     <td className="r"><details className="inline-edit"><summary className="b b-plain b-sm">แก้ไข</summary><div className="inline-edit-body">{campaignForm(c)}</div></details></td>

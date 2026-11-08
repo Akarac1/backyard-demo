@@ -37,19 +37,25 @@ export default function BookPage() {
   const [review, setReview] = useState(false);
   const [agree, setAgree] = useState(false);
   type Coupon = { id: string; code: string; title: string; value: number; expiresAt: string };
-  const [disc, setDisc] = useState<{ amount: number; reason: string | null; coupons?: Coupon[] } | null>(null);
+  const [disc, setDisc] = useState<{ amount: number; reason: string | null; coupons?: Coupon[]; campaign?: { name: string; amount: number; stackable: boolean } | null } | null>(null);
   const [couponId, setCouponId] = useState<string>('');
 
   useEffect(() => { if (liff.name && !f.name) setF((x) => ({ ...x, name: liff.name! })); }, [liff.name]); // eslint-disable-line
 
   const days = f.end >= f.start ? daysBetween(f.start, f.end) : 0;
   const subtotal = days * pr.price_per_day + (f.shuttle ? pr.shuttle_price : 0);
-  const discount = Math.min(disc?.amount ?? 0, subtotal);
+  // campaign (e.g. 10 days, 1 day free) and the returning-customer discount; a non-stackable campaign
+  // replaces the member discount when it is bigger (the server applies the same rule)
+  const camp = disc?.campaign ?? null;
+  let discount = Math.min(disc?.amount ?? 0, subtotal);
+  let campAmount = camp?.amount ?? 0;
+  if (camp && !camp.stackable && discount > 0) { if (campAmount > discount) discount = 0; else campAmount = 0; }
   // a parking-discount coupon (the server checks it again)
   const coupons = disc?.coupons ?? [];
   const coupon = coupons.find((c) => c.id === couponId);
   const couponAmount = coupon ? Math.min(coupon.value, subtotal - discount) : 0;
-  const total = subtotal - discount - couponAmount;
+  campAmount = Math.max(0, Math.min(campAmount, subtotal - discount - couponAmount));
+  const total = subtotal - discount - couponAmount - campAmount;
 
   useEffect(() => {
     if (!f.start || !f.end || f.end < f.start) { setAvail(null); return; }
@@ -144,6 +150,7 @@ export default function BookPage() {
             <div className="price"><span>ที่จอด {days} วัน × {pr.price_per_day}</span><span>{(days * pr.price_per_day).toLocaleString('th-TH')} บาท</span></div>
             {f.shuttle && <div className="price"><span>รถรับส่งไป-กลับ</span><span>{pr.shuttle_price} บาท</span></div>}
             {discount > 0 && <div className="price discount"><span>{disc?.reason === 'referral' ? 'ส่วนลดเพื่อนแนะนำ' : 'ส่วนลดลูกค้าเก่า'}</span><span>−{discount.toLocaleString('th-TH')} บาท</span></div>}
+            {campAmount > 0 && <div className="price discount"><span>แคมเปญ {camp?.name}</span><span>−{campAmount.toLocaleString('th-TH')} บาท</span></div>}
             {coupons.length > 0 && (
               <label className="coupon-pick">คูปองส่วนลดของคุณ
                 <select value={couponId} onChange={(e) => setCouponId(e.target.value)}>

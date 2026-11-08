@@ -31,6 +31,8 @@ export type Booking = {
   discount_amount: number;
   coupon_id: string | null;
   coupon_amount: number;
+  campaign_id: string | null;
+  campaign_amount: number;
   discount_reason: string | null;
   referrer_phone: string | null;
   extra_amount_due: number;

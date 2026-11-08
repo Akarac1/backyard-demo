@@ -139,11 +139,12 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
               </li>
             ))}
           </ul>
-          {(b.coupon_amount > 0 || b.discount_amount > 0) && (
+          {(b.coupon_amount > 0 || b.discount_amount > 0 || b.campaign_amount > 0) && (
             <p className="hint" style={{ marginTop: 10 }}>
               ราคาเต็ม {n(b.parking_amount + b.shuttle_amount)} บาท
               {b.discount_amount > 0 ? ` · ส่วนลด${b.discount_reason === 'referral' ? 'เพื่อนแนะนำ' : 'ลูกค้าเก่า'} −${n(b.discount_amount)}` : ''}
               {b.coupon_amount > 0 ? ` · คูปอง −${n(b.coupon_amount)}` : ''}
+              {b.campaign_amount > 0 ? ` · แคมเปญ −${n(b.campaign_amount)}` : ''}
             </p>
           )}
           <h3 style={{ marginTop: 16 }}>สมาชิก {cust?.member_no} · ระดับ {tier?.name}{cust?.tier_override ? ' (กำหนดเอง)' : ''} · แต้ม {n(Number(balance ?? 0))}</h3>

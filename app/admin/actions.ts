@@ -24,7 +24,7 @@ const ERR: Record<string, string> = {
   invalid_reward: 'ข้อมูลของรางวัลไม่ครบ (ชื่อ แต้มที่ใช้ อายุคูปอง 1–1095 วัน และคูปองส่วนลดค่าจอดต้องมีมูลค่า)',
   invalid_tier: 'ข้อมูลระดับไม่ถูกต้อง (ระดับแรกต้องเริ่มที่ 0 บาท และตัวคูณ 0.1–10)',
   invalid_tier_order: 'ระดับที่สูงกว่าต้องใช้ยอดมากกว่าระดับก่อนหน้า',
-  invalid_campaign: 'ข้อมูลแคมเปญไม่ครบ (แต้มคูณต้องมากกว่า 1, โบนัสอย่างน้อย 1 แต้ม, วันสิ้นสุดต้องหลังวันเริ่ม)',
+  invalid_campaign: 'ข้อมูลแคมเปญไม่ครบ (แต้มคูณต้องมากกว่า 1, โบนัสอย่างน้อย 1 แต้ม, ส่วนลดวันฟรีต้องจองมากกว่าจำนวนวันฟรี, ส่วนลดเงินต้องกำหนดวันขั้นต่ำ, วันสิ้นสุดต้องหลังวันเริ่ม)',
   invalid_purchase: 'ยอดเงินไม่ถูกต้อง',
   member_not_found: 'ไม่พบสมาชิกจากเบอร์หรือเลขสมาชิกนี้',
   coupon_not_found: 'ไม่พบรหัสคูปองนี้',
@@ -254,6 +254,8 @@ export async function saveCampaign(_: ActionResult, f: FormData): Promise<Action
     p_business: str(f, 'business'), p_tiers: f.getAll('tiers').map(String), p_kind: str(f, 'kind'),
     p_multiplier: num(f, 'multiplier') || 1, p_bonus: num(f, 'bonus') || 0,
     p_starts: bkkInput(str(f, 'starts')), p_ends: bkkInput(str(f, 'ends')), p_active: f.get('active') === 'on',
+    p_min_days: num(f, 'min_days') || 0, p_free_days: num(f, 'free_days') || 0, p_amount_off: num(f, 'amount_off') || 0,
+    p_stackable: f.get('stackable') === 'on',
   }, 'บันทึกแคมเปญแล้ว', ['/admin/campaigns']);
 }
 
