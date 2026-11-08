@@ -13,6 +13,7 @@ const ADMIN_ITEMS = [
   { href: '/exec', label: 'รายงาน' },
   { href: '/admin/settings', label: 'ตั้งค่า' },
   { href: '/admin/users', label: 'ผู้ใช้' },
+  { href: '/admin/system', label: 'สถานะระบบ' },
 ];
 const EXEC_ITEMS = [{ href: '/exec', label: 'รายงาน' }];
 const DRIVER_ITEMS = [{ href: '/driver', label: 'งานของฉัน' }];

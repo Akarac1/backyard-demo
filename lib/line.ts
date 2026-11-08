@@ -1,5 +1,6 @@
 import 'server-only';
 import crypto from 'node:crypto';
+import { logEvent } from './events';
 
 const API = 'https://api.line.me/v2/bot';
 
@@ -17,7 +18,12 @@ async function call(path: string, body: unknown) {
     headers: { Authorization: `Bearer ${token()}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
-  if (!res.ok) console.error('LINE API', path, res.status, await res.text());
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    console.error('LINE API', path, res.status, text);
+    // 429 = monthly quota used up or too many requests
+    await logEvent('line', 'error', `LINE ${path} ล้มเหลว (${res.status})${res.status === 429 ? ' · โควตาข้อความอาจหมด' : ''}`, { status: res.status, body: text.slice(0, 300) });
+  }
   return res.ok;
 }
 

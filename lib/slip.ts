@@ -1,4 +1,5 @@
 import 'server-only';
+import { logEvent } from './events';
 
 export type SlipResult =
   | { ok: true; amount: number; transRef: string; provider: string }
@@ -20,14 +21,19 @@ type Expect = { amount: number; notBefore: Date; remark?: string };
 export async function verifySlip(file: File, expected: Expect): Promise<SlipResult> {
   const provider = process.env.SLIP_PROVIDER ?? 'mock';
   try {
-    if (provider === 'easyslip') {
-      const r = process.env.EASYSLIP_API_VERSION === 'v1' ? await easyslipV1(file) : await easyslipV2(file, expected.amount, expected.remark);
-      return finalCheck(r, expected);
+    if (provider === 'easyslip' || provider === 'slipok') {
+      const r = provider === 'slipok' ? await slipok(file)
+        : process.env.EASYSLIP_API_VERSION === 'v1' ? await easyslipV1(file) : await easyslipV2(file, expected.amount, expected.remark);
+      const out = finalCheck(r, expected);
+      // every call counts against the slip service quota; errors show on the status page
+      await logEvent('slip', out.ok ? 'info' : out.reason === 'error' ? 'error' : 'warn',
+        out.ok ? `ตรวจสลิปผ่าน (${provider})` : `ตรวจสลิปไม่ผ่าน: ${out.reason} · ${out.message}`, { provider });
+      return out;
     }
-    if (provider === 'slipok') return finalCheck(await slipok(file), expected);
     return { ok: true, amount: expected.amount, transRef: `MOCK-${Date.now()}`, provider: 'mock' };
   } catch (e) {
     console.error('slip verify', e);
+    await logEvent('slip', 'error', `เรียกบริการตรวจสลิปไม่สำเร็จ: ${String(e).slice(0, 200)}`, { provider });
     return { ok: false, reason: 'error', message: 'ตรวจสลิปไม่สำเร็จ ลองใหม่อีกครั้ง หรือรอแอดมินตรวจ' };
   }
 }
