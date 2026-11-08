@@ -34,13 +34,15 @@ function FlipCard({ mem, idToken }: { mem: Member; idToken: string | null }) {
   const canFlip = !!mem.memberNo;
   return (
     <div className="flip-wrap">
-      <button type="button" className={`flip ${flipped ? 'is-flipped' : ''}`} onClick={() => canFlip && setFlipped(!flipped)}
+      {/* a div, not a <button>: Safari / LINE on iPhone flattens 3D inside buttons and shows the front through the back */}
+      <div role="button" tabIndex={0} className={`flip ${flipped ? 'is-flipped' : ''}`} onClick={() => canFlip && setFlipped(!flipped)}
+        onKeyDown={(e) => { if (canFlip && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); setFlipped(!flipped); } }}
         aria-label={flipped ? t('ซ่อน QR บัตรสมาชิก') : t('แสดง QR บัตรสมาชิก')} aria-pressed={flipped}>
         <div className="flip-inner">
-          <div className="flip-face flip-front">
+          <div className="flip-face flip-front" aria-hidden={flipped}>
             <MemberCard tier={mem.tier} tierName={mem.tierName} name={mem.name} memberNo={mem.memberNo} points={mem.points} multiplier={mem.multiplier} pointsWord={t('แต้ม')} label={t('บัตรสมาชิก Backyard ระดับ {x}', { x: mem.tierName })} />
           </div>
-          <div className="flip-face flip-back">
+          <div className="flip-face flip-back" aria-hidden={!flipped}>
             <div className={`mcard mcard-${mem.tier} mcard-back`}>
               <div className="mcard-shine" />
               <div className="qr-box">
@@ -56,7 +58,7 @@ function FlipCard({ mem, idToken }: { mem: Member; idToken: string | null }) {
             </div>
           </div>
         </div>
-      </button>
+      </div>
       {canFlip && <span className="mcard-tap">{flipped ? t('ให้พนักงานคาเฟ่ ที่พัก หรือที่ลานสแกน · แตะอีกครั้งเพื่อพลิกกลับ') : t('แตะบัตรเพื่อพลิกดู QR')}</span>}
     </div>
   );
