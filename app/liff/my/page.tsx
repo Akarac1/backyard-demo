@@ -5,6 +5,61 @@ import { authHeaders, useLiff } from '../useLiff';
 import { MemberCard } from '@/components/MemberCard';
 import QRCode from 'qrcode';
 
+/** Member card that flips over to show its QR (member number + tier, signed, refreshed every minute). */
+function FlipCard({ mem, idToken }: { mem: Member; idToken: string | null }) {
+  const [flipped, setFlipped] = useState(false);
+  const [qr, setQr] = useState<{ src: string; exp: number } | null>(null);
+  const [err, setErr] = useState(false);
+  const [now, setNow] = useState(Date.now());
+  useEffect(() => {
+    if (!flipped) return;
+    let alive = true;
+    const load = async () => {
+      try {
+        const r = await fetch('/api/member/qr', { headers: authHeaders(idToken) });
+        if (!r.ok) { setErr(true); return; }
+        const j = await r.json();
+        const src = await QRCode.toDataURL(j.url, { margin: 1, width: 480, errorCorrectionLevel: 'M', color: { dark: '#0E3320', light: '#FFFFFF' } });
+        if (alive) { setQr({ src, exp: j.exp }); setErr(false); }
+      } catch { setErr(true); }
+    };
+    load();
+    const refresh = setInterval(load, 60_000);
+    const tick = setInterval(() => setNow(Date.now()), 1000);
+    return () => { alive = false; clearInterval(refresh); clearInterval(tick); };
+  }, [flipped, idToken]);
+  const left = qr ? Math.min(600_000, Math.max(0, qr.exp * 1000 - now)) : 0;
+  const canFlip = !!mem.memberNo;
+  return (
+    <div className="flip-wrap">
+      <button type="button" className={`flip ${flipped ? 'is-flipped' : ''}`} onClick={() => canFlip && setFlipped(!flipped)}
+        aria-label={flipped ? 'ซ่อน QR บัตรสมาชิก' : 'แสดง QR บัตรสมาชิก'} aria-pressed={flipped}>
+        <div className="flip-inner">
+          <div className="flip-face flip-front">
+            <MemberCard tier={mem.tier} tierName={mem.tierName} name={mem.name} memberNo={mem.memberNo} points={mem.points} multiplier={mem.multiplier} />
+          </div>
+          <div className="flip-face flip-back">
+            <div className={`mcard mcard-${mem.tier} mcard-back`}>
+              <div className="mcard-shine" />
+              <div className="qr-box">
+                {qr ? <img src={qr.src} alt={`QR สมาชิก ${mem.memberNo}`} /> : <span>{err ? 'สร้าง QR ไม่สำเร็จ' : 'กำลังสร้าง QR…'}</span>}
+              </div>
+              <div className="back-info">
+                <span className="back-brand">BACKYARD MEMBER</span>
+                <b className="back-tier">{mem.tierName.toUpperCase()}</b>
+                <span className="back-no">{mem.memberNo}</span>
+                <span className="back-name">{mem.name}</span>
+                <span className="back-timer">{qr ? `QR ใช้ได้อีก ${Math.floor(left / 60000)}:${String(Math.floor((left % 60000) / 1000)).padStart(2, '0')}` : ''}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </button>
+      {canFlip && <span className="mcard-tap">{flipped ? 'ให้พนักงานคาเฟ่ ที่พัก หรือที่ลานสแกน · แตะอีกครั้งเพื่อพลิกกลับ' : 'แตะบัตรเพื่อพลิกดู QR'}</span>}
+    </div>
+  );
+}
+
 /** QR for staff at the lot: opens the booking on the on-site screen (staff must be signed in). */
 function BookingQr({ code }: { code: string }) {
   const [src, setSrc] = useState<string | null>(null);
@@ -55,7 +110,7 @@ export default function MyBookings() {
       <div className="wrap">
         {mem && (
           <div className="member-box">
-            <MemberCard tier={mem.tier} tierName={mem.tierName} name={mem.name} memberNo={mem.memberNo} points={mem.points} multiplier={mem.multiplier} />
+            <FlipCard mem={mem} idToken={liff.idToken} />
             <div className="member-progress">
               {mem.nextTierName && mem.nextMin != null && !mem.manual ? (
                 <>

@@ -58,6 +58,7 @@ export default async function OpsPage({ searchParams }: { searchParams: Promise<
       {q && (
         <section className="panel">
           <h2>ผลการค้นหา “{q}”</h2>
+          {/^BY\d{3,10}$/i.test(q) && <p><Link className="b b-primary b-sm" href={`/ops/m/${q.toUpperCase()}`}>เปิดข้อมูลสมาชิก {q.toUpperCase()} (คูปอง · บันทึกยอดคาเฟ่/ที่พัก)</Link></p>}
           {!found.length ? <p className="empty">ไม่พบการจองที่ยืนยันแล้ว</p> : <ul className="ops-list">{found.map((b) => <OpsRow key={b.id} b={b} />)}</ul>}
           <p className="hint"><Link href="/ops">ล้างการค้นหา</Link></p>
         </section>

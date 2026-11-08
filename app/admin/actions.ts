@@ -225,10 +225,11 @@ export async function saveReward(_: ActionResult, f: FormData): Promise<ActionRe
 
 export async function takeCoupon(_: ActionResult, f: FormData): Promise<ActionResult> {
   let actor: string;
-  try { actor = (await staffForAction(['admin'])).uid; } catch { return { error: ERR.not_allowed }; }
+  try { actor = (await staffForAction(['admin', 'ops'])).uid; } catch { return { error: ERR.not_allowed }; }
   const { data, error } = await db().rpc('admin_use_coupon', { p_actor: actor, p_code: str(f, 'code') });
   if (error) return { error: thai(error.message) };
   revalidatePath('/admin/members');
+  revalidatePath('/ops/m');
   const c = data as { code: string; title: string };
   return { ok: `ใช้คูปอง ${c.code} “${c.title}” แล้ว` };
 }
@@ -270,12 +271,12 @@ export async function saveCampaign(_: ActionResult, f: FormData): Promise<Action
 
 export async function recordPurchase(_: ActionResult, f: FormData): Promise<ActionResult> {
   let actor: string;
-  try { actor = (await staffForAction(['admin'])).uid; } catch { return { error: ERR.not_allowed }; }
+  try { actor = (await staffForAction(['admin', 'ops'])).uid; } catch { return { error: ERR.not_allowed }; }
   const { data, error } = await db().rpc('admin_record_purchase', {
     p_actor: actor, p_who: str(f, 'who'), p_business: str(f, 'business'), p_amount: num(f, 'amount'), p_note: str(f, 'note'),
   });
   if (error) return { error: thai(error.message) };
-  revalidatePath('/admin/campaigns');
+  revalidatePath('/admin/campaigns'); revalidatePath('/ops/m');
   const r = (Array.isArray(data) ? data[0] : data) as { customer_name: string; points: number; tier: string };
   return { ok: `บันทึกแล้ว · ${r.customer_name} ได้ ${r.points} แต้ม (ระดับ ${r.tier})` };
 }
