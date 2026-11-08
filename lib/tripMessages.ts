@@ -132,7 +132,7 @@ function callButtons(c: Ctx, primaryDriver: boolean): Button[] {
   return out;
 }
 
-const driverRow = (c: Ctx): Row => ['คนขับ', c.driverPhone ? `${c.driver} · ${fmtPhone(c.driverPhone)}` : c.driver];
+const driverRow = (c: Ctx): Row => ['คนขับ', c.driver];
 
 /** The card sent to the customer when the driver changes the trip status. */
 export function statusMessage(c: Ctx, step: TripStep): LineMessage {
