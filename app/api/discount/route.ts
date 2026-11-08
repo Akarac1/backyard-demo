@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 export async function POST(req: Request) {
   const uid = await currentUser(req);
   if (!uid) return json({ error: 'กรุณาเปิดจาก LINE' }, 401);
-  const b = (await req.json().catch(() => ({}))) as { phone?: string; refPhone?: string; days?: number; shuttle?: boolean };
+  const b = (await req.json().catch(() => ({}))) as { phone?: string; refPhone?: string; days?: number; shuttle?: boolean; start?: string };
   const phone = String(b.phone ?? '').slice(0, 30);
   const ref = String(b.refPhone ?? '').slice(0, 30);
   const days = Math.max(0, Math.min(400, Number(b.days) || 0));
@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     db().from('coupons').select('id, code, title, value_baht, expires_at, customers!inner(line_user_id)')
       .eq('customers.line_user_id', uid).eq('status', 'active').eq('kind', 'parking_discount')
       .gt('expires_at', new Date().toISOString()).order('value_baht', { ascending: false }),
-    days ? db().rpc('booking_campaign_preview', { p_line_user_id: uid, p_days: days }) : Promise.resolve({ data: null }),
+    days ? db().rpc('booking_campaign_preview', { p_line_user_id: uid, p_days: days, p_start: /^\d{4}-\d{2}-\d{2}$/.test(String(b.start)) ? b.start : null }) : Promise.resolve({ data: null }),
   ]);
   const cp = (Array.isArray(camp) ? camp[0] : camp) as { name: string; amount: number; stackable: boolean } | undefined;
   const row = (!error && (Array.isArray(data) ? data[0] : data)) as { amount: number; reason: string | null } | undefined;

@@ -256,6 +256,7 @@ export async function saveCampaign(_: ActionResult, f: FormData): Promise<Action
     p_starts: bkkInput(str(f, 'starts')), p_ends: bkkInput(str(f, 'ends')), p_active: f.get('active') === 'on',
     p_min_days: num(f, 'min_days') || 0, p_free_days: num(f, 'free_days') || 0, p_amount_off: num(f, 'amount_off') || 0,
     p_stackable: f.get('stackable') === 'on',
+    p_stay_from: str(f, 'stay_from') || null, p_stay_to: str(f, 'stay_to') || null, p_percent_off: num(f, 'percent_off') || 0,
   }, 'บันทึกแคมเปญแล้ว', ['/admin/campaigns']);
 }
 

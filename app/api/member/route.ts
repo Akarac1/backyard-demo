@@ -3,6 +3,7 @@ import { currentUser, json } from '@/lib/request';
 
 export const dynamic = 'force-dynamic';
 
+const thD = (d: string) => new Date(`${d}T00:00:00+07:00`).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short' });
 const BIZ: Record<string, string> = { all: 'ทุกบริการ', parking: 'ที่จอดรถ', cafe: 'คาเฟ่', stay: 'ที่พัก' };
 
 /** Member card data for the signed-in customer: tier, spend toward the next tier, points, campaigns for them. */
@@ -18,11 +19,13 @@ export async function GET(req: Request) {
     memberNo: m.member_no, name: m.name, tier: m.tier, tierName: m.tier_name, multiplier: Number(m.multiplier),
     spend: m.spend, windowMonths: m.window_months, nextTierName: m.next_tier_name, nextMin: m.next_min,
     points: m.points, manual: m.manual,
-    campaigns: ((camps ?? []) as { name: string; description: string | null; business: string; kind: string; multiplier: number; bonus_points: number; ends_at: string | null; min_days: number; free_days: number; amount_off: number }[])
+    campaigns: ((camps ?? []) as { name: string; description: string | null; business: string; kind: string; multiplier: number; bonus_points: number; ends_at: string | null; min_days: number; free_days: number; amount_off: number; percent_off: number; stay_from: string | null; stay_to: string | null }[])
       .map((c) => ({
         name: c.name, description: c.description, business: BIZ[c.business] ?? c.business, endsAt: c.ends_at,
         effect: c.kind === 'multiplier' ? `แต้ม x${Number(c.multiplier)}` : c.kind === 'bonus' ? `+${c.bonus_points} แต้มต่อการใช้บริการ`
-          : c.kind === 'free_days' ? `จอด ${c.min_days} วันขึ้นไป ฟรี ${c.free_days} วัน` : c.kind === 'amount_off' ? `จอด ${c.min_days} วันขึ้นไป ลด ${c.amount_off.toLocaleString('th-TH')} บาท` : null,
+          : c.kind === 'free_days' ? `จอด ${c.min_days} วันขึ้นไป ฟรี ${c.free_days} วัน` : c.kind === 'amount_off' ? `จอด ${c.min_days} วันขึ้นไป ลด ${c.amount_off.toLocaleString('th-TH')} บาท`
+          : c.kind === 'percent_off' ? `ลดค่าจอด ${c.percent_off}%${c.min_days > 1 ? ` (จอด ${c.min_days} วันขึ้นไป)` : ''}` : null,
+        stay: c.stay_from || c.stay_to ? `เข้าจอด ${c.stay_from ? thD(c.stay_from) : ''} – ${c.stay_to ? thD(c.stay_to) : ''}` : null,
       })),
   });
 }

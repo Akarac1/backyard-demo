@@ -7,7 +7,7 @@ import { MemberCard } from '@/components/MemberCard';
 type Row = { id: string; code: string; plate: string; start_date: string; end_date: string; days: number; total_amount: number; status: string; shuttle: boolean; pax: number | null; rescheduled_at: string | null };
 
 type Points = { points: number; pointValue: number; enabled: boolean; expiring: number; expiringAt: string | null; moves: { at: string; points: number; label: string }[]; perBaht: number; referral: number; months: number };
-type Member = { memberNo: string | null; name: string | null; tier: string; tierName: string; multiplier: number; spend: number; windowMonths: number; nextTierName: string | null; nextMin: number | null; points: number; manual: boolean; campaigns: { name: string; description: string | null; business: string; effect: string | null; endsAt: string | null }[] };
+type Member = { memberNo: string | null; name: string | null; tier: string; tierName: string; multiplier: number; spend: number; windowMonths: number; nextTierName: string | null; nextMin: number | null; points: number; manual: boolean; campaigns: { name: string; description: string | null; business: string; effect: string | null; endsAt: string | null; stay: string | null }[] };
 const thShort = (ts: string) => new Date(ts).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short', year: '2-digit' });
 
 const STATUS: Record<string, [string, string]> = {
@@ -55,7 +55,7 @@ export default function MyBookings() {
             {mem.campaigns.map((c) => (
               <div className="camp" key={c.name}>
                 <b>{c.name}</b>{c.effect ? ` · ${c.effect}` : ''}
-                <small>{c.description ? `${c.description} · ` : ''}{c.business}{c.endsAt ? ` · ถึง ${thShort(c.endsAt)}` : ''}</small>
+                <small>{c.description ? `${c.description} · ` : ''}{c.business}{c.stay ? ` · ${c.stay}` : ''}{c.endsAt ? ` · จองได้ถึง ${thShort(c.endsAt)}` : ''}</small>
               </div>
             ))}
           </div>

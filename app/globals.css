@@ -458,3 +458,4 @@ table.report th:first-child, table.report td:first-child { text-align: left; }
 .tier-checks > div { display: flex; gap: 16px; margin-top: 6px; font-weight: 400; }
 .camp-disc { border: 1px dashed #D5DCE6; border-radius: 12px; padding: 10px 12px 12px; display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); }
 .camp-disc legend { font-size: 13px; color: var(--muted); padding: 0 6px; }
+.price span:last-child { white-space: nowrap; padding-left: 10px; }

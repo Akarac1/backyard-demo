@@ -86,7 +86,7 @@ export default function BookPage() {
     // the final price is decided by the server when booking; this only shows it ahead
     fetch('/api/discount', {
       method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders(liff.idToken) },
-      body: JSON.stringify({ phone: f.phone, refPhone: f.refPhone, days, shuttle: f.shuttle }),
+      body: JSON.stringify({ phone: f.phone, refPhone: f.refPhone, days, shuttle: f.shuttle, start: f.start }),
     }).then((r) => (r.ok ? r.json() : null)).then((j) => { setDisc(j ?? { amount: 0, reason: null }); setCouponId(j?.coupons?.[0]?.id ?? ''); }).catch(() => setDisc({ amount: 0, reason: null }));
   }
 
