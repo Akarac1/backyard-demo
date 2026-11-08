@@ -2,16 +2,18 @@ import Link from 'next/link';
 import { db } from '@/lib/supabase';
 import { thDate } from '@/lib/format';
 import { StatusTag } from '@/lib/labels';
+import { ActionButton } from '@/components/ActionForm';
+import { setStatus } from '../actions';
 
 export const dynamic = 'force-dynamic';
 
 const TABS = [
-  { key: '', label: 'ทั้งหมด', statuses: null },
-  { key: 'pending', label: 'รอชำระ', statuses: ['pending_payment'] },
-  { key: 'confirmed', label: 'ยืนยันแล้ว', statuses: ['confirmed'] },
-  { key: 'in', label: 'อยู่ในลาน', statuses: ['checked_in'] },
-  { key: 'done', label: 'รับรถแล้ว', statuses: ['checked_out'] },
-  { key: 'off', label: 'ยกเลิก / หมดเวลา', statuses: ['cancelled', 'expired', 'no_show'] },
+  { key: '', label: 'ทั้งหมด', statuses: null, empty: 'ยังไม่มีการจอง' },
+  { key: 'pending', label: 'รอชำระ', statuses: ['pending_payment'], empty: 'ไม่มีการจองที่รอชำระเงิน' },
+  { key: 'confirmed', label: 'ยืนยันแล้ว', statuses: ['confirmed'], empty: 'ไม่มีการจองที่จ่ายแล้วและรอรถเข้า' },
+  { key: 'in', label: 'อยู่ในลาน', statuses: ['checked_in'], empty: 'ยังไม่มีรถในลาน · รถจะย้ายมาแท็บนี้เมื่อกด “รถเข้าแล้ว” ในแท็บ “ยืนยันแล้ว” หรือที่หน้าภาพรวม' },
+  { key: 'done', label: 'รับรถแล้ว', statuses: ['checked_out'], empty: 'ยังไม่มีรถที่รับคืนแล้ว · กด “รับรถแล้ว” ในแท็บ “อยู่ในลาน” เมื่อลูกค้ามารับรถ' },
+  { key: 'off', label: 'ยกเลิก / หมดเวลา', statuses: ['cancelled', 'expired', 'no_show'], empty: 'ไม่มีการจองที่ยกเลิก หมดเวลาชำระ หรือไม่มาตามนัด' },
 ];
 const PAGE = 50;
 
@@ -23,6 +25,14 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
   const tab = TABS.find((t) => t.key === (sp.s ?? '')) ?? TABS[0];
   const page = Math.max(0, Number(sp.p ?? 0) || 0);
   const sb = db();
+  // mark unpaid holds as expired now (also runs every 2 minutes when pg_cron is on)
+  await sb.rpc('expire_holds').then(() => null, () => null);
+  // how many in each tab
+  const counts = await Promise.all(TABS.map(async (t) => {
+    let c = sb.from('bookings').select('id', { count: 'exact', head: true });
+    if (t.statuses) c = c.in('status', t.statuses);
+    return (await c).count ?? 0;
+  }));
 
   let query = sb.from('bookings')
     .select('id, code, plate, plate_province, status, start_date, end_date, days, total_amount, shuttle, pax, customers(name, phone)', { count: 'exact' });
@@ -57,14 +67,14 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
       </header>
 
       <nav className="seg" aria-label="กรองตามสถานะ">
-        {TABS.map((t) => <Link key={t.key} href={link({ s: t.key, p: 0 })} className={t === tab ? 'on' : ''}>{t.label}</Link>)}
+        {TABS.map((t, i) => <Link key={t.key} href={link({ s: t.key, p: 0 })} className={t === tab ? 'on' : ''}>{t.label} <span className="seg-n">{counts[i].toLocaleString('th-TH')}</span></Link>)}
       </nav>
 
       <section className="panel flush">
-        {!rows.length ? <p className="empty pad">ไม่พบการจอง</p> : (
+        {!rows.length ? <p className="empty pad">{q || sp.from ? 'ไม่พบการจองที่ตรงกับการค้นหา' : tab.empty}</p> : (
           <div className="table-wrap">
             <table className="tbl">
-              <thead><tr><th>รหัส</th><th>ทะเบียน</th><th>ลูกค้า</th><th>วันที่จอด</th><th>รถรับส่ง</th><th className="r">ยอด</th><th>สถานะ</th></tr></thead>
+              <thead><tr><th>รหัส</th><th>ทะเบียน</th><th>ลูกค้า</th><th>วันที่จอด</th><th>รถรับส่ง</th><th className="r">ยอด</th><th>สถานะ</th><th></th></tr></thead>
               <tbody>
                 {rows.map((r) => (
                   <tr key={r.id}>
@@ -75,6 +85,10 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
                     <td>{r.shuttle ? `${r.pax} คน` : '–'}</td>
                     <td className="r">{r.total_amount.toLocaleString('th-TH')}</td>
                     <td><StatusTag status={r.status} /></td>
+                    <td className="r">
+                      {r.status === 'confirmed' && <ActionButton action={setStatus} fields={{ id: r.id, status: 'checked_in' }} label="รถเข้าแล้ว" variant="primary" />}
+                      {r.status === 'checked_in' && <ActionButton action={setStatus} fields={{ id: r.id, status: 'checked_out' }} label="รับรถแล้ว" variant="primary" confirm={`ลูกค้ามารับรถ ${r.plate} แล้ว?`} />}
+                    </td>
                   </tr>
                 ))}
               </tbody>
