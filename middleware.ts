@@ -3,7 +3,9 @@ import { homeFor, readSession, rolesFor, SESSION_COOKIE } from '@/lib/session';
 
 // Staff pages need a signed-in user with the right role.
 //   /admin, /api/admin : admin
-//   /exec, /account    : admin or exec
+//   /exec              : admin or exec
+//   /driver            : admin or driver
+//   /account           : any staff
 export async function middleware(req: NextRequest) {
   const path = req.nextUrl.pathname;
   const roles = rolesFor(path);
@@ -20,4 +22,4 @@ export async function middleware(req: NextRequest) {
   return NextResponse.redirect(url);
 }
 
-export const config = { matcher: ['/admin/:path*', '/api/admin/:path*', '/exec/:path*', '/account/:path*'] };
+export const config = { matcher: ['/admin/:path*', '/api/admin/:path*', '/exec/:path*', '/driver/:path*', '/account/:path*'] };

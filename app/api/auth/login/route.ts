@@ -24,7 +24,7 @@ export async function POST(req: Request) {
   }
   // only same-site relative paths, and only ones this role may open
   const safeNext = next && next.startsWith('/') && !next.startsWith('//') &&
-    (u.role === 'admin' || next.startsWith('/exec') || next.startsWith('/account')) ? next : homeFor(u.role);
+    (u.role === 'admin' || next.startsWith(homeFor(u.role)) || next.startsWith('/account')) ? next : homeFor(u.role);
   const res = NextResponse.json({ ok: true, redirect: safeNext });
   res.cookies.set(SESSION_COOKIE, token, {
     httpOnly: true, sameSite: 'lax', path: '/', maxAge: SESSION_HOURS * 3600,

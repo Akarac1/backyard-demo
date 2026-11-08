@@ -34,7 +34,7 @@ function thai(msg: string): string {
 }
 
 /** Run a database function as the signed-in admin; actor id is always taken from the session. */
-async function run(fn: string, args: Record<string, unknown>, okText: string, paths: string[], roles: ('admin' | 'exec')[] = ['admin']): Promise<ActionResult> {
+async function run(fn: string, args: Record<string, unknown>, okText: string, paths: string[], roles: ('admin' | 'exec' | 'driver')[] = ['admin']): Promise<ActionResult> {
   let actor: string;
   try { actor = (await staffForAction(roles)).uid; } catch { return { error: ERR.not_allowed }; }
   const { error } = await db().rpc(fn, { p_actor: actor, ...args });
@@ -124,25 +124,35 @@ export async function updateSettings(_: ActionResult, f: FormData): Promise<Acti
 export async function createStaff(_: ActionResult, f: FormData): Promise<ActionResult> {
   let actor: string;
   try { actor = (await staffForAction(['admin'])).uid; } catch { return { error: ERR.not_allowed }; }
-  const { error } = await db().rpc('staff_create', {
+  const { data: newId, error } = await db().rpc('staff_create', {
     p_username: str(f, 'username'), p_name: str(f, 'name'), p_role: str(f, 'role'), p_password: String(f.get('password') ?? ''), p_actor: actor,
   });
   if (error) return { error: thai(error.message) };
+  if (str(f, 'role') === 'driver' && str(f, 'vehicle_id')) {
+    await db().rpc('staff_set_vehicle', { p_actor: actor, p_id: newId, p_vehicle_id: str(f, 'vehicle_id') });
+  }
   revalidatePath('/admin/users');
   return { ok: 'เพิ่มผู้ใช้แล้ว' };
 }
 
 export async function updateStaff(_: ActionResult, f: FormData): Promise<ActionResult> {
-  return run('staff_update', {
+  const r = await run('staff_update', {
     p_id: str(f, 'id'), p_name: str(f, 'name'), p_role: str(f, 'role'), p_active: f.get('active') === 'on',
     p_new_password: String(f.get('password') ?? '') || null,
   }, 'บันทึกแล้ว', ['/admin/users']);
+  if (r?.error) return r;
+  const vehicle = str(f, 'role') === 'driver' ? str(f, 'vehicle_id') || null : null;
+  return run('staff_set_vehicle', { p_id: str(f, 'id'), p_vehicle_id: vehicle }, 'บันทึกแล้ว', ['/admin/users']);
+}
+
+export async function ackTripNote(_: ActionResult, f: FormData): Promise<ActionResult> {
+  return run('admin_ack_trip_note', { p_trip_id: str(f, 'id') }, 'รับทราบแล้ว', ['/admin', '/admin/trips']);
 }
 
 export async function changeOwnPassword(_: ActionResult, f: FormData): Promise<ActionResult> {
   if (String(f.get('new')) !== String(f.get('confirm'))) return { error: 'รหัสผ่านใหม่ทั้งสองช่องไม่ตรงกัน' };
   return run('staff_change_own_password', { p_old: String(f.get('old') ?? ''), p_new: String(f.get('new') ?? '') },
-    'เปลี่ยนรหัสผ่านแล้ว', ['/account'], ['admin', 'exec']);
+    'เปลี่ยนรหัสผ่านแล้ว', ['/account'], ['admin', 'exec', 'driver']);
 }
 
 // ---------- search ----------

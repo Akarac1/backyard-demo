@@ -280,3 +280,40 @@ table.report th:first-child, table.report td:first-child { text-align: left; }
   .tiles { grid-template-columns: 1fr 1fr; }
   .tiles .tile:first-child { grid-column: span 2; }
 }
+
+/* ---------- driver page ---------- */
+.driver-page .page-head { margin-bottom: 12px; }
+.seg-gap { width: 12px; }
+.job { padding: 16px; }
+.job-done { opacity: .72; }
+.job-top { display: flex; gap: 14px; align-items: flex-start; }
+.job-top time { font-size: 30px; font-weight: 600; line-height: 1; min-width: 78px; }
+.job-top > div { flex: 1; }
+.job-top b { display: block; font-size: 17px; }
+.job-top small, .job-who small { display: block; color: var(--muted); font-size: 13.5px; }
+.job-who { display: flex; justify-content: space-between; align-items: center; gap: 12px; background: #F6F8F6; border-radius: 12px; padding: 10px 12px; margin: 12px 0; }
+.job-who b { font-size: 16px; }
+.call { padding: 10px 18px; font-size: 15px; }
+.job .note { margin: 0 0 12px; }
+.steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.step { font: inherit; display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 12px 6px; border-radius: 14px; border: 1.5px solid #D6DED8; background: #fff; color: var(--navy); cursor: pointer; min-height: 88px; justify-content: center; }
+.step i { font-style: normal; width: 26px; height: 26px; border-radius: 50%; display: grid; place-items: center; background: #EEF2EF; font-size: 13px; font-weight: 600; }
+.step span { font-size: 14.5px; font-weight: 500; text-align: center; line-height: 1.25; }
+.step small { font-size: 12px; color: var(--muted); }
+.step.next { background: var(--navy); border-color: var(--navy); color: #fff; box-shadow: 0 4px 14px rgba(14,51,32,.25); }
+.step.next i { background: var(--amber); color: var(--navy); }
+.step.did { background: #E9F4EC; border-color: #BFDCC8; }
+.step.did i { background: #2E7D4F; color: #fff; }
+.step:disabled { opacity: .6; }
+.step-form .msg { margin-top: 10px; }
+.notify { display: flex; align-items: center; gap: 8px; font-size: 13.5px; color: var(--muted); margin: 10px 0 0; font-weight: 400; }
+.notify input { width: 18px; height: 18px; margin: 0; }
+.note-box { margin-top: 12px; border-top: 1px solid #EEF2EF; padding-top: 10px; }
+.note-box summary { cursor: pointer; color: var(--bad); font-size: 14px; font-weight: 500; }
+.note-box textarea { width: 100%; font: inherit; font-size: 15px; padding: 10px 12px; border: 1.5px solid #D5DCE6; border-radius: 10px; margin-top: 8px; resize: vertical; }
+.note-row { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 6px; }
+.note-row .notify { margin: 0; }
+.trip-progress { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin: -2px 0 10px; }
+.trip-progress small { color: var(--muted); font-size: 12.5px; }
+.trip-note { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 0 0 10px; font-size: 14px; }
+.trip-note.open { background: #FBEAEA; color: #8A2F28; }

@@ -4,13 +4,13 @@ import { requireStaff } from '@/lib/auth';
 import { addDays, bkkDay, thDate, thTime, todayBkk } from '@/lib/format';
 import { DIRECTION, StatusTag } from '@/lib/labels';
 import { ActionButton } from '@/components/ActionForm';
-import { autoAssign, confirmSlip, lprDone, quickSearch, setStatus } from './actions';
+import { ackTripNote, autoAssign, confirmSlip, lprDone, quickSearch, setStatus } from './actions';
 
 export const dynamic = 'force-dynamic';
 
 type Occ = { day: string; used: number; total_spots: number; reserve_spots: number };
 type Row = { id: string; code: string; plate: string; plate_province: string; status: string; shuttle: boolean; pax: number | null; start_date: string; end_date: string; customers: { name: string; phone: string } | null };
-type Trip = { id: string; direction: string; pax: number; pickup_at: string; flight_number: string | null; vehicles: { name: string } | null; bookings: { id: string; code: string; plate: string; customers: { name: string; phone: string } | null } | null };
+type Trip = { id: string; direction: string; pax: number; pickup_at: string; flight_number: string | null; status: string; vehicles: { name: string } | null; bookings: { id: string; code: string; plate: string; customers: { name: string; phone: string } | null } | null };
 
 const DAYS = ['อาทิตย์', 'จันทร์', 'อังคาร', 'พุธ', 'พฤหัสบดี', 'ศุกร์', 'เสาร์'];
 const n = (v: number) => v.toLocaleString('th-TH');
@@ -20,17 +20,18 @@ export default async function AdminHome() {
   const today = todayBkk();
   const sb = db();
   const sel = 'id, code, plate, plate_province, status, shuttle, pax, start_date, end_date, customers(name, phone)';
-  const [occ, arrivals, departures, inLot, slips, lpr, trips, paidToday, owed] = await Promise.all([
+  const [occ, arrivals, departures, inLot, slips, lpr, trips, paidToday, owed, notes] = await Promise.all([
     sb.from('v_occupancy_30d').select('day, used, total_spots, reserve_spots').limit(14),
     sb.from('bookings').select(sel).eq('start_date', today).in('status', ['confirmed', 'checked_in']).order('created_at'),
     sb.from('bookings').select(sel).eq('end_date', today).in('status', ['confirmed', 'checked_in', 'checked_out']).order('created_at'),
     sb.from('bookings').select('id', { count: 'exact', head: true }).eq('status', 'checked_in'),
     sb.from('payments').select('id, amount, slip_path, created_at, bookings(id, code, plate)').eq('status', 'pending').eq('kind', 'booking').not('slip_path', 'is', null).order('created_at'),
     sb.from('lpr_sync').select('id, plate, plate_province, action, valid_from, valid_to').neq('status', 'done').order('created_at'),
-    sb.from('shuttle_trips').select('id, direction, pax, pickup_at, flight_number, vehicles(name), bookings(id, code, plate, customers(name, phone))')
+    sb.from('shuttle_trips').select('id, direction, pax, pickup_at, flight_number, status, vehicles(name), bookings(id, code, plate, customers(name, phone))')
       .gte('pickup_at', `${today}T00:00:00+07:00`).lt('pickup_at', `${addDays(today, 2)}T00:00:00+07:00`).neq('status', 'cancelled').order('pickup_at'),
     sb.from('payments').select('amount').eq('status', 'verified').gte('paid_at', `${today}T00:00:00+07:00`),
     sb.from('payments').select('id, amount, bookings(id, code, plate)').eq('status', 'pending').eq('kind', 'overstay'),
+    sb.from('shuttle_trips').select('id, direction, driver_note, note_at, vehicles(name), bookings(id, code)').eq('note_resolved', false).order('note_at'),
   ]);
 
   const days = (occ.data ?? []) as Occ[];
@@ -48,7 +49,7 @@ export default async function AdminHome() {
     const { data } = await sb.storage.from('slips').createSignedUrl(p.slip_path!, 3600);
     if (data) slipLinks[p.id] = data.signedUrl;
   }
-  const todo = (slips.data?.length ?? 0) + (lpr.data?.length ?? 0) + unassigned.length + (owed.data?.length ?? 0);
+  const todo = (slips.data?.length ?? 0) + (lpr.data?.length ?? 0) + unassigned.length + (owed.data?.length ?? 0) + (notes.data?.length ?? 0);
   const d = new Date(today + 'T00:00:00Z');
 
   return (
@@ -81,6 +82,17 @@ export default async function AdminHome() {
         <h2>ต้องจัดการ {todo > 0 && <span className="count">{todo}</span>}</h2>
         {todo === 0 && <p className="empty">ไม่มีงานค้าง เยี่ยมมาก</p>}
         <ul className="todo">
+          {(notes.data ?? []).map((t) => {
+            const b = t.bookings as unknown as { id: string; code: string } | null;
+            const v = t.vehicles as unknown as { name: string } | null;
+            return (
+              <li key={`n${t.id}`}>
+                <span className="todo-kind k-del">คนขับแจ้ง</span>
+                <div className="todo-main"><b>{t.driver_note}</b><small>{v?.name} · {DIRECTION[t.direction]} · <Link href={`/admin/bookings/${b?.id}`}>{b?.code}</Link>{t.note_at ? ` · ${thTime(t.note_at)}` : ''}</small></div>
+                <div className="todo-act"><ActionButton action={ackTripNote} fields={{ id: t.id }} label="รับทราบ" /></div>
+              </li>
+            );
+          })}
           {(slips.data ?? []).map((p) => {
             const b = p.bookings as unknown as { id: string; code: string; plate: string } | null;
             return (
@@ -164,7 +176,7 @@ export default async function AdminHome() {
               <li key={t.id} className={t.vehicles ? '' : 'warn'}>
                 <time>{bkkDay(t.pickup_at) === today ? '' : 'พรุ่งนี้ '}{thTime(t.pickup_at)}</time>
                 <div><b>{DIRECTION[t.direction]} · {t.pax} คน</b><small>{t.bookings?.customers?.name}{t.flight_number ? ` · ${t.flight_number}` : ''}</small></div>
-                <span className={t.vehicles ? 'st st-ok' : 'st st-wait'}>{t.vehicles?.name ?? 'ยังไม่มีรถ'}</span>
+                <span className={`st ${t.status === 'done' ? 'st-done' : t.status === 'en_route' || t.status === 'arrived' ? 'st-in' : t.vehicles ? 'st-ok' : 'st-wait'}`}>{t.status === 'done' ? 'เสร็จแล้ว' : t.status === 'en_route' ? 'กำลังเดินทาง' : t.status === 'arrived' ? 'ถึงจุดนัด' : t.vehicles?.name ?? 'ยังไม่มีรถ'}</span>
               </li>
             ))}
           </ul>

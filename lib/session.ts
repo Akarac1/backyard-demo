@@ -1,7 +1,7 @@
 // Signed session cookie for staff. Works in middleware (edge) and on the server.
 // Value: base64url(JSON payload) + "." + base64url(HMAC-SHA256(payload, SESSION_SECRET))
 
-export type Role = 'admin' | 'exec';
+export type Role = 'admin' | 'exec' | 'driver';
 export type Session = { uid: string; role: Role; name: string; username: string; exp: number };
 
 export const SESSION_COOKIE = 'by_session';
@@ -53,8 +53,9 @@ export async function readSession(value: string | undefined | null): Promise<Ses
 export function rolesFor(path: string): Role[] | null {
   if (path.startsWith('/admin') || path.startsWith('/api/admin')) return ['admin'];
   if (path.startsWith('/exec')) return ['admin', 'exec'];
-  if (path.startsWith('/account')) return ['admin', 'exec'];
+  if (path.startsWith('/driver')) return ['admin', 'driver'];
+  if (path.startsWith('/account')) return ['admin', 'exec', 'driver'];
   return null;
 }
 
-export const homeFor = (role: Role) => (role === 'admin' ? '/admin' : '/exec');
+export const homeFor = (role: Role) => (role === 'admin' ? '/admin' : role === 'driver' ? '/driver' : '/exec');

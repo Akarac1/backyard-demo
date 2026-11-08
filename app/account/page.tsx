@@ -3,10 +3,10 @@ import { ActionForm, Submit } from '@/components/ActionForm';
 import { changeOwnPassword } from '@/app/admin/actions';
 
 export default async function AccountPage() {
-  const s = await requireStaff(['admin', 'exec']);
+  const s = await requireStaff(['admin', 'exec', 'driver']);
   return (
     <main className="page narrow">
-      <header className="page-head"><div><h1>บัญชีของฉัน</h1><p>{s.name} · {s.username} · {s.role === 'admin' ? 'แอดมิน' : 'ผู้บริหาร'}</p></div></header>
+      <header className="page-head"><div><h1>บัญชีของฉัน</h1><p>{s.name} · {s.username} · {s.role === 'admin' ? 'แอดมิน' : s.role === 'driver' ? 'คนขับ' : 'ผู้บริหาร'}</p></div></header>
       <section className="panel">
         <h2>เปลี่ยนรหัสผ่าน</h2>
         <ActionForm action={changeOwnPassword} resetOnOk className="form">

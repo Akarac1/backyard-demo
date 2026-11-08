@@ -2,7 +2,7 @@ import 'server-only';
 import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { db } from './supabase';
-import { readSession, SESSION_COOKIE, type Role, type Session } from './session';
+import { homeFor, readSession, SESSION_COOKIE, type Role, type Session } from './session';
 
 /** The signed-in staff member, re-checked against the database (deactivated users are out at once). */
 export async function getStaff(): Promise<Session | null> {
@@ -17,7 +17,7 @@ export async function getStaff(): Promise<Session | null> {
 export async function requireStaff(roles: Role[]): Promise<Session> {
   const s = await getStaff();
   if (!s) redirect('/login');
-  if (!roles.includes(s.role)) redirect(s.role === 'exec' ? '/exec' : '/login');
+  if (!roles.includes(s.role)) redirect(homeFor(s.role));
   return s;
 }
 

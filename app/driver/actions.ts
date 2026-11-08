@@ -1,0 +1,67 @@
+'use server';
+import { revalidatePath } from 'next/cache';
+import { db } from '@/lib/supabase';
+import { staffForAction } from '@/lib/auth';
+import { noteText, sendToCustomer, statusText, tripContext, type TripStep } from '@/lib/tripMessages';
+import type { ActionResult } from '@/app/admin/actions';
+
+const ERR: Record<string, string> = {
+  not_allowed: 'ไม่มีสิทธิ์ ลองออกจากระบบแล้วเข้าใหม่',
+  not_found: 'ไม่พบงานนี้',
+  not_your_trip: 'งานนี้ไม่ใช่ของรถคุณ ติดต่อแอดมิน',
+  bad_status: 'สถานะไม่ถูกต้อง',
+  trip_cancelled: 'งานนี้ถูกยกเลิกแล้ว',
+  empty_note: 'พิมพ์ข้อความก่อนส่ง',
+};
+const LABEL: Record<string, Record<string, string>> = {
+  to_airport: { arrived: 'บันทึกว่าพร้อมรับที่ลาน', en_route: 'บันทึกว่าออกเดินทางไปสนามบิน', done: 'บันทึกว่าส่งถึงสนามบินแล้ว' },
+  from_airport: { en_route: 'บันทึกว่าออกไปรับ', arrived: 'บันทึกว่าถึงจุดนัดรับ', done: 'บันทึกว่าส่งถึงลานแล้ว' },
+};
+const SENT: Record<string, string> = { sent: 'ส่งข้อความหาลูกค้าแล้ว', no_line: 'ลูกค้าไม่ได้จองผ่าน LINE ไม่ได้ส่งข้อความ', failed: 'ส่งข้อความไม่สำเร็จ โทรแจ้งลูกค้าแทน' };
+
+export async function setTripStatus(_: ActionResult, f: FormData): Promise<ActionResult> {
+  let me;
+  try { me = await staffForAction(['driver', 'admin']); } catch { return { error: ERR.not_allowed }; }
+  const tripId = String(f.get('id'));
+  const step = String(f.get('status')) as TripStep;
+  const { error } = await db().rpc('driver_set_trip_status', { p_actor: me.uid, p_trip_id: tripId, p_status: step });
+  if (error) return { error: ERR[error.message] ?? 'บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง' };
+
+  const label = LABEL[String(f.get('direction'))]?.[step] ?? 'บันทึกแล้ว';
+  let result: ActionResult = { ok: label };
+  if (f.get('notify') === 'on') {
+    const ctx = await tripContext(tripId, me.name);
+    if (ctx) {
+      const r = await sendToCustomer(ctx, statusText(ctx, step));
+      if (r === 'sent') {
+        const { data: ev } = await db().rpc('trip_last_event', { p_trip_id: tripId });
+        if (ev) await db().rpc('trip_event_notified', { p_event_id: ev });
+      }
+      // a failed message is shown in red so the driver calls the customer instead
+      result = r === 'failed' ? { error: `${label} แต่${SENT.failed}` } : { ok: `${label} · ${SENT[r]}` };
+    }
+  }
+  revalidatePath('/driver'); revalidatePath('/admin/trips'); revalidatePath('/admin');
+  return result;
+}
+
+export async function addTripNote(_: ActionResult, f: FormData): Promise<ActionResult> {
+  let me;
+  try { me = await staffForAction(['driver', 'admin']); } catch { return { error: ERR.not_allowed }; }
+  const tripId = String(f.get('id'));
+  const note = String(f.get('note') ?? '').trim();
+  const { data: evId, error } = await db().rpc('driver_add_note', { p_actor: me.uid, p_trip_id: tripId, p_note: note });
+  if (error) return { error: ERR[error.message] ?? 'บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง' };
+
+  let result: ActionResult = { ok: 'บันทึกหมายเหตุและแจ้งแอดมินแล้ว' };
+  if (f.get('notify') === 'on') {
+    const ctx = await tripContext(tripId, me.name);
+    if (ctx) {
+      const r = await sendToCustomer(ctx, noteText(ctx, note));
+      if (r === 'sent' && evId) await db().rpc('trip_event_notified', { p_event_id: evId });
+      result = r === 'failed' ? { error: `แจ้งแอดมินแล้ว แต่${SENT.failed}` } : { ok: `บันทึกหมายเหตุและแจ้งแอดมินแล้ว · ${SENT[r]}` };
+    }
+  }
+  revalidatePath('/driver'); revalidatePath('/admin/trips'); revalidatePath('/admin');
+  return result;
+}

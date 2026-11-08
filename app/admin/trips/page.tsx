@@ -3,17 +3,20 @@ import { db } from '@/lib/supabase';
 import { addDays, thDate, thTime, todayBkk } from '@/lib/format';
 import { DIRECTION } from '@/lib/labels';
 import { ActionButton, ActionForm, Submit } from '@/components/ActionForm';
-import { autoAssign, updateTrip } from '../actions';
+import { ackTripNote, autoAssign, updateTrip } from '../actions';
 
 export const dynamic = 'force-dynamic';
 
 type Trip = {
   id: string; direction: string; pax: number; pickup_at: string | null; flight_number: string | null; status: string;
   vehicle_id: string | null; assignment_locked: boolean;
+  departed_at: string | null; arrived_at: string | null; completed_at: string | null; driver_note: string | null; note_resolved: boolean;
   bookings: { id: string; code: string; plate: string; status: string; customers: { name: string; phone: string } | null } | null;
 };
 
 /** 'YYYY-MM-DDTHH:MM' in Bangkok time, for <input type="datetime-local"> */
+const TRIP_STATUS: Record<string, string> = { unassigned: 'ยังไม่มีรถ', assigned: 'จัดรถแล้ว', en_route: 'กำลังเดินทาง', arrived: 'ถึงจุดนัดแล้ว', picked_up: 'รับลูกค้าแล้ว', done: 'เสร็จแล้ว' };
+
 const localInput = (ts: string | null) => ts ? new Date(ts).toLocaleString('sv-SE', { timeZone: 'Asia/Bangkok' }).slice(0, 16).replace(' ', 'T') : '';
 
 export default async function TripsPage({ searchParams }: { searchParams: Promise<{ d?: string }> }) {
@@ -23,7 +26,7 @@ export default async function TripsPage({ searchParams }: { searchParams: Promis
   const sb = db();
   const [{ data }, { data: vehicles }] = await Promise.all([
     sb.from('shuttle_trips')
-      .select('id, direction, pax, pickup_at, flight_number, status, vehicle_id, assignment_locked, bookings(id, code, plate, status, customers(name, phone))')
+      .select('id, direction, pax, pickup_at, flight_number, status, vehicle_id, assignment_locked, departed_at, arrived_at, completed_at, driver_note, note_resolved, bookings(id, code, plate, status, customers(name, phone))')
       .gte('pickup_at', `${day}T00:00:00+07:00`).lt('pickup_at', `${addDays(day, 1)}T00:00:00+07:00`)
       .neq('status', 'cancelled').order('pickup_at'),
     sb.from('vehicles').select('id, name, seats').eq('active', true).order('seats'),
@@ -53,6 +56,18 @@ export default async function TripsPage({ searchParams }: { searchParams: Promis
                 <small><Link href={`/admin/bookings/${t.bookings?.id}`}>{t.bookings?.code}</Link> · {t.bookings?.customers?.name} · <a href={`tel:${t.bookings?.customers?.phone}`}>{t.bookings?.customers?.phone}</a>{t.flight_number ? ` · ไฟลต์ ${t.flight_number}` : ''}</small>
               </div>
             </div>
+            <div className="trip-progress">
+              <span className={`st ${t.status === 'done' ? 'st-done' : t.status === 'en_route' || t.status === 'arrived' ? 'st-in' : t.vehicle_id ? 'st-ok' : 'st-wait'}`}>{TRIP_STATUS[t.status] ?? t.status}</span>
+              {t.departed_at && <small>ออกเดินทาง {thTime(t.departed_at)}</small>}
+              {t.arrived_at && <small>ถึงจุดนัด {thTime(t.arrived_at)}</small>}
+              {t.completed_at && <small>เสร็จ {thTime(t.completed_at)}</small>}
+            </div>
+            {t.driver_note && (
+              <div className={`note trip-note ${t.note_resolved ? '' : 'open'}`}>
+                <span>คนขับแจ้ง: {t.driver_note}</span>
+                {!t.note_resolved && <ActionButton action={ackTripNote} fields={{ id: t.id }} label="รับทราบ" />}
+              </div>
+            )}
             <ActionForm action={updateTrip} className="form trip-form">
               <input type="hidden" name="id" value={t.id} />
               <label>รถ
