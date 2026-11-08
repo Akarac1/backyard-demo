@@ -1,0 +1,149 @@
+import { reply, verifySignature, type LineMessage } from '@/lib/line';
+import { json } from '@/lib/request';
+
+// Everything here answers with reply messages, which do not count against the LINE OA quota.
+type Event = { type: string; replyToken?: string; message?: { type: string; text?: string } };
+
+const GREEN = '#0E3320';
+const GOLD = '#E0B04A';
+const MUTED = '#6B7A70';
+const PHONE = process.env.SHOP_PHONE ?? '0888101089';
+const PHONE_DISPLAY = PHONE.replace(/^(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3');
+
+const base = () => process.env.NEXT_PUBLIC_BASE_URL ?? '';
+const liffUrl = (path: string) =>
+  process.env.NEXT_PUBLIC_LIFF_ID ? `https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID}${path}` : `${base()}/liff${path}`;
+
+const header = (title: string, subtitle: string) => ({
+  type: 'box', layout: 'vertical', backgroundColor: GREEN, paddingAll: '18px', spacing: 'xs',
+  contents: [
+    { type: 'text', text: title, color: GOLD, weight: 'bold', size: 'xl' },
+    { type: 'text', text: subtitle, color: '#DCE7DF', size: 'xs' },
+  ],
+});
+
+const priceRow = (label: string, price: string, unit: string, note?: string) => ({
+  type: 'box', layout: 'vertical', spacing: 'none',
+  contents: [
+    {
+      type: 'box', layout: 'horizontal', alignItems: 'flex-end',
+      contents: [
+        { type: 'text', text: label, size: 'md', color: GREEN, weight: 'bold', flex: 5, wrap: true },
+        { type: 'text', text: price, size: 'xl', color: GREEN, weight: 'bold', align: 'end', flex: 3 },
+        { type: 'text', text: unit, size: 'xs', color: MUTED, align: 'end', flex: 3, gravity: 'bottom' },
+      ],
+    },
+    ...(note ? [{ type: 'text', text: note, size: 'xs', color: MUTED, wrap: true }] : []),
+  ],
+});
+
+const bullet = (text: string) => ({
+  type: 'box', layout: 'baseline', spacing: 'sm',
+  contents: [
+    { type: 'text', text: '•', size: 'sm', color: GOLD, flex: 0 },
+    { type: 'text', text, size: 'sm', color: '#3A4A40', wrap: true },
+  ],
+});
+
+const callButton = (style: 'primary' | 'secondary') => ({
+  type: 'button', style, height: 'sm', color: style === 'primary' ? GREEN : undefined,
+  action: { type: 'uri', label: `โทร ${PHONE_DISPLAY}`, uri: `tel:${PHONE}` },
+});
+
+const priceFlex: LineMessage = {
+  type: 'flex',
+  altText: 'ราคา: ที่จอด 100 บาท/วัน · รถรับส่งไป-กลับ 300 บาท',
+  contents: {
+    type: 'bubble',
+    header: header('ราคาและเงื่อนไข', 'Backyard Airport · The Hangar · ใกล้สุวรรณภูมิ 15 นาที'),
+    body: {
+      type: 'box', layout: 'vertical', spacing: 'lg', paddingAll: '18px',
+      contents: [
+        priceRow('ที่จอดรถ', '100', 'บาท / วัน'),
+        priceRow('รถรับส่งไป-กลับ', '300', 'บาท / การจอง', 'สนามบินสุวรรณภูมิ · ไม่เกิน 7 คน · ต้องจองที่จอดด้วย'),
+        priceRow('จอดเกินหรือเพิ่มวัน', '120', 'บาท / วัน'),
+        { type: 'separator', color: '#E4E9E5' },
+        { type: 'text', text: 'เงื่อนไข', size: 'sm', weight: 'bold', color: GREEN },
+        {
+          type: 'box', layout: 'vertical', spacing: 'xs',
+          contents: [
+            bullet('นับวันตามปฏิทิน รวมวันเข้าและวันออก'),
+            bullet('จ่ายเต็มจำนวนตอนจองผ่าน PromptPay'),
+            bullet('ไม่คืนเงิน เลื่อนวันได้ 1 ครั้ง ล่วงหน้าอย่างน้อย 7 วัน ภายใน 1 ปีนับจากวันจอง'),
+          ],
+        },
+      ],
+    },
+    footer: {
+      type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
+      contents: [
+        { type: 'button', style: 'primary', color: GOLD, height: 'sm', action: { type: 'uri', label: 'จองเลย', uri: liffUrl('/book') } },
+        callButton('secondary'),
+      ],
+    },
+  },
+};
+
+const adminFlex: LineMessage = {
+  type: 'flex',
+  altText: `ติดต่อแอดมิน 08:00–20:00 · โทร ${PHONE_DISPLAY}`,
+  contents: {
+    type: 'bubble',
+    header: header('ติดต่อแอดมิน', 'ตอบแชททุกวัน 08:00–20:00'),
+    body: {
+      type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '18px',
+      contents: [
+        { type: 'text', text: 'พิมพ์ข้อความทิ้งไว้ในแชทนี้ได้เลย แอดมินจะตอบกลับโดยเร็วที่สุด', size: 'sm', color: '#3A4A40', wrap: true },
+        { type: 'text', text: 'จองที่จอดและส่งสลิปได้ตลอด 24 ชั่วโมง ไม่ต้องรอแอดมิน', size: 'sm', color: MUTED, wrap: true },
+        {
+          type: 'box', layout: 'horizontal', margin: 'md',
+          contents: [
+            { type: 'text', text: 'โทร', size: 'sm', color: MUTED, flex: 1 },
+            { type: 'text', text: PHONE_DISPLAY, size: 'lg', weight: 'bold', color: GREEN, flex: 4 },
+          ],
+        },
+      ],
+    },
+    footer: {
+      type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
+      contents: [
+        callButton('primary'),
+        { type: 'button', style: 'secondary', height: 'sm', action: { type: 'uri', label: 'จองที่จอดรถ', uri: liffUrl('/book') } },
+      ],
+    },
+  },
+};
+
+const bookFlex: LineMessage = {
+  type: 'flex',
+  altText: 'จองที่จอดรถ + รถรับส่งสุวรรณภูมิ',
+  contents: {
+    type: 'bubble', size: 'kilo',
+    header: header('จองที่จอดรถ', 'จอด 100 บาท/วัน · รถรับส่งไป-กลับ 300 บาท'),
+    footer: {
+      type: 'box', layout: 'vertical', paddingAll: '14px',
+      contents: [{ type: 'button', style: 'primary', color: GOLD, height: 'sm', action: { type: 'uri', label: 'จองเลย', uri: liffUrl('/book') } }],
+    },
+  },
+};
+
+export async function POST(req: Request) {
+  const body = await req.text();
+  if (!verifySignature(body, req.headers.get('x-line-signature'))) return json({ error: 'bad signature' }, 401);
+  const { events } = JSON.parse(body) as { events: Event[] };
+
+  await Promise.all(events.map(async (e) => {
+    if (!e.replyToken) return;
+    if (e.type === 'follow') {
+      return reply(e.replyToken, [
+        { type: 'image', originalContentUrl: `${base()}/welcome.png`, previewImageUrl: `${base()}/welcome.png` },
+        { type: 'text', text: `ยินดีต้อนรับสู่ Backyard Airport · The Hangar\nจองที่จอดและรถรับส่งได้ตลอด 24 ชั่วโมงจากเมนูด้านล่าง\nคุยกับแอดมิน 08:00–20:00 · โทร ${PHONE_DISPLAY}` },
+      ]);
+    }
+    const text = e.type === 'message' && e.message?.type === 'text' ? e.message.text ?? '' : '';
+    if (/ราคา|เงื่อนไข/.test(text)) return reply(e.replyToken, [priceFlex]);
+    if (/แอดมิน|ติดต่อ|โทร/.test(text)) return reply(e.replyToken, [adminFlex]);
+    if (/จอง/.test(text)) return reply(e.replyToken, [bookFlex]);
+  }));
+  return json({ ok: true });
+}
