@@ -1,6 +1,7 @@
 import { db } from '@/lib/supabase';
 import { bkkLocalToIso, currentUser, json } from '@/lib/request';
 import { dbErrorToThai } from '@/lib/format';
+import { serverT } from '@/lib/i18nDict';
 import { afterConfirmed } from '@/lib/confirm';
 
 type Body = {
@@ -10,10 +11,11 @@ type Body = {
 };
 
 export async function POST(req: Request) {
+  const L = serverT(req);
   const uid = await currentUser(req);
-  if (!uid) return json({ error: 'กรุณาเปิดจาก LINE' }, 401);
+  if (!uid) return json({ error: L('กรุณาเปิดจาก LINE') }, 401);
   const b = (await req.json()) as Body;
-  if (!b.name?.trim() || !b.phone?.trim() || !b.plate?.trim()) return json({ error: 'กรอกข้อมูลให้ครบ' }, 400);
+  if (!b.name?.trim() || !b.phone?.trim() || !b.plate?.trim()) return json({ error: L('กรอกข้อมูลให้ครบ') }, 400);
 
   // Pickup time = landing + time to get out of the terminal (settings), customer-entered (no flight API in the lean plan).
   let returnPickup: string | null = null;
@@ -40,7 +42,7 @@ export async function POST(req: Request) {
     p_ref_phone: b.refPhone?.trim() || null,
     p_coupon: b.couponId && /^[0-9a-f-]{36}$/.test(b.couponId) ? b.couponId : null,
   });
-  if (error) return json({ error: dbErrorToThai(error.message) }, 409);
+  if (error) return json({ error: dbErrorToThai(error.message, L.lang) }, 409);
   const id = (data as { id: string }).id;
   const paidInFull = (data as { status: string }).status === 'confirmed';
   // keep the landing time: the "welcome to Suvarnabhumi" card is sent at this time

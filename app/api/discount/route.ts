@@ -1,5 +1,6 @@
 import { db } from '@/lib/supabase';
 import { currentUser, json } from '@/lib/request';
+import { serverT } from '@/lib/i18nDict';
 
 export const dynamic = 'force-dynamic';
 
@@ -8,7 +9,7 @@ export const dynamic = 'force-dynamic';
  *  The real discount is decided again inside create_booking. */
 export async function POST(req: Request) {
   const uid = await currentUser(req);
-  if (!uid) return json({ error: 'กรุณาเปิดจาก LINE' }, 401);
+  if (!uid) return json({ error: serverT(req)('กรุณาเปิดจาก LINE') }, 401);
   const b = (await req.json().catch(() => ({}))) as { phone?: string; refPhone?: string; days?: number; shuttle?: boolean; start?: string };
   const phone = String(b.phone ?? '').slice(0, 30);
   const ref = String(b.refPhone ?? '').slice(0, 30);

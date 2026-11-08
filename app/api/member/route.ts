@@ -1,13 +1,15 @@
 import { db } from '@/lib/supabase';
 import { currentUser, json } from '@/lib/request';
+import { serverT, dayIn, numIn } from '@/lib/i18nDict';
 
 export const dynamic = 'force-dynamic';
 
-const thD = (d: string) => new Date(`${d}T00:00:00+07:00`).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short' });
 const BIZ: Record<string, string> = { all: 'ทุกบริการ', parking: 'ที่จอดรถ', cafe: 'คาเฟ่', stay: 'ที่พัก' };
 
 /** Member card data for the signed-in customer: tier, spend toward the next tier, points, campaigns for them. */
 export async function GET(req: Request) {
+  const L = serverT(req);
+  const thD = (d: string) => dayIn(L.lang, d);
   const uid = await currentUser(req);
   if (!uid) return json({ error: 'unauthorized' }, 401);
   const sb = db();
@@ -21,11 +23,11 @@ export async function GET(req: Request) {
     points: m.points, manual: m.manual,
     campaigns: ((camps ?? []) as { name: string; description: string | null; business: string; kind: string; multiplier: number; bonus_points: number; ends_at: string | null; min_days: number; free_days: number; amount_off: number; percent_off: number; stay_from: string | null; stay_to: string | null }[])
       .map((c) => ({
-        name: c.name, description: c.description, business: BIZ[c.business] ?? c.business, endsAt: c.ends_at,
-        effect: c.kind === 'multiplier' ? `แต้ม x${Number(c.multiplier)}` : c.kind === 'bonus' ? `+${c.bonus_points} แต้มต่อการใช้บริการ`
-          : c.kind === 'free_days' ? `จอด ${c.min_days} วันขึ้นไป ฟรี ${c.free_days} วัน` : c.kind === 'amount_off' ? `จอด ${c.min_days} วันขึ้นไป ลด ${c.amount_off.toLocaleString('th-TH')} บาท`
-          : c.kind === 'percent_off' ? `ลดค่าจอด ${c.percent_off}%${c.min_days > 1 ? ` (จอด ${c.min_days} วันขึ้นไป)` : ''}` : null,
-        stay: c.stay_from || c.stay_to ? `เข้าจอด ${c.stay_from ? thD(c.stay_from) : ''} – ${c.stay_to ? thD(c.stay_to) : ''}` : null,
+        name: c.name, description: c.description, business: L(BIZ[c.business] ?? c.business), endsAt: c.ends_at,
+        effect: c.kind === 'multiplier' ? L('แต้ม x{n}', { n: Number(c.multiplier) }) : c.kind === 'bonus' ? L('+{n} แต้มต่อการใช้บริการ', { n: c.bonus_points })
+          : c.kind === 'free_days' ? L('จอด {a} วันขึ้นไป ฟรี {b} วัน', { a: c.min_days, b: c.free_days }) : c.kind === 'amount_off' ? L('จอด {a} วันขึ้นไป ลด {b} บาท', { a: c.min_days, b: numIn(L.lang, c.amount_off) })
+          : c.kind === 'percent_off' ? L('ลดค่าจอด {n}%', { n: c.percent_off }) + (c.min_days > 1 ? L(' (จอด {n} วันขึ้นไป)', { n: c.min_days }) : '') : null,
+        stay: c.stay_from || c.stay_to ? L('เข้าจอด {a} – {b}', { a: c.stay_from ? thD(c.stay_from) : '', b: c.stay_to ? thD(c.stay_to) : '' }) : null,
       })),
   });
 }

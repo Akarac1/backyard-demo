@@ -594,3 +594,12 @@ table.report th:first-child, table.report td:first-child { text-align: left; }
 .back-name { font-size: 13px; opacity: .85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .back-timer { font-size: 11px; opacity: .75; margin-top: 6px; font-variant-numeric: tabular-nums; }
 @media (prefers-reduced-motion: reduce) { .flip-inner { transition: none; } }
+
+/* language switch (customer pages) */
+html[lang="zh-CN"] body { font-family: 'Kanit', 'PingFang SC', 'Noto Sans SC', 'Microsoft YaHei', system-ui, sans-serif; }
+.lang-switch { position: fixed; top: 10px; right: 10px; z-index: 50; display: flex; gap: 2px; padding: 3px;
+  background: rgba(255,255,255,.92); border-radius: 999px; box-shadow: 0 2px 10px rgba(10,30,20,.18); backdrop-filter: blur(6px); }
+.lang-switch button { all: unset; cursor: pointer; font: 500 12px/1 'Kanit', 'PingFang SC', 'Noto Sans SC', system-ui, sans-serif;
+  padding: 6px 9px; border-radius: 999px; color: #3C4A42; }
+.lang-switch button.on { background: var(--navy); color: #fff; }
+.lang-switch button:focus-visible { outline: 2px solid var(--navy); outline-offset: 1px; }

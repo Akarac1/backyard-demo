@@ -7,6 +7,8 @@ export type SlipResult =
       ok: false;
       reason: 'pending' | 'invalid' | 'duplicate' | 'amount_mismatch' | 'wrong_receiver' | 'too_old' | 'review' | 'error';
       message: string;
+      /** template of message, for showing it in another language */
+      key?: string; vars?: Record<string, string | number>;
     };
 
 type Expect = { amount: number; notBefore: Date; remark?: string };
@@ -49,7 +51,7 @@ function finalCheck(r: Read, x: Expect): SlipResult {
   if (r.receiver === 'mismatch')
     return { ok: false, reason: 'wrong_receiver', message: 'บัญชีผู้รับในสลิปไม่ใช่บัญชีของร้าน กรุณาโอนผ่าน QR ในหน้านี้' };
   if (r.amount + 0.001 < x.amount)
-    return { ok: false, reason: 'amount_mismatch', message: `ยอดในสลิป ${r.amount} บาท น้อยกว่ายอดที่ต้องชำระ ${x.amount} บาท` };
+    return { ok: false, reason: 'amount_mismatch', message: `ยอดในสลิป ${r.amount} บาท น้อยกว่ายอดที่ต้องชำระ ${x.amount} บาท`, key: 'ยอดในสลิป {a} บาท น้อยกว่ายอดที่ต้องชำระ {b} บาท', vars: { a: r.amount, b: x.amount } };
   if (r.date && Date.parse(r.date) < x.notBefore.getTime() - 10 * 60_000)
     return { ok: false, reason: 'too_old', message: 'สลิปนี้โอนก่อนทำการจอง กรุณาใช้สลิปของการโอนครั้งนี้' };
   if (r.receiver === 'unknown')

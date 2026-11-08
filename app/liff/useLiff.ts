@@ -46,4 +46,10 @@ let accessToken: string | null = null;
 export const authHeaders = (idToken: string | null): Record<string, string> => ({
   ...(idToken ? { 'x-id-token': idToken } : {}),
   ...(accessToken ? { 'x-access-token': accessToken } : {}),
+  'x-lang': currentLang(),
 });
+
+/** The language picked with the switch at the top right; servers answer in it. */
+export function currentLang(): string {
+  try { return localStorage.getItem('by_lang') || 'th'; } catch { return 'th'; }
+}

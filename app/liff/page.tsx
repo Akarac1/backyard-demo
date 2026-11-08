@@ -1,6 +1,7 @@
 'use client';
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useT } from '@/components/Lang';
 
 /**
  * LIFF endpoint (https://<domain>/liff). liff.line.me/<id>/my arrives here as ?liff.state=/my;
@@ -8,6 +9,7 @@ import { useRouter } from 'next/navigation';
  */
 export default function LiffRoot() {
   const router = useRouter();
+  const { t } = useT();
   useEffect(() => {
     const state = new URLSearchParams(window.location.search).get('liff.state');
     const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
@@ -17,5 +19,5 @@ export default function LiffRoot() {
       router.replace('/liff/book');
     }
   }, [router]);
-  return <main className="wrap"><p className="small">กำลังเปิด…</p></main>;
+  return <main className="wrap"><p className="small">{t('กำลังเปิด…')}</p></main>;
 }

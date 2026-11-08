@@ -1,3 +1,4 @@
+import { tr, dayIn, type Lang } from './i18nDict';
 const TH_MONTHS = ['ม.ค.', 'ก.พ.', 'มี.ค.', 'เม.ย.', 'พ.ค.', 'มิ.ย.', 'ก.ค.', 'ส.ค.', 'ก.ย.', 'ต.ค.', 'พ.ย.', 'ธ.ค.'];
 
 /** '2026-11-20' -> '20 พ.ย.' */
@@ -24,10 +25,10 @@ export function addDays(iso: string, n: number): string {
 
 export const baht = (n: number) => `${n.toLocaleString('th-TH')} บาท`;
 
-/** Postgres exception text from our functions -> message for the customer. */
-export function dbErrorToThai(msg: string): string {
-  if (msg.startsWith('full:')) return `วันที่ ${thDate(msg.slice(5))} ที่จอดเต็มแล้ว ลองเลือกวันอื่น`;
-  if (msg.startsWith('full_after_hold_expired:')) return `หมดเวลากันที่ และวันที่ ${thDate(msg.split(':')[1])} เต็มแล้ว แอดมินจะติดต่อกลับ`;
+/** Postgres exception text from our functions -> message for the customer (Thai unless a language is given). */
+export function dbErrorToThai(msg: string, lang: Lang = 'th'): string {
+  if (msg.startsWith('full:')) return tr(lang, 'วันที่ {d} ที่จอดเต็มแล้ว ลองเลือกวันอื่น', { d: dayIn(lang, msg.slice(5)) });
+  if (msg.startsWith('full_after_hold_expired:')) return tr(lang, 'หมดเวลากันที่ และวันที่ {d} เต็มแล้ว แอดมินจะติดต่อกลับ', { d: dayIn(lang, msg.split(':')[1]) });
   const map: Record<string, string> = {
     start_date_in_past: 'วันเข้าจอดต้องไม่ใช่วันที่ผ่านมาแล้ว',
     invalid_range: 'วันรับรถคืนต้องไม่ก่อนวันเข้าจอด',
@@ -43,7 +44,7 @@ export function dbErrorToThai(msg: string): string {
     out_of_stock: 'ของรางวัลนี้หมดแล้ว',
     not_found: 'ไม่พบของรางวัลนี้',
   };
-  return map[msg] ?? 'เกิดข้อผิดพลาด ลองใหม่อีกครั้ง';
+  return tr(lang, map[msg] ?? 'เกิดข้อผิดพลาด ลองใหม่อีกครั้ง');
 }
 
 /** timestamptz -> 'YYYY-MM-DD' in Bangkok (a UTC timestamp's date can be the day before) */

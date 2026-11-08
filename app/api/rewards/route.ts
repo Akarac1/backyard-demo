@@ -1,5 +1,6 @@
 import { db } from '@/lib/supabase';
 import { currentUser, json } from '@/lib/request';
+import { serverT } from '@/lib/i18nDict';
 import { dbErrorToThai } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
@@ -29,12 +30,13 @@ export async function GET(req: Request) {
 
 /** Exchange points for a reward. */
 export async function POST(req: Request) {
+  const L = serverT(req);
   const uid = await currentUser(req);
-  if (!uid) return json({ error: 'กรุณาเปิดจาก LINE' }, 401);
+  if (!uid) return json({ error: L('กรุณาเปิดจาก LINE') }, 401);
   const { rewardId } = (await req.json().catch(() => ({}))) as { rewardId?: string };
-  if (!rewardId || !/^[0-9a-f-]{36}$/.test(rewardId)) return json({ error: 'ไม่พบของรางวัลนี้' }, 400);
+  if (!rewardId || !/^[0-9a-f-]{36}$/.test(rewardId)) return json({ error: L('ไม่พบของรางวัลนี้') }, 400);
   const { data, error } = await db().rpc('redeem_reward', { p_line_user_id: uid, p_reward: rewardId });
-  if (error) return json({ error: dbErrorToThai(error.message) }, 409);
+  if (error) return json({ error: dbErrorToThai(error.message, L.lang) }, 409);
   const c = data as { code: string; title: string; expires_at: string };
   return json({ code: c.code, title: c.title, expiresAt: c.expires_at });
 }

@@ -1,5 +1,6 @@
 import { db } from '@/lib/supabase';
 import { currentUser, json } from '@/lib/request';
+import { serverT } from '@/lib/i18nDict';
 
 export const dynamic = 'force-dynamic';
 
@@ -7,6 +8,7 @@ type Move = { at: string; points: number; label: string; expires_at?: string | n
 
 /** The signed-in customer's points: balance, what they are worth, what expires soon, last movements. */
 export async function GET(req: Request) {
+  const L = serverT(req);
   const uid = await currentUser(req);
   if (!uid) return json({ error: 'unauthorized' }, 401);
   const sb = db();
@@ -23,11 +25,11 @@ export async function GET(req: Request) {
     const code = (x: unknown) => (x as { code?: string } | null)?.code;
     for (const l of lots ?? []) moves.push({
       at: l.earned_at, points: l.points, expires_at: l.expires_at,
-      label: l.source === 'payment' ? `ชำระเงิน ${code(l.bookings) ?? ''}` : l.source === 'referral' ? `แนะนำเพื่อน${l.note ? ` (${l.note.replace(/^แนะนำ\s*/, '')})` : ''}` : (l.note ?? 'แอดมินเพิ่มให้'),
+      label: l.source === 'payment' ? L('ชำระเงิน {c}', { c: code(l.bookings) ?? '' }) : l.source === 'referral' ? L('แนะนำเพื่อน') + (l.note ? ` (${l.note.replace(/^แนะนำ\s*/, '')})` : '') : L(l.note ?? 'แอดมินเพิ่มให้'),
     });
     for (const s of spends ?? []) if (!s.returned_at) moves.push({
       at: s.created_at, points: -s.points,
-      label: s.reason === 'coupon' ? `แลก ${s.note ?? 'ของรางวัล'}` : s.reason === 'booking' ? `ใช้เป็นส่วนลด ${code(s.bookings) ?? ''}` : (s.note ?? 'แอดมินปรับ'),
+      label: s.reason === 'coupon' ? L('แลก {x}', { x: s.note ? L(s.note) : L('ของรางวัล') }) : s.reason === 'booking' ? L('ใช้เป็นส่วนลด {c}', { c: code(s.bookings) ?? '' }) : L(s.note ?? 'แอดมินปรับ'),
     });
     moves.sort((a, b) => b.at.localeCompare(a.at));
   }

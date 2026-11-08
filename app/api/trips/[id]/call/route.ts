@@ -1,5 +1,6 @@
 import { db } from '@/lib/supabase';
 import { currentUser, json } from '@/lib/request';
+import { serverT } from '@/lib/i18nDict';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,7 +53,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
       not_found: 'ไม่พบการจองนี้', not_your_trip: 'ไม่พบการจองนี้', not_return_trip: 'ปุ่มนี้ใช้สำหรับรถรับขากลับ',
       trip_closed: 'งานรับส่งนี้เสร็จหรือถูกยกเลิกแล้ว',
     };
-    return json({ error: msg[error.message] ?? 'เรียกรถไม่สำเร็จ กรุณาโทรหาร้าน' }, 409);
+    return json({ error: serverT(req)(msg[error.message] ?? 'เรียกรถไม่สำเร็จ กรุณาโทรหาร้าน') }, 409);
   }
   const t = await load(id, uid);
   return json(t ? await view(t) : { ok: true });

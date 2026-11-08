@@ -1,17 +1,18 @@
 'use client';
 import { use, useCallback, useEffect, useState } from 'react';
 import { authHeaders, useLiff } from '../../useLiff';
+import { useT } from '@/components/Lang';
 
 type Info = {
   code: string; name: string; pax: number; flight: string | null; status: string; calledAt: string | null; eta: string | null;
   meetingPoint: string; isReturn: boolean; driver: { name: string; phone: string | null } | null; shopPhone: string;
 };
-const time = (ts: string) => new Date(ts).toLocaleTimeString('th-TH', { timeZone: 'Asia/Bangkok', hour: '2-digit', minute: '2-digit' });
 const fmtPhone = (p: string) => p.replace(/^(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3');
 
 export default function CallPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const liff = useLiff();
+  const { t, time, lang } = useT();
   const [info, setInfo] = useState<Info | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
@@ -19,7 +20,7 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/trips/${id}/call`, { headers: authHeaders(liff.idToken) });
-    if (r.ok) setInfo(await r.json()); else setError('ไม่พบการจองนี้ หรือเปิดลิงก์จากบัญชี LINE อื่น');
+    if (r.ok) setInfo(await r.json()); else setError(t('ไม่พบการจองนี้ หรือเปิดลิงก์จากบัญชี LINE อื่น'));
   }, [id, liff.idToken]);
   useEffect(() => { if (liff.ready) load(); }, [liff.ready, load]);
   // keep the status fresh while the customer waits
@@ -34,7 +35,7 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
     const r = await fetch(`/api/trips/${id}/call`, { method: 'POST', headers: authHeaders(liff.idToken) });
     const j = await r.json().catch(() => ({}));
     setBusy(false); setAsking(false);
-    if (r.ok) setInfo(j); else setError(j.error ?? 'เรียกรถไม่สำเร็จ กรุณาโทรหาร้าน');
+    if (r.ok) setInfo(j); else setError(j.error ?? t('เรียกรถไม่สำเร็จ กรุณาโทรหาร้าน'));
   }
 
   const phone = info?.driver?.phone ?? info?.shopPhone;
@@ -43,50 +44,50 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
   return (
     <main>
       <div className="hero">
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><img src="/logo.png" alt="Backyard Airport The Hangar" width={48} height={46} /><span className="chip">รถรับขากลับ</span></div>
-        <h1>ยินดีต้อนรับสู่สุวรรณภูมิ</h1>
-        <p>{info ? `คุณ${/^[A-Za-z]/.test(info.name) ? ' ' : ''}${info.name} · ${info.pax} ท่าน · ${info.code}` : 'กำลังโหลด…'}</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><img src="/logo.png" alt="Backyard Airport The Hangar" width={48} height={46} /><span className="chip">{t('รถรับขากลับ')}</span></div>
+        <h1>{t('ยินดีต้อนรับสู่สุวรรณภูมิ')}</h1>
+        <p>{info ? `${lang === 'th' ? `คุณ${/^[A-Za-z]/.test(info.name) ? ' ' : ''}` : ''}${info.name} · ${t('{n} ท่าน', { n: info.pax })} · ${info.code}` : t('กำลังโหลด…')}</p>
       </div>
       <div className="wrap">
         {error && <div className="alert bad">{error}</div>}
-        {info && !info.isReturn && <div className="alert info">ปุ่มนี้ใช้สำหรับรถรับขากลับ</div>}
+        {info && !info.isReturn && <div className="alert info">{t('ปุ่มนี้ใช้สำหรับรถรับขากลับ')}</div>}
 
         {state === 'ready' && info && (
           <div className="card call-card">
-            <h2>ได้กระเป๋าแล้วหรือยัง?</h2>
-            <p className="small">กดเรียกรถเมื่อรับกระเป๋าเรียบร้อยและพร้อมออกจากโถงผู้โดยสาร คนขับจะไปถึงจุดนัดภายในประมาณ <b>15 นาที</b></p>
-            <div className="meet"><span>จุดนัดรับ</span><b>{info.meetingPoint}</b></div>
-            <button className="btn primary big" onClick={() => setAsking(true)}>เรียกรถมารับ</button>
-            <p className="small" style={{ textAlign: 'center' }}>ยังรอกระเป๋าอยู่? ไม่ต้องรีบ เปิดหน้านี้จากการ์ดในแชทได้ตลอด</p>
+            <h2>{t('ได้กระเป๋าแล้วหรือยัง?')}</h2>
+            <p className="small">{t('กดเรียกรถเมื่อรับกระเป๋าเรียบร้อยและพร้อมออกจากโถงผู้โดยสาร คนขับจะไปถึงจุดนัดภายในประมาณ 15 นาที')}</p>
+            <div className="meet"><span>{t('จุดนัดรับ')}</span><b>{t(info.meetingPoint)}</b></div>
+            <button className="btn primary big" onClick={() => setAsking(true)}>{t('เรียกรถมารับ')}</button>
+            <p className="small" style={{ textAlign: 'center' }}>{t('ยังรอกระเป๋าอยู่? ไม่ต้องรีบ เปิดหน้านี้จากการ์ดในแชทได้ตลอด')}</p>
           </div>
         )}
 
         {(state === 'called' || state === 'coming' || state === 'arrived') && info && (
           <div className="card call-card">
             <div className={`call-status s-${state}`}>
-              <b>{state === 'called' ? 'เรียกรถแล้ว รอคนขับรับทราบ' : state === 'coming' ? 'คนขับกำลังไปจุดนัดรับ' : 'รถถึงจุดนัดรับแล้ว'}</b>
-              {state !== 'arrived' && info.eta && <span>ถึงประมาณ {time(info.eta)} น.</span>}
+              <b>{state === 'called' ? t('เรียกรถแล้ว รอคนขับรับทราบ') : state === 'coming' ? t('คนขับกำลังไปจุดนัดรับ') : t('รถถึงจุดนัดรับแล้ว')}</b>
+              {state !== 'arrived' && info.eta && <span>{t('ถึงประมาณ {t} น.', { t: time(info.eta) })}</span>}
             </div>
-            <div className="meet"><span>จุดนัดรับ</span><b>{info.meetingPoint}</b></div>
-            {info.driver && <div className="meet"><span>คนขับ</span><b>{info.driver.name}</b></div>}
-            <p className="small">เรียกรถเมื่อ {info.calledAt && time(info.calledAt)} น. · หน้านี้อัปเดตเองทุก 20 วินาที</p>
+            <div className="meet"><span>{t('จุดนัดรับ')}</span><b>{t(info.meetingPoint)}</b></div>
+            {info.driver && <div className="meet"><span>{t('คนขับ')}</span><b>{info.driver.name}</b></div>}
+            <p className="small">{t('เรียกรถเมื่อ {t} น. · หน้านี้อัปเดตเองทุก 20 วินาที', { t: info.calledAt ? time(info.calledAt) : '' })}</p>
           </div>
         )}
 
-        {state === 'done' && <div className="card"><h2>ถึงลาน Backyard แล้ว</h2><p className="small">ขอบคุณที่ใช้บริการ หวังว่าจะได้ดูแลอีกในทริปหน้า</p></div>}
+        {state === 'done' && <div className="card"><h2>{t('ถึงลาน Backyard แล้ว')}</h2><p className="small">{t('ขอบคุณที่ใช้บริการ หวังว่าจะได้ดูแลอีกในทริปหน้า')}</p></div>}
 
-        {phone && <a className="btn" style={{ width: '100%', marginTop: 14 }} href={`tel:${phone}`}>โทรหา{info?.driver?.phone ? 'คนขับ' : 'ร้าน'} {fmtPhone(phone)}</a>}
+        {phone && <a className="btn" style={{ width: '100%', marginTop: 14 }} href={`tel:${phone}`}>{info?.driver?.phone ? t('โทรหาคนขับ') : t('โทรหาร้าน')} {fmtPhone(phone)}</a>}
       </div>
 
       {asking && info && (
         <div className="modal-bg" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
           <div className="modal">
-            <h2 id="confirm-title">ยืนยันเรียกรถ?</h2>
-            <p>คนขับจะออกเดินทางมารับที่ <b>{info.meetingPoint}</b> ทันที และถึงภายในประมาณ 15 นาที</p>
-            <p className="small">กดเมื่อได้กระเป๋าครบและพร้อมออกจากโถงแล้วเท่านั้น</p>
+            <h2 id="confirm-title">{t('ยืนยันเรียกรถ?')}</h2>
+            <p>{t('คนขับจะออกเดินทางมารับที่ {m} ทันที และถึงภายในประมาณ 15 นาที', { m: t(info.meetingPoint) })}</p>
+            <p className="small">{t('กดเมื่อได้กระเป๋าครบและพร้อมออกจากโถงแล้วเท่านั้น')}</p>
             <div className="modal-actions">
-              <button className="btn" onClick={() => setAsking(false)} disabled={busy}>ยังไม่พร้อม</button>
-              <button className="btn primary" style={{ marginTop: 0 }} onClick={call} disabled={busy}>{busy ? 'กำลังเรียก…' : 'ยืนยัน เรียกรถ'}</button>
+              <button className="btn" onClick={() => setAsking(false)} disabled={busy}>{t('ยังไม่พร้อม')}</button>
+              <button className="btn primary" style={{ marginTop: 0 }} onClick={call} disabled={busy}>{busy ? t('กำลังเรียก…') : t('ยืนยัน เรียกรถ')}</button>
             </div>
           </div>
         </div>
