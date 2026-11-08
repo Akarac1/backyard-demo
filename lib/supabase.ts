@@ -28,6 +28,11 @@ export type Booking = {
   pax: number | null;
   shuttle_amount: number;
   total_amount: number;
+  discount_amount: number;
+  coupon_id: string | null;
+  coupon_amount: number;
+  discount_reason: string | null;
+  referrer_phone: string | null;
   extra_amount_due: number;
   status: string;
   hold_expires_at: string | null;

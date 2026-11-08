@@ -1,11 +1,12 @@
 import { db } from '@/lib/supabase';
 import { bkkLocalToIso, currentUser, json } from '@/lib/request';
 import { dbErrorToThai } from '@/lib/format';
+import { afterConfirmed } from '@/lib/confirm';
 
 type Body = {
   start: string; end: string; name: string; phone: string; plate: string; province: string;
   shuttle: boolean; pax: number; outboundTime?: string; returnFlight?: string; returnLanding?: string;
-  flightType?: 'domestic' | 'international';
+  flightType?: 'domestic' | 'international'; refPhone?: string; couponId?: string;
 };
 
 export async function POST(req: Request) {
@@ -36,12 +37,17 @@ export async function POST(req: Request) {
     p_outbound_time: b.shuttle ? bkkLocalToIso(b.outboundTime) : null,
     p_return_flight: b.shuttle ? b.returnFlight || null : null,
     p_return_time: returnPickup,
+    p_ref_phone: b.refPhone?.trim() || null,
+    p_coupon: b.couponId && /^[0-9a-f-]{36}$/.test(b.couponId) ? b.couponId : null,
   });
   if (error) return json({ error: dbErrorToThai(error.message) }, 409);
   const id = (data as { id: string }).id;
+  const paidInFull = (data as { status: string }).status === 'confirmed';
   // keep the landing time: the "welcome to Suvarnabhumi" card is sent at this time
   if (b.shuttle && b.returnLanding) {
     await db().from('shuttle_trips').update({ landing_at: bkkLocalToIso(b.returnLanding) }).eq('booking_id', id).eq('direction', 'from_airport');
   }
-  return json({ id });
+  // paid entirely with discount + points: nothing to pay, send the confirmation now
+  if (paidInFull) await afterConfirmed(id).catch((e) => console.error('afterConfirmed', String(e)));
+  return json({ id, paid: paidInFull });
 }

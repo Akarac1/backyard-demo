@@ -37,6 +37,11 @@ export function dbErrorToThai(msg: string): string {
     beyond_one_year: 'วันใหม่ต้องไม่เกิน 1 ปีนับจากวันที่จอง',
     not_confirmed: 'การจองนี้ยังไม่ได้ยืนยัน',
     payment_not_pending: 'รายการนี้ชำระแล้ว',
+    coupon_invalid: 'คูปองนี้ใช้ไม่ได้แล้ว (อาจหมดอายุหรือใช้ไปแล้ว) กด “แก้ไข” แล้วลองใหม่',
+    not_enough_points: 'แต้มไม่พอสำหรับของรางวัลนี้',
+    reward_closed: 'ของรางวัลนี้ปิดแลกแล้ว',
+    out_of_stock: 'ของรางวัลนี้หมดแล้ว',
+    not_found: 'ไม่พบของรางวัลนี้',
   };
   return map[msg] ?? 'เกิดข้อผิดพลาด ลองใหม่อีกครั้ง';
 }

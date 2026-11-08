@@ -19,6 +19,14 @@ const ERR: Record<string, string> = {
   payment_not_pending: 'ไม่มียอดค้างชำระ',
   invalid_days: 'จำนวนวันต้องอยู่ระหว่าง 1–60',
   vehicle_busy: 'รถคันนี้มีเที่ยวอื่นในช่วงเวลาใกล้กัน',
+  not_enough_points: 'แต้มของลูกค้าไม่พอให้หัก',
+  invalid_points: 'จำนวนแต้มไม่ถูกต้อง',
+  invalid_reward: 'ข้อมูลของรางวัลไม่ครบ (ชื่อ แต้มที่ใช้ อายุคูปอง 1–1095 วัน และคูปองส่วนลดค่าจอดต้องมีมูลค่า)',
+  coupon_not_found: 'ไม่พบรหัสคูปองนี้',
+  coupon_used: 'คูปองนี้ถูกใช้หรือยกเลิกไปแล้ว',
+  coupon_expired: 'คูปองนี้หมดอายุแล้ว',
+  coupon_parking: 'คูปองส่วนลดค่าจอดใช้ได้ในหน้าจองของลูกค้าเท่านั้น',
+  landing_after_pickup: 'เวลาเครื่องลงต้องไม่ช้ากว่าเวลารับ',
   too_many_pax: 'ผู้โดยสารเกินจำนวนที่นั่งของรถคันนี้',
   invalid_settings: 'ค่าที่ตั้งไม่ถูกต้อง (ช่องสำรองต้องน้อยกว่าช่องทั้งหมด และเวลากันที่ 5–120 นาที)',
   weak_password: 'รหัสผ่านต้องยาวอย่างน้อย 10 ตัวอักษร',
@@ -98,8 +106,10 @@ export async function lprDone(_: ActionResult, f: FormData): Promise<ActionResul
 export async function updateTrip(_: ActionResult, f: FormData): Promise<ActionResult> {
   const vehicle = str(f, 'vehicle_id');
   const time = str(f, 'pickup_at');
+  const landing = str(f, 'landing_at');
   return run('admin_update_trip', {
     p_trip_id: str(f, 'id'), p_vehicle_id: vehicle || null, p_pickup_at: time ? bkkLocalToIso(time) : null,
+    p_landing_at: landing ? bkkLocalToIso(landing) : null,
   }, 'บันทึกเที่ยวรถแล้ว', ['/admin/trips', '/admin']);
 }
 
@@ -156,4 +166,65 @@ export async function changeOwnPassword(_: ActionResult, f: FormData): Promise<A
 export async function quickSearch(f: FormData) {
   const q = str(f, 'q');
   redirect(q ? `/admin/bookings?q=${encodeURIComponent(q)}` : '/admin/bookings');
+}
+
+// ---------- returning customers / referral discount ----------
+export async function importMembers(_: ActionResult, f: FormData): Promise<ActionResult> {
+  let actor: string;
+  try { actor = (await staffForAction(['admin'])).uid; } catch { return { error: ERR.not_allowed }; }
+  const lines = String(f.get('lines') ?? '').slice(0, 200_000);
+  if (!lines.trim()) return { error: 'วางเบอร์โทรอย่างน้อย 1 บรรทัด' };
+  const { data, error } = await db().rpc('admin_import_members', { p_actor: actor, p_lines: lines });
+  if (error) return { error: thai(error.message) };
+  revalidatePath('/admin/members');
+  const total = lines.split(/\r?\n/).filter((l) => l.trim()).length;
+  return { ok: `เพิ่มใหม่ ${data} เบอร์ จาก ${total} บรรทัด (เบอร์ที่มีอยู่แล้วหรือรูปแบบผิดจะถูกข้าม)` };
+}
+
+export async function removeMember(_: ActionResult, f: FormData): Promise<ActionResult> {
+  return run('admin_remove_member', { p_phone: str(f, 'phone') }, 'ลบเบอร์แล้ว', ['/admin/members']);
+}
+
+export async function setMemberDiscount(_: ActionResult, f: FormData): Promise<ActionResult> {
+  return run('admin_set_member_discount', { p_amount: num(f, 'amount') }, 'บันทึกส่วนลดแล้ว', ['/admin/members']);
+}
+
+// ---------- points ----------
+export async function adjustPoints(_: ActionResult, f: FormData): Promise<ActionResult> {
+  const pts = Math.trunc(num(f, 'points'));
+  const bid = str(f, 'booking_id');
+  return run('admin_adjust_points', { p_customer: str(f, 'customer_id'), p_points: pts, p_note: str(f, 'note') },
+    pts > 0 ? `เพิ่ม ${pts} แต้มแล้ว` : `หัก ${-pts} แต้มแล้ว`, [`/admin/bookings/${bid}`, '/admin/members']);
+}
+
+export async function setPointsSettings(_: ActionResult, f: FormData): Promise<ActionResult> {
+  return run('admin_set_points_settings', {
+    p_enabled: f.get('enabled') === 'on', p_per_baht: num(f, 'per_baht'), p_value: num(f, 'value'),
+    p_referral: num(f, 'referral'), p_months: num(f, 'months'),
+  }, 'บันทึกกติกาแต้มแล้ว', ['/admin/members']);
+}
+
+// ---------- rewards & coupons ----------
+export async function saveReward(_: ActionResult, f: FormData): Promise<ActionResult> {
+  const stock = str(f, 'stock');
+  return run('admin_save_reward', {
+    p_id: str(f, 'id') || null, p_title: str(f, 'title'), p_description: str(f, 'description'),
+    p_business: str(f, 'business'), p_kind: str(f, 'kind'), p_value: num(f, 'value') || 0,
+    p_cost: num(f, 'cost'), p_valid_days: num(f, 'valid_days'), p_stock: stock === '' ? null : Number(stock),
+    p_active: f.get('active') === 'on', p_sort: num(f, 'sort') || 0,
+  }, 'บันทึกของรางวัลแล้ว', ['/admin/members']);
+}
+
+export async function takeCoupon(_: ActionResult, f: FormData): Promise<ActionResult> {
+  let actor: string;
+  try { actor = (await staffForAction(['admin'])).uid; } catch { return { error: ERR.not_allowed }; }
+  const { data, error } = await db().rpc('admin_use_coupon', { p_actor: actor, p_code: str(f, 'code') });
+  if (error) return { error: thai(error.message) };
+  revalidatePath('/admin/members');
+  const c = data as { code: string; title: string };
+  return { ok: `ใช้คูปอง ${c.code} “${c.title}” แล้ว` };
+}
+
+export async function cancelCoupon(_: ActionResult, f: FormData): Promise<ActionResult> {
+  return run('admin_cancel_coupon', { p_code: str(f, 'code') }, 'ยกเลิกคูปองและคืนแต้มแล้ว', ['/admin/members']);
 }

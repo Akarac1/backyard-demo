@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authHeaders, useLiff } from '../useLiff';
 
-type Prices = { price_per_day: number; shuttle_price: number; hold_minutes: number; reschedule_min_days: number; pickup_meeting_point: string };
+type Prices = { price_per_day: number; shuttle_price: number; hold_minutes: number; reschedule_min_days: number; pickup_meeting_point: string; member_discount?: number };
 const DEFAULT_PRICES: Prices = { price_per_day: 100, shuttle_price: 300, hold_minutes: 15, reschedule_min_days: 7, pickup_meeting_point: 'ชั้น 2 ประตู 4' };
 
 function todayBkk() {
@@ -27,7 +27,7 @@ export default function BookPage() {
   const today = todayBkk();
   const [f, setF] = useState({
     start: today, end: today, name: '', phone: '', plate: '', province: 'กรุงเทพมหานคร',
-    shuttle: true, pax: 2, outboundTime: '', returnFlight: '', returnLanding: '', flightType: 'international',
+    shuttle: true, pax: 2, outboundTime: '', returnFlight: '', returnLanding: '', flightType: 'international', refPhone: '',
   });
   const [avail, setAvail] = useState<Avail[] | null>(null);
   const [pr, setPr] = useState<Prices>(DEFAULT_PRICES);
@@ -36,11 +36,20 @@ export default function BookPage() {
   const [error, setError] = useState<string | null>(null);
   const [review, setReview] = useState(false);
   const [agree, setAgree] = useState(false);
+  type Coupon = { id: string; code: string; title: string; value: number; expiresAt: string };
+  const [disc, setDisc] = useState<{ amount: number; reason: string | null; coupons?: Coupon[] } | null>(null);
+  const [couponId, setCouponId] = useState<string>('');
 
   useEffect(() => { if (liff.name && !f.name) setF((x) => ({ ...x, name: liff.name! })); }, [liff.name]); // eslint-disable-line
 
   const days = f.end >= f.start ? daysBetween(f.start, f.end) : 0;
-  const total = days * pr.price_per_day + (f.shuttle ? pr.shuttle_price : 0);
+  const subtotal = days * pr.price_per_day + (f.shuttle ? pr.shuttle_price : 0);
+  const discount = Math.min(disc?.amount ?? 0, subtotal);
+  // a parking-discount coupon (the server checks it again)
+  const coupons = disc?.coupons ?? [];
+  const coupon = coupons.find((c) => c.id === couponId);
+  const couponAmount = coupon ? Math.min(coupon.value, subtotal - discount) : 0;
+  const total = subtotal - discount - couponAmount;
 
   useEffect(() => {
     if (!f.start || !f.end || f.end < f.start) { setAvail(null); return; }
@@ -63,9 +72,16 @@ export default function BookPage() {
     setError(null);
     if (f.shuttle && (!f.outboundTime || !f.returnLanding)) { setError('กรุณาใส่เวลามาถึงลาน และเวลาเครื่องลงขากลับ'); return; }
     if (!/^0\d{8,9}$/.test(f.phone.replace(/\D/g, ''))) { setError('เบอร์โทรไม่ถูกต้อง'); return; }
+    if (f.refPhone.trim() && !/^0\d{8,9}$/.test(f.refPhone.replace(/\D/g, '').replace(/^66/, '0'))) { setError('เบอร์ลูกค้าที่แนะนำไม่ถูกต้อง'); return; }
     setAgree(false);
+    setDisc(null);
     setReview(true);
     window.scrollTo({ top: 0 });
+    // the final price is decided by the server when booking; this only shows it ahead
+    fetch('/api/discount', {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders(liff.idToken) },
+      body: JSON.stringify({ phone: f.phone, refPhone: f.refPhone }),
+    }).then((r) => (r.ok ? r.json() : null)).then((j) => { setDisc(j ?? { amount: 0, reason: null }); setCouponId(j?.coupons?.[0]?.id ?? ''); }).catch(() => setDisc({ amount: 0, reason: null }));
   }
 
   // dates entered for the shuttle that do not match the parking dates: show as a warning on the summary
@@ -82,7 +98,7 @@ export default function BookPage() {
     const r = await fetch('/api/bookings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders(liff.idToken) },
-      body: JSON.stringify(f),
+      body: JSON.stringify({ ...f, couponId: coupon?.id ?? null }),
     });
     const j = await r.json();
     setBusy(false);
@@ -111,6 +127,7 @@ export default function BookPage() {
             <Row k="ทะเบียนรถ" v={`${f.plate} ${f.province}`} />
             <Row k="ชื่อผู้จอง" v={f.name} />
             <Row k="เบอร์โทร" v={f.phone} />
+            {f.refPhone.trim() && <Row k="ลูกค้าที่แนะนำ" v={f.refPhone} />}
           </div>
           <div className="card">
             <div className="sum-head"><h2>รถรับส่ง</h2><button type="button" className="link-btn" onClick={() => setReview(false)}>แก้ไข</button></div>
@@ -126,13 +143,24 @@ export default function BookPage() {
           <div className="card">
             <div className="price"><span>ที่จอด {days} วัน × {pr.price_per_day}</span><span>{(days * pr.price_per_day).toLocaleString('th-TH')} บาท</span></div>
             {f.shuttle && <div className="price"><span>รถรับส่งไป-กลับ</span><span>{pr.shuttle_price} บาท</span></div>}
-            <div className="price total"><span>ยอดชำระ</span><span>{total.toLocaleString('th-TH')} บาท</span></div>
+            {discount > 0 && <div className="price discount"><span>{disc?.reason === 'referral' ? 'ส่วนลดเพื่อนแนะนำ' : 'ส่วนลดลูกค้าเก่า'}</span><span>−{discount.toLocaleString('th-TH')} บาท</span></div>}
+            {coupons.length > 0 && (
+              <label className="coupon-pick">คูปองส่วนลดของคุณ
+                <select value={couponId} onChange={(e) => setCouponId(e.target.value)}>
+                  <option value="">ไม่ใช้คูปอง</option>
+                  {coupons.map((c) => <option key={c.id} value={c.id}>{c.title} · {c.code}</option>)}
+                </select>
+              </label>
+            )}
+            {couponAmount > 0 && <div className="price discount"><span>คูปอง {coupon?.code}</span><span>−{couponAmount.toLocaleString('th-TH')} บาท</span></div>}
+            <div className="price total"><span>ยอดชำระ</span><span>{disc ? `${total.toLocaleString('th-TH')} บาท` : 'กำลังคำนวณ…'}</span></div>
+            {disc && !discount && f.refPhone.trim() && <p className="small" style={{ margin: '4px 0 0' }}>ไม่พบเบอร์ลูกค้าที่แนะนำในระบบ จึงยังไม่มีส่วนลด กด “แก้ไข” เพื่อตรวจเบอร์ได้</p>}
             <label className="agree">
               <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
               <span>ข้อมูลถูกต้อง และยอมรับเงื่อนไข: ชำระเต็มจำนวน ไม่คืนเงิน เลื่อนวันได้ 1 ครั้ง (ล่วงหน้า {pr.reschedule_min_days} วัน)</span>
             </label>
             {error && <div className="alert bad">{error}</div>}
-            <button type="button" className="primary" onClick={submit} disabled={!agree || busy || !liff.ready}>{busy ? 'กำลังจอง…' : 'ยืนยันและไปชำระเงิน'}</button>
+            <button type="button" className="primary" onClick={submit} disabled={!agree || busy || !liff.ready || !disc}>{busy ? 'กำลังจอง…' : disc && total === 0 ? 'ยืนยันการจอง (ไม่มียอดต้องชำระ)' : 'ยืนยันและไปชำระเงิน'}</button>
             <button type="button" className="btn back-btn" onClick={() => setReview(false)} disabled={busy}>กลับไปแก้ไขข้อมูล</button>
             <p className="small">กดยืนยันแล้ว ระบบกันที่ให้ {pr.hold_minutes} นาทีระหว่างชำระเงิน</p>
           </div>
@@ -167,6 +195,8 @@ export default function BookPage() {
           </div>
           <label htmlFor="name">ชื่อผู้จอง</label><input id="name" value={f.name} onChange={set('name')} required />
           <label htmlFor="phone">เบอร์โทร</label><input id="phone" type="tel" inputMode="tel" value={f.phone} onChange={set('phone')} required />
+          <label htmlFor="ref">เบอร์ลูกค้าเก่าที่แนะนำ (ถ้ามี)</label><input id="ref" type="tel" inputMode="tel" placeholder="ลูกค้าใหม่ที่เพื่อนแนะนำ ใส่เบอร์เพื่อน" value={f.refPhone} onChange={set('refPhone')} />
+          {(pr.member_discount ?? 0) > 0 && <p className="small" style={{ margin: '6px 0 0' }}>ลูกค้าเก่า หรือลูกค้าที่เพื่อนแนะนำ ลด {pr.member_discount} บาท · ดูยอดสุดท้ายในหน้าถัดไป</p>}
         </div>
 
         <div className="card">
@@ -200,7 +230,7 @@ export default function BookPage() {
         <div className="card">
           <div className="price"><span>ที่จอด {days} วัน × {pr.price_per_day}</span><span>{days * pr.price_per_day} บาท</span></div>
           {f.shuttle && <div className="price"><span>รถรับส่งไป-กลับ</span><span>{pr.shuttle_price} บาท</span></div>}
-          <div className="price total"><span>รวม</span><span>{total.toLocaleString('th-TH')} บาท</span></div>
+          <div className="price total"><span>รวม</span><span>{subtotal.toLocaleString('th-TH')} บาท</span></div>
           {error && <div className="alert bad">{error}</div>}
           <button className="primary" disabled={!!full || days < 1}>ถัดไป: ตรวจสอบข้อมูล</button>
           <p className="small">ยังไม่ตัดที่จอดจนกว่าจะกดยืนยันในหน้าถัดไป · ไม่คืนเงิน แต่เลื่อนวันได้ 1 ครั้ง (ล่วงหน้า {pr.reschedule_min_days} วัน)</p>

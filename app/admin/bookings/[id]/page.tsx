@@ -4,7 +4,7 @@ import { db } from '@/lib/supabase';
 import { bkkDay, thDate, thTime } from '@/lib/format';
 import { DIRECTION, STATUS, StatusTag } from '@/lib/labels';
 import { ActionButton, ActionForm, Submit } from '@/components/ActionForm';
-import { addExtraDays, markPaid, setStatus, updateBooking } from '../../actions';
+import { addExtraDays, adjustPoints, markPaid, setStatus, updateBooking } from '../../actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,6 +28,7 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
   ]);
   if (!b) notFound();
   const c = b.customers as { name: string; phone: string; line_user_id: string } | null;
+  const { data: balance } = await sb.rpc('points_balance', { p_customer: b.customer_id });
   const vname = (vid: string | null) => vehicles?.find((v) => v.id === vid)?.name;
   const paid = (pays ?? []).filter((p) => p.status === 'verified').reduce((a, p) => a + p.amount, 0);
   const pendingBooking = (pays ?? []).find((p) => p.kind === 'booking' && p.status === 'pending');
@@ -68,7 +69,7 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
         <div><span>รถ</span><b>{b.plate}</b><small>{b.plate_province}</small></div>
         <div><span>วันที่จอด</span><b>{thDate(b.start_date)} – {thDate(b.end_date)}</b><small>{b.days} วัน</small></div>
         <div><span>รถรับส่ง</span><b>{b.shuttle ? `${b.pax} คน` : 'ไม่ใช้'}</b></div>
-        <div><span>ยอดจอง</span><b>{n(b.total_amount)} บาท</b><small>รับแล้วทั้งหมด {n(paid)} บาท</small></div>
+        <div><span>ยอดจอง</span><b>{n(b.total_amount)} บาท</b><small>รับแล้วทั้งหมด {n(paid)} บาท{b.discount_amount > 0 ? ` · ${b.discount_reason === 'referral' ? `ส่วนลดเพื่อนแนะนำ (${b.referrer_phone})` : 'ส่วนลดลูกค้าเก่า'} −${n(b.discount_amount)}` : ''}</small></div>
       </section>
       {b.admin_note && <p className="note">หมายเหตุ: {b.admin_note}</p>}
 
@@ -131,6 +132,21 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
               </li>
             ))}
           </ul>
+          {(b.coupon_amount > 0 || b.discount_amount > 0) && (
+            <p className="hint" style={{ marginTop: 10 }}>
+              ราคาเต็ม {n(b.parking_amount + b.shuttle_amount)} บาท
+              {b.discount_amount > 0 ? ` · ส่วนลด${b.discount_reason === 'referral' ? 'เพื่อนแนะนำ' : 'ลูกค้าเก่า'} −${n(b.discount_amount)}` : ''}
+              {b.coupon_amount > 0 ? ` · คูปอง −${n(b.coupon_amount)}` : ''}
+            </p>
+          )}
+          <h3 style={{ marginTop: 16 }}>แต้มของลูกค้า: {n(Number(balance ?? 0))} แต้ม</h3>
+          <ActionForm action={adjustPoints} className="form grid2" resetOnOk>
+            <input type="hidden" name="customer_id" value={b.customer_id} />
+            <input type="hidden" name="booking_id" value={b.id} />
+            <label>เพิ่ม/ลดแต้ม<input name="points" type="number" step={1} placeholder="เช่น 5 หรือ -5" required /></label>
+            <label>เหตุผล<input name="note" placeholder="เช่น ชดเชยรอรถนาน" required /></label>
+            <div className="form-actions span2"><Submit small variant="plain">ปรับแต้ม</Submit></div>
+          </ActionForm>
         </section>
         <section className="panel">
           <div className="panel-head"><h2>รถรับส่ง</h2>{b.shuttle && <Link href="/admin/trips" className="link">จัดรถ →</Link>}</div>
