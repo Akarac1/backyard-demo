@@ -317,3 +317,7 @@ table.report th:first-child, table.report td:first-child { text-align: left; }
 .trip-progress small { color: var(--muted); font-size: 12.5px; }
 .trip-note { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin: 0 0 10px; font-size: 14px; }
 .trip-note.open { background: #FBEAEA; color: #8A2F28; }
+.handler { margin: 0 0 10px; font-size: 13.5px; color: var(--muted); }
+.handler.mine { color: #1E6B40; font-weight: 500; }
+.takeover { display: flex; align-items: center; gap: 8px; background: #FFF6E0; color: #7A5200; border-radius: 10px; padding: 8px 10px; margin: 0 0 10px; font-size: 13.5px; font-weight: 400; }
+.takeover input { width: 18px; height: 18px; margin: 0; }

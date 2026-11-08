@@ -2,13 +2,12 @@
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/supabase';
 import { staffForAction } from '@/lib/auth';
-import { noteText, sendToCustomer, statusText, tripContext, type TripStep } from '@/lib/tripMessages';
+import { noteMessage, sendToCustomer, statusMessage, tripContext, type TripStep } from '@/lib/tripMessages';
 import type { ActionResult } from '@/app/admin/actions';
 
 const ERR: Record<string, string> = {
   not_allowed: 'ไม่มีสิทธิ์ ลองออกจากระบบแล้วเข้าใหม่',
   not_found: 'ไม่พบงานนี้',
-  not_your_trip: 'งานนี้ไม่ใช่ของรถคุณ ติดต่อแอดมิน',
   bad_status: 'สถานะไม่ถูกต้อง',
   trip_cancelled: 'งานนี้ถูกยกเลิกแล้ว',
   empty_note: 'พิมพ์ข้อความก่อนส่ง',
@@ -24,15 +23,18 @@ export async function setTripStatus(_: ActionResult, f: FormData): Promise<Actio
   try { me = await staffForAction(['driver', 'admin']); } catch { return { error: ERR.not_allowed }; }
   const tripId = String(f.get('id'));
   const step = String(f.get('status')) as TripStep;
-  const { error } = await db().rpc('driver_set_trip_status', { p_actor: me.uid, p_trip_id: tripId, p_status: step });
-  if (error) return { error: ERR[error.message] ?? 'บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง' };
+  const { error } = await db().rpc('driver_set_trip_status', { p_actor: me.uid, p_trip_id: tripId, p_status: step, p_takeover: f.get('takeover') === 'on' });
+  if (error) {
+    if (error.message.startsWith('taken_by:')) return { error: `${error.message.slice(9)} ดูแลงานนี้อยู่ ถ้าจะขับแทน ให้ติ๊ก “รับงานแทน” แล้วกดอีกครั้ง` };
+    return { error: ERR[error.message] ?? 'บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง' };
+  }
 
   const label = LABEL[String(f.get('direction'))]?.[step] ?? 'บันทึกแล้ว';
   let result: ActionResult = { ok: label };
   if (f.get('notify') === 'on') {
-    const ctx = await tripContext(tripId, me.name);
+    const ctx = await tripContext(tripId, me.uid, me.name);
     if (ctx) {
-      const r = await sendToCustomer(ctx, statusText(ctx, step));
+      const r = await sendToCustomer(ctx, statusMessage(ctx, step));
       if (r === 'sent') {
         const { data: ev } = await db().rpc('trip_last_event', { p_trip_id: tripId });
         if (ev) await db().rpc('trip_event_notified', { p_event_id: ev });
@@ -55,9 +57,9 @@ export async function addTripNote(_: ActionResult, f: FormData): Promise<ActionR
 
   let result: ActionResult = { ok: 'บันทึกหมายเหตุและแจ้งแอดมินแล้ว' };
   if (f.get('notify') === 'on') {
-    const ctx = await tripContext(tripId, me.name);
+    const ctx = await tripContext(tripId, me.uid, me.name);
     if (ctx) {
-      const r = await sendToCustomer(ctx, noteText(ctx, note));
+      const r = await sendToCustomer(ctx, noteMessage(ctx, note));
       if (r === 'sent' && evId) await db().rpc('trip_event_notified', { p_event_id: evId });
       result = r === 'failed' ? { error: `แจ้งแอดมินแล้ว แต่${SENT.failed}` } : { ok: `บันทึกหมายเหตุและแจ้งแอดมินแล้ว · ${SENT[r]}` };
     }

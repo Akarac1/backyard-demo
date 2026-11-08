@@ -128,9 +128,7 @@ export async function createStaff(_: ActionResult, f: FormData): Promise<ActionR
     p_username: str(f, 'username'), p_name: str(f, 'name'), p_role: str(f, 'role'), p_password: String(f.get('password') ?? ''), p_actor: actor,
   });
   if (error) return { error: thai(error.message) };
-  if (str(f, 'role') === 'driver' && str(f, 'vehicle_id')) {
-    await db().rpc('staff_set_vehicle', { p_actor: actor, p_id: newId, p_vehicle_id: str(f, 'vehicle_id') });
-  }
+  if (str(f, 'phone')) await db().rpc('staff_set_phone', { p_actor: actor, p_id: newId, p_phone: str(f, 'phone') });
   revalidatePath('/admin/users');
   return { ok: 'เพิ่มผู้ใช้แล้ว' };
 }
@@ -141,8 +139,7 @@ export async function updateStaff(_: ActionResult, f: FormData): Promise<ActionR
     p_new_password: String(f.get('password') ?? '') || null,
   }, 'บันทึกแล้ว', ['/admin/users']);
   if (r?.error) return r;
-  const vehicle = str(f, 'role') === 'driver' ? str(f, 'vehicle_id') || null : null;
-  return run('staff_set_vehicle', { p_id: str(f, 'id'), p_vehicle_id: vehicle }, 'บันทึกแล้ว', ['/admin/users']);
+  return run('staff_set_phone', { p_id: str(f, 'id'), p_phone: str(f, 'phone') }, 'บันทึกแล้ว', ['/admin/users']);
 }
 
 export async function ackTripNote(_: ActionResult, f: FormData): Promise<ActionResult> {

@@ -22,7 +22,7 @@ function StepButtons({ steps, next, pick }: { steps: Step[]; next: string | null
   );
 }
 
-export function StepForm({ tripId, direction, steps, next, hasLine }: { tripId: string; direction: string; steps: Step[]; next: string | null; hasLine: boolean }) {
+export function StepForm({ tripId, direction, steps, next, hasLine, takenBy }: { tripId: string; direction: string; steps: Step[]; next: string | null; hasLine: boolean; takenBy: string | null }) {
   const [state, action] = useActionState<ActionResult, FormData>(setTripStatus, null);
   const status = useRef<HTMLInputElement>(null);
   return (
@@ -31,6 +31,11 @@ export function StepForm({ tripId, direction, steps, next, hasLine }: { tripId: 
       <input type="hidden" name="direction" value={direction} />
       {/* set by the clicked button just before the form submits */}
       <input type="hidden" name="status" ref={status} defaultValue="" />
+      {takenBy && (
+        <label className="takeover">
+          <input type="checkbox" name="takeover" value="on" /> {takenBy} ดูแลงานนี้อยู่ · ติ๊กเพื่อรับงานแทน
+        </label>
+      )}
       <StepButtons steps={steps} next={next} pick={(k) => { if (status.current) status.current.value = k; }} />
       <label className="notify">
         <input type="checkbox" name="notify" value="on" defaultChecked={hasLine} disabled={!hasLine} />
