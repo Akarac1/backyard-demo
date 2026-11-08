@@ -349,3 +349,15 @@ table.report th:first-child, table.report td:first-child { text-align: left; }
 .call-tools { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
 .call-tools form { margin: 0; }
 .call-tools .msg { flex-basis: 100%; margin: 4px 0 0; }
+
+/* ---------- booking summary ---------- */
+.sum-head { display: flex; justify-content: space-between; align-items: baseline; }
+.sum-head h2 { margin-bottom: 6px; }
+.link-btn { background: none; border: 0; padding: 0; color: var(--navy); font-size: 14px; font-weight: 600; text-decoration: underline; cursor: pointer; border-radius: 0; }
+.sum-row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 0; border-top: 1px solid #EEF2EF; font-size: 15px; }
+.sum-row:first-of-type { border-top: 0; }
+.sum-row span { color: var(--muted); }
+.sum-row b { text-align: right; font-weight: 600; }
+.agree { display: flex; gap: 10px; align-items: flex-start; color: var(--ink); font-size: 14px; margin: 14px 0 0; }
+.agree input { width: 20px; height: 20px; flex: none; margin-top: 2px; }
+.back-btn { width: 100%; margin-top: 10px; background: #fff; border: 1.5px solid #D6DED8; }

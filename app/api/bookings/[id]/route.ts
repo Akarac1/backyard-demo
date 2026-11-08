@@ -1,6 +1,5 @@
-import QRCode from 'qrcode';
 import { currentUser, json, ownBooking } from '@/lib/request';
-import { promptPayPayload } from '@/lib/promptpay';
+import { paymentQr } from '@/lib/qr';
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -10,8 +9,6 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   if (!booking) return json({ error: 'not_found' }, 404);
 
   let qr: string | null = null;
-  if (booking.status === 'pending_payment' && process.env.PROMPTPAY_ID) {
-    qr = await QRCode.toDataURL(promptPayPayload(process.env.PROMPTPAY_ID, booking.total_amount), { margin: 1, width: 480 });
-  }
+  if (booking.status === 'pending_payment') qr = (await paymentQr(booking.total_amount))?.image ?? null;
   return json({ booking, qr, promptpayName: process.env.PROMPTPAY_NAME ?? 'Backyard Airport' });
 }

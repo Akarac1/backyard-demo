@@ -15,6 +15,12 @@ function daysBetween(a: string, b: string) {
 
 type Avail = { day: string; used: number; cap: number; available: boolean };
 
+const TH_OPT: Intl.DateTimeFormatOptions = { timeZone: 'Asia/Bangkok', weekday: 'short', day: 'numeric', month: 'short', year: '2-digit' };
+/** '2026-12-12' -> 'ส. 12 ธ.ค. 69' */
+const thDay = (d: string) => new Date(`${d}T12:00:00+07:00`).toLocaleDateString('th-TH', TH_OPT);
+/** '2026-12-12T09:30' (Bangkok) -> 'ส. 12 ธ.ค. 69 · 09:30 น.' */
+const thDayTime = (dt: string) => (dt ? `${thDay(dt.slice(0, 10))} · ${dt.slice(11, 16)} น.` : '—');
+
 export default function BookPage() {
   const liff = useLiff();
   const router = useRouter();
@@ -28,6 +34,8 @@ export default function BookPage() {
   useEffect(() => { fetch('/api/prices').then((r) => (r.ok ? r.json() : null)).then((p) => p && setPr(p)).catch(() => {}); }, []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [review, setReview] = useState(false);
+  const [agree, setAgree] = useState(false);
 
   useEffect(() => { if (liff.name && !f.name) setF((x) => ({ ...x, name: liff.name! })); }, [liff.name]); // eslint-disable-line
 
@@ -49,10 +57,27 @@ export default function BookPage() {
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setF({ ...f, [k]: e.target.value });
 
-  async function submit(e: React.FormEvent) {
+  // step 1: check the form, then show the summary (nothing is booked yet, the hold starts on confirm)
+  function toReview(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     if (f.shuttle && (!f.outboundTime || !f.returnLanding)) { setError('กรุณาใส่เวลามาถึงลาน และเวลาเครื่องลงขากลับ'); return; }
+    if (!/^0\d{8,9}$/.test(f.phone.replace(/\D/g, ''))) { setError('เบอร์โทรไม่ถูกต้อง'); return; }
+    setAgree(false);
+    setReview(true);
+    window.scrollTo({ top: 0 });
+  }
+
+  // dates entered for the shuttle that do not match the parking dates: show as a warning on the summary
+  const warnings = [
+    f.shuttle && f.outboundTime && f.outboundTime.slice(0, 10) !== f.start && `เวลามาถึงลาน (${thDayTime(f.outboundTime)}) ไม่ใช่วันเข้าจอด`,
+    f.shuttle && f.returnLanding && f.returnLanding.slice(0, 10) !== f.end && f.returnLanding.slice(0, 10) !== f.start && `เวลาเครื่องลงขากลับ (${thDayTime(f.returnLanding)}) ไม่ใช่วันรับรถคืน`,
+    f.shuttle && f.outboundTime && f.returnLanding && f.returnLanding <= f.outboundTime && 'เวลาเครื่องลงขากลับต้องหลังเวลาขาไป',
+  ].filter(Boolean) as string[];
+
+  // step 2: confirmed -> create the booking and go to payment
+  async function submit() {
+    setError(null);
     setBusy(true);
     const r = await fetch('/api/bookings', {
       method: 'POST',
@@ -65,6 +90,57 @@ export default function BookPage() {
     router.push(`/liff/pay/${j.id}`);
   }
 
+  if (review) {
+    const Row = ({ k, v }: { k: string; v: React.ReactNode }) => <div className="sum-row"><span>{k}</span><b>{v}</b></div>;
+    return (
+      <main>
+        <div className="hero">
+          <span className="chip">ขั้นตอน 2 จาก 3 · ตรวจสอบข้อมูล</span>
+          <h1>ยืนยันการจอง</h1>
+          <p>ตรวจสอบให้ถูกต้องก่อนชำระเงิน ข้อมูลผิดกด “แก้ไข” ได้</p>
+        </div>
+        <div className="wrap">
+          <div className="card">
+            <div className="sum-head"><h2>วันที่จอด</h2><button type="button" className="link-btn" onClick={() => setReview(false)}>แก้ไข</button></div>
+            <Row k="วันเข้าจอด" v={thDay(f.start)} />
+            <Row k="วันรับรถคืน" v={thDay(f.end)} />
+            <Row k="จำนวนวัน" v={`${days} วัน`} />
+          </div>
+          <div className="card">
+            <div className="sum-head"><h2>รถและผู้จอง</h2><button type="button" className="link-btn" onClick={() => setReview(false)}>แก้ไข</button></div>
+            <Row k="ทะเบียนรถ" v={`${f.plate} ${f.province}`} />
+            <Row k="ชื่อผู้จอง" v={f.name} />
+            <Row k="เบอร์โทร" v={f.phone} />
+          </div>
+          <div className="card">
+            <div className="sum-head"><h2>รถรับส่ง</h2><button type="button" className="link-btn" onClick={() => setReview(false)}>แก้ไข</button></div>
+            {f.shuttle ? <>
+              <Row k="ผู้โดยสาร" v={`${f.pax} คน`} />
+              <Row k="ขาไป: มาถึงลาน" v={thDayTime(f.outboundTime)} />
+              <Row k="ขากลับ: เครื่องลง" v={thDayTime(f.returnLanding)} />
+              <Row k="เที่ยวบินขากลับ" v={`${f.returnFlight || 'ไม่ระบุ'} · ${f.flightType === 'domestic' ? 'ในประเทศ' : 'ต่างประเทศ'}`} />
+              <Row k="จุดนัดรับขากลับ" v={pr.pickup_meeting_point} />
+            </> : <p className="small" style={{ margin: 0 }}>ไม่ใช้รถรับส่ง</p>}
+          </div>
+          {warnings.map((w) => <div key={w} className="alert info">โปรดตรวจสอบ: {w}</div>)}
+          <div className="card">
+            <div className="price"><span>ที่จอด {days} วัน × {pr.price_per_day}</span><span>{(days * pr.price_per_day).toLocaleString('th-TH')} บาท</span></div>
+            {f.shuttle && <div className="price"><span>รถรับส่งไป-กลับ</span><span>{pr.shuttle_price} บาท</span></div>}
+            <div className="price total"><span>ยอดชำระ</span><span>{total.toLocaleString('th-TH')} บาท</span></div>
+            <label className="agree">
+              <input type="checkbox" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
+              <span>ข้อมูลถูกต้อง และยอมรับเงื่อนไข: ชำระเต็มจำนวน ไม่คืนเงิน เลื่อนวันได้ 1 ครั้ง (ล่วงหน้า {pr.reschedule_min_days} วัน)</span>
+            </label>
+            {error && <div className="alert bad">{error}</div>}
+            <button type="button" className="primary" onClick={submit} disabled={!agree || busy || !liff.ready}>{busy ? 'กำลังจอง…' : 'ยืนยันและไปชำระเงิน'}</button>
+            <button type="button" className="btn back-btn" onClick={() => setReview(false)} disabled={busy}>กลับไปแก้ไขข้อมูล</button>
+            <p className="small">กดยืนยันแล้ว ระบบกันที่ให้ {pr.hold_minutes} นาทีระหว่างชำระเงิน</p>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main>
       <div className="hero">
@@ -72,7 +148,7 @@ export default function BookPage() {
         <h1>จองที่จอดรถ</h1>
         <p>จอดวันละ {pr.price_per_day} บาท · รถรับส่งไป-กลับ {pr.shuttle_price} บาท</p>
       </div>
-      <form className="wrap" onSubmit={submit}>
+      <form className="wrap" onSubmit={toReview}>
         <div className="card">
           <h2>วันที่จอด</h2>
           <div className="row">
@@ -126,8 +202,8 @@ export default function BookPage() {
           {f.shuttle && <div className="price"><span>รถรับส่งไป-กลับ</span><span>{pr.shuttle_price} บาท</span></div>}
           <div className="price total"><span>รวม</span><span>{total.toLocaleString('th-TH')} บาท</span></div>
           {error && <div className="alert bad">{error}</div>}
-          <button className="primary" disabled={busy || !!full || days < 1 || !liff.ready}>{busy ? 'กำลังจอง…' : 'จองและชำระเงิน'}</button>
-          <p className="small">ระบบกันที่ให้ {pr.hold_minutes} นาทีระหว่างชำระเงิน · ไม่คืนเงิน แต่เลื่อนวันได้ 1 ครั้ง (ล่วงหน้า {pr.reschedule_min_days} วัน)</p>
+          <button className="primary" disabled={!!full || days < 1}>ถัดไป: ตรวจสอบข้อมูล</button>
+          <p className="small">ยังไม่ตัดที่จอดจนกว่าจะกดยืนยันในหน้าถัดไป · ไม่คืนเงิน แต่เลื่อนวันได้ 1 ครั้ง (ล่วงหน้า {pr.reschedule_min_days} วัน)</p>
         </div>
       </form>
     </main>

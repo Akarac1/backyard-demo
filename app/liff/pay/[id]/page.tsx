@@ -9,6 +9,8 @@ type PayInfo = {
   promptpayName: string;
 };
 
+const thDay = (d: string) => new Date(`${d}T12:00:00+07:00`).toLocaleDateString('th-TH', { timeZone: 'Asia/Bangkok', day: 'numeric', month: 'short' });
+
 export default function PayPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = use(params);
   const liff = useLiff();
@@ -56,7 +58,7 @@ export default function PayPage({ params }: { params: Promise<{ id: string }> })
       <div className="hero">
         <span className="chip">รหัสการจอง {b.code}</span>
         <h1>{paid ? 'จองสำเร็จ' : 'ชำระเงิน'}</h1>
-        <p>{b.plate} · {b.start_date} ถึง {b.end_date} ({b.days} วัน)</p>
+        <p>{b.plate} · {thDay(b.start_date)} – {thDay(b.end_date)} ({b.days} วัน)</p>
       </div>
       <div className="wrap">
         {paid ? (
@@ -71,10 +73,11 @@ export default function PayPage({ params }: { params: Promise<{ id: string }> })
         ) : (
           <>
             <div className="card" style={{ textAlign: 'center' }}>
-              <div className="small">สแกนจ่ายด้วยแอปธนาคาร</div>
-              {info.qr && <img className="qr" src={info.qr} alt="QR PromptPay สำหรับชำระเงิน" />}
+              <div className="small">สแกนจ่ายด้วยแอปธนาคาร · ยอดเงินขึ้นให้อัตโนมัติ</div>
+              {info.qr ? <img className="qr" src={info.qr} alt={`QR PromptPay ยอด ${b.total_amount} บาท`} /> : <div className="alert bad">ยังสร้าง QR ไม่ได้ ติดต่อแอดมิน</div>}
               <div style={{ fontSize: 26, fontWeight: 700 }}>{b.total_amount.toLocaleString('th-TH')} บาท</div>
               <div className="small">PromptPay · {info.promptpayName}</div>
+              <p className="small" style={{ margin: '8px 0 0' }}>บนมือถือ: กดค้างที่ QR เพื่อบันทึกรูป แล้วเปิดในแอปธนาคาร</p>
               {left != null && <div className="alert info">กันที่ไว้ให้อีก {Math.floor(left / 60)}:{String(left % 60).padStart(2, '0')} นาที</div>}
             </div>
             <div className="card">
