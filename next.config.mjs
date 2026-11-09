@@ -4,7 +4,7 @@ const securityHeaders = [
   { key: 'Strict-Transport-Security', value: 'max-age=63072000; includeSubDomains; preload' },
   // no framing of our pages inside other sites (click-jacking). LIFF opens pages directly, not in a frame.
   { key: 'X-Frame-Options', value: 'DENY' },
-  { key: 'Content-Security-Policy', value: "frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'" },
+  // Content-Security-Policy is set per request in middleware.ts (it needs a fresh nonce)
   // the browser must not guess file types
   { key: 'X-Content-Type-Options', value: 'nosniff' },
   { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
