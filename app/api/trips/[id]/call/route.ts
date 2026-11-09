@@ -21,12 +21,17 @@ async function load(id: string, uid: string) {
 }
 
 async function view(t: TripRow) {
-  const { data: s } = await db().from('settings').select('pickup_meeting_point, shop_phone').eq('id', 1).single();
+  const [{ data: s }, { data: eta }] = await Promise.all([
+    db().from('settings').select('pickup_meeting_point, shop_phone').eq('id', 1).single(),
+    // (4) the van that becomes free soonest + 15 minutes' drive (a driver on the way: set-off + 15)
+    t.called_at ? db().rpc('shuttle_eta', { p_trip: t.id }) : Promise.resolve({ data: null }),
+  ]);
   return {
     code: t.bookings?.code, name: t.bookings?.customers?.name, pax: t.pax, flight: t.flight_number, status: t.status,
     calledAt: t.called_at,
-    // about 15 minutes from when the driver set off (or from the call, until a driver accepts)
-    eta: t.called_at ? new Date(Date.parse(t.departed_at && t.departed_at > t.called_at ? t.departed_at : t.called_at) + 15 * 60_000).toISOString() : null,
+    eta: t.called_at
+      ? (eta as string | null) ?? new Date(Date.parse(t.departed_at && t.departed_at > t.called_at ? t.departed_at : t.called_at) + 15 * 60_000).toISOString()
+      : null,
     meetingPoint: s?.pickup_meeting_point ?? 'ชั้น 2 ประตู 4', isReturn: t.direction === 'from_airport',
     driver: t.driver ? { name: t.driver.display_name.replace(/\s*\(.*\)$/, ''), phone: t.driver.phone } : null,
     shopPhone: (s?.shop_phone || process.env.SHOP_PHONE || '0888101089').replace(/\D/g, ''),

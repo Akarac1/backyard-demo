@@ -40,6 +40,9 @@ export default function BookPage() {
   const [disc, setDisc] = useState<{ amount: number; reason: string | null; coupons?: Coupon[]; campaign?: { name: string; amount: number; stackable: boolean } | null; points?: number; rewards?: Reward[] } | null>(null);
   // '' = none, 'c:<coupon id>' = a coupon already redeemed, 'r:<reward id>' = spend points now
   const [pick, setPick] = useState<string>('');
+  // the outbound van is full at the chosen time: nearby free times to pick from
+  const [slotFull, setSlotFull] = useState<string[] | null>(null);
+  useEffect(() => { setSlotFull(null); }, [f.outboundTime, f.pax, f.shuttle]);
 
   useEffect(() => { if (liff.name && !f.name) setF((x) => ({ ...x, name: liff.name! })); }, [liff.name]); // eslint-disable-line
 
@@ -78,12 +81,20 @@ export default function BookPage() {
     setF({ ...f, [k]: e.target.value });
 
   // step 1: check the form, then show the summary (nothing is booked yet, the hold starts on confirm)
-  function toReview(e: React.FormEvent) {
+  async function toReview(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
     if (f.shuttle && (!f.outboundTime || !f.returnLanding)) { setError(t('กรุณาใส่เวลามาถึงลาน และเวลาเครื่องลงขากลับ')); return; }
     if (!/^0\d{8,9}$/.test(f.phone.replace(/\D/g, ''))) { setError(t('เบอร์โทรไม่ถูกต้อง')); return; }
     if (f.refPhone.trim() && !/^0\d{8,9}$/.test(f.refPhone.replace(/\D/g, '').replace(/^66/, '0'))) { setError(t('เบอร์ลูกค้าที่แนะนำไม่ถูกต้อง')); return; }
+    // a free van for the outbound trip? (checked again when booking)
+    if (f.shuttle) {
+      setBusy(true);
+      const c = await fetch('/api/shuttle/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ at: f.outboundTime, pax: f.pax }) })
+        .then((r) => (r.ok ? r.json() : null)).catch(() => null) as { ok: boolean; suggestions: string[] } | null;
+      setBusy(false);
+      if (c && !c.ok) { setSlotFull(c.suggestions); document.getElementById('out')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+    }
     setAgree(false);
     setDisc(null);
     setReview(true);
@@ -113,6 +124,11 @@ export default function BookPage() {
     });
     const j = await r.json();
     setBusy(false);
+    if (!r.ok && j.code === 'shuttle_full') {
+      setReview(false); setSlotFull(j.suggestions ?? []);
+      setTimeout(() => document.getElementById('out')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
+      return;
+    }
     if (!r.ok) { setError(j.error ?? t('จองไม่สำเร็จ')); return; }
     router.push(`/liff/pay/${j.id}`);
   }
@@ -246,7 +262,25 @@ export default function BookPage() {
                 {[1, 2, 3, 4, 5, 6, 7].map((n) => <option key={n} value={n}>{t('{n} คน', { n })}</option>)}
               </select>
               <label htmlFor="out">{t('ขาไป: เวลาที่จะมาถึงลานจอด')}</label>
-              <input id="out" type="datetime-local" value={f.outboundTime} onChange={set('outboundTime')} />
+              <input id="out" type="datetime-local" value={f.outboundTime} onChange={set('outboundTime')} aria-invalid={!!slotFull} />
+              {slotFull && (
+                <div className="slot-full" role="alert">
+                  <b>{t('รถรับส่งเวลา {t} เต็มแล้ว', { t: f.outboundTime.slice(11, 16) })}</b>
+                  {slotFull.length > 0 ? (
+                    <>
+                      <span>{t('เลือกเวลาที่ยังว่าง:')}</span>
+                      <div className="slot-pick">
+                        {slotFull.map((s) => (
+                          <button key={s} type="button" className="slot-b" onClick={() => setF({ ...f, outboundTime: s })}>
+                            {s.slice(0, 10) === f.outboundTime.slice(0, 10) ? s.slice(11, 16) : thDayTime(s)}
+                          </button>
+                        ))}
+                      </div>
+                    </>
+                  ) : <span>{t('ช่วงใกล้เคียงไม่มีรถว่าง ลองเปลี่ยนเวลา หรือติดต่อร้าน')}</span>}
+                  <button type="button" className="link-btn" onClick={() => setF({ ...f, shuttle: false })}>{t('จองที่จอดอย่างเดียว ไม่ใช้รถรับส่ง')}</button>
+                </div>
+              )}
               <label htmlFor="land">{t('ขากลับ: เวลาเครื่องลง')}</label>
               <input id="land" type="datetime-local" value={f.returnLanding} onChange={set('returnLanding')} />
               <div className="row">
@@ -266,7 +300,7 @@ export default function BookPage() {
           {f.shuttle && <div className="price"><span>{t('รถรับส่งไป-กลับ')}</span><span>{money(pr.shuttle_price)}</span></div>}
           <div className="price total"><span>{t('รวม')}</span><span>{money(subtotal)}</span></div>
           {error && <div className="alert bad">{error}</div>}
-          <button className="primary" disabled={!!full || days < 1}>{t('ถัดไป: ตรวจสอบข้อมูล')}</button>
+          <button className="primary" disabled={!!full || days < 1 || busy}>{busy ? t('กำลังตรวจรถรับส่ง…') : t('ถัดไป: ตรวจสอบข้อมูล')}</button>
           <p className="small">{t('ยังไม่ตัดที่จอดจนกว่าจะกดยืนยันในหน้าถัดไป · ไม่คืนเงิน แต่เลื่อนวันได้ 1 ครั้ง (ล่วงหน้า {n} วัน)', { n: pr.reschedule_min_days })}</p>
         </div>
       </form>

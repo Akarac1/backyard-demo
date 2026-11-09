@@ -3,6 +3,7 @@ import { bkkLocalToIso, currentUser, json } from '@/lib/request';
 import { dbErrorToThai } from '@/lib/format';
 import { serverT } from '@/lib/i18nDict';
 import { afterConfirmed } from '@/lib/confirm';
+import { shuttleCheck } from '@/lib/shuttle';
 
 type Body = {
   start: string; end: string; name: string; phone: string; plate: string; province: string;
@@ -45,7 +46,14 @@ export async function POST(req: Request) {
     p_ref_phone: b.refPhone?.trim() || null,
     ...(useReward ? { p_reward: b.rewardId } : { p_coupon: isId(b.couponId) ? b.couponId : null }),
   });
-  if (error) return json({ error: dbErrorToThai(error.message, L.lang) }, 409);
+  if (error) {
+    // the van filled up between the check on the form and this booking: send nearby free times back
+    if (error.message === 'shuttle_full' && b.outboundTime) {
+      const c = await shuttleCheck(b.outboundTime, b.pax);
+      return json({ error: dbErrorToThai(error.message, L.lang), code: 'shuttle_full', suggestions: c.suggestions }, 409);
+    }
+    return json({ error: dbErrorToThai(error.message, L.lang) }, 409);
+  }
   const id = (data as { id: string }).id;
   const paidInFull = (data as { status: string }).status === 'confirmed';
   // keep the landing time: the "welcome to Suvarnabhumi" card is sent at this time

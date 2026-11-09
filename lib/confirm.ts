@@ -1,7 +1,27 @@
 import 'server-only';
 import { db } from './supabase';
 import { confirmationFlex, push } from './line';
-import { thDate } from './format';
+import { thDate, thTime, bkkDay } from './format';
+
+/** Who hears about shuttle trips with no van: SHUTTLE_ALERT_LINE_IDS, else the system alert list (user or group ids). */
+const alertIds = () => (process.env.SHUTTLE_ALERT_LINE_IDS || process.env.ALERT_LINE_USER_IDS || '')
+  .split(',').map((s) => s.trim()).filter(Boolean);
+
+/** (2) tell staff right away about trips that got no van, so they can sort it out before the day. */
+export async function alertNoVan(bookingId: string) {
+  const to = alertIds();
+  if (!to.length) return;
+  const { data } = await db().from('shuttle_trips')
+    .select('direction, pax, pickup_at, bookings(code, plate, customers(name, phone))')
+    .eq('booking_id', bookingId).is('vehicle_id', null).not('status', 'in', '(cancelled,done)');
+  const rows = (data ?? []) as unknown as { direction: string; pax: number; pickup_at: string | null; bookings: { code: string; plate: string; customers: { name: string; phone: string } | null } | null }[];
+  if (!rows.length) return;
+  const b = rows[0].bookings;
+  const lines = rows.map((t) => `• ${t.direction === 'to_airport' ? 'ขาไป (ลาน → สนามบิน)' : 'ขากลับ (สนามบิน → ลาน)'} ${t.pickup_at ? `${thDate(bkkDay(t.pickup_at))} ${thTime(t.pickup_at)}` : ''} · ${t.pax} คน`);
+  const text = [`🚐 รถรับส่งไม่พอ: ${b?.code ?? ''}`, ...lines, `ลูกค้า ${b?.customers?.name ?? '-'} ${b?.customers?.phone ?? ''} · ${b?.plate ?? ''}`,
+    'จัดรถเองหรือเลื่อนเวลาที่หน้า "รถรับส่ง" ในหลังบ้าน (ถ้ามีเที่ยวอื่นยกเลิก ระบบจะลองจัดให้อัตโนมัติ)'].join('\n');
+  await Promise.all(to.map((id) => push(id, [{ type: 'text', text }]).catch((e) => console.error('alertNoVan', String(e)))));
+}
 
 /** After a booking is confirmed: assign shuttle vehicles and send the confirmation to the customer. */
 export async function afterConfirmed(bookingId: string) {
@@ -12,6 +32,7 @@ export async function afterConfirmed(bookingId: string) {
       if (error) console.error('assign_vehicle', error.message);
     }
   }
+  await alertNoVan(bookingId).catch((e) => console.error('alertNoVan', String(e)));
 
   const { data: b } = await db().from('bookings')
     .select('code, plate, start_date, end_date, days, total_amount, shuttle, pax, customers(line_user_id)')

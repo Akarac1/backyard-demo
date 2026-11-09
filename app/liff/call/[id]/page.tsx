@@ -68,6 +68,9 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
               <b>{state === 'called' ? t('เรียกรถแล้ว รอคนขับรับทราบ') : state === 'coming' ? t('คนขับกำลังไปจุดนัดรับ') : t('รถถึงจุดนัดรับแล้ว')}</b>
               {state !== 'arrived' && info.eta && <span>{t('ถึงประมาณ {t} น.', { t: time(info.eta) })}</span>}
             </div>
+            {state === 'called' && info.eta && info.calledAt && Date.parse(info.eta) - Date.parse(info.calledAt) > 20 * 60_000 && (
+              <p className="small call-busy">{t('ตอนนี้รถทุกคันกำลังรับส่งลูกค้าอยู่ คันแรกที่ว่างจะมารับคุณทันที ขออภัยที่ต้องรอเพิ่ม')}</p>
+            )}
             <div className="meet"><span>{t('จุดนัดรับ')}</span><b>{t(info.meetingPoint)}</b></div>
             {info.driver && <div className="meet"><span>{t('คนขับ')}</span><b>{info.driver.name}</b></div>}
             <p className="small">{t('เรียกรถเมื่อ {t} น. · หน้านี้อัปเดตเองทุก 20 วินาที', { t: info.calledAt ? time(info.calledAt) : '' })}</p>
@@ -83,7 +86,7 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
         <div className="modal-bg" role="dialog" aria-modal="true" aria-labelledby="confirm-title">
           <div className="modal">
             <h2 id="confirm-title">{t('ยืนยันเรียกรถ?')}</h2>
-            <p>{t('คนขับจะออกเดินทางมารับที่ {m} ทันที และถึงภายในประมาณ 15 นาที', { m: t(info.meetingPoint) })}</p>
+            <p>{t('คนขับคันที่ว่างก่อนจะออกมารับที่ {m} และหน้านี้จะบอกเวลาที่รถจะถึงหลังกดเรียก', { m: t(info.meetingPoint) })}</p>
             <p className="small">{t('กดเมื่อได้กระเป๋าครบและพร้อมออกจากโถงแล้วเท่านั้น')}</p>
             <div className="modal-actions">
               <button className="btn" onClick={() => setAsking(false)} disabled={busy}>{t('ยังไม่พร้อม')}</button>

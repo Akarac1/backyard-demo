@@ -5,6 +5,15 @@ export const LANGS: Lang[] = ['th', 'en', 'zh'];
 
 // [English, Chinese]
 const D: Record<string, [string, string]> = {
+  // ---- shuttle capacity ----
+  'รถรับส่งเวลานี้เต็มแล้ว กรุณาเลือกเวลาอื่น หรือจองแบบไม่ใช้รถรับส่ง': ['The shuttle is full at this time. Please pick another time or book parking only.', '该时段接驳车已满，请选择其他时间，或仅预订停车。'],
+  'รถรับส่งเวลา {t} เต็มแล้ว': ['The shuttle at {t} is full', '{t} 的接驳车已满'],
+  'เลือกเวลาที่ยังว่าง:': ['Pick a time that is still free:', '请选择仍有空位的时间：'],
+  'ช่วงใกล้เคียงไม่มีรถว่าง ลองเปลี่ยนเวลา หรือติดต่อร้าน': ['No shuttle is free around that time. Try another time or contact us.', '附近时段没有空车，请换个时间或联系我们。'],
+  'จองที่จอดอย่างเดียว ไม่ใช้รถรับส่ง': ['Book parking only, no shuttle', '仅预订停车，不用接驳车'],
+  'กำลังตรวจรถรับส่ง…': ['Checking the shuttle…', '正在查询接驳车…'],
+  'คนขับคันที่ว่างก่อนจะออกมารับที่ {m} และหน้านี้จะบอกเวลาที่รถจะถึงหลังกดเรียก': ['The first free driver will come to {m}. This page shows the arrival time once you call.', '最先空出的司机会前往{m}接您，叫车后本页会显示预计到达时间。'],
+  'ตอนนี้รถทุกคันกำลังรับส่งลูกค้าอยู่ คันแรกที่ว่างจะมารับคุณทันที ขออภัยที่ต้องรอเพิ่ม': ['All shuttles are on other trips right now. The first one free will come straight to you. Sorry for the extra wait.', '目前所有接驳车都在接送其他乘客，最先空出的车会立即来接您，抱歉让您多等。'],
   // ---- booking form ----
   'กรุณาใส่เวลามาถึงลาน และเวลาเครื่องลงขากลับ': ['Please enter your arrival time at the car park and your return landing time', '请填写到达停车场的时间和回程航班落地时间'],
   'เบอร์โทรไม่ถูกต้อง': ['Invalid phone number', '电话号码不正确'],
