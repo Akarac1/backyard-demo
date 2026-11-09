@@ -7,6 +7,22 @@ import { thDate, thTime, bkkDay } from './format';
 const alertIds = () => (process.env.SHUTTLE_ALERT_LINE_IDS || process.env.ALERT_LINE_USER_IDS || '')
   .split(',').map((s) => s.trim()).filter(Boolean);
 
+/** The customer changed the bags of a trip and the vehicle no longer works out: tell staff now. */
+export async function alertBags(tripId: string, r: { vehicle: string | null; no_vehicle: boolean; too_big: boolean; late: boolean }) {
+  const to = alertIds();
+  if (!to.length) return;
+  const { data } = await db().from('shuttle_trips')
+    .select('direction, pax, large_bags, small_bags, pickup_at, called_at, bookings(code, plate, customers(name, phone))').eq('id', tripId).single();
+  const t = data as unknown as { direction: string; pax: number; large_bags: number; small_bags: number; pickup_at: string | null; called_at: string | null; bookings: { code: string; plate: string; customers: { name: string; phone: string } | null } | null } | null;
+  if (!t) return;
+  const why = r.late ? `รถที่ออกไปแล้ว (${r.vehicle ?? '-'}) ใส่กระเป๋าไม่พอ` : r.too_big ? 'รถประจำคันไหนก็ใส่ไม่พอ ต้องใช้รถสำรองหรือ 2 คัน' : 'ไม่มีรถประจำว่างที่ใส่พอ';
+  const text = [`🧳 ลูกค้าแจ้งกระเป๋าเพิ่ม: ${t.bookings?.code ?? ''}`,
+    `${t.direction === 'to_airport' ? 'ขาไป' : 'ขากลับ'} ${t.pickup_at ? `${thDate(bkkDay(t.pickup_at))} ${thTime(t.pickup_at)}` : ''} · ${t.pax} คน · กระเป๋าใหญ่ ${t.large_bags} เล็ก ${t.small_bags}${t.called_at ? ' · เรียกรถแล้ว' : ''}`,
+    `⚠️ ${why}`, `ลูกค้า ${t.bookings?.customers?.name ?? '-'} ${t.bookings?.customers?.phone ?? ''}`,
+    'จัดรถที่หน้า "รถรับส่ง" ในหลังบ้าน (ใช้รถสำรองฉุกเฉินได้)'].join('\n');
+  await Promise.all(to.map((id) => push(id, [{ type: 'text', text }]).catch((e) => console.error('alertBags', String(e)))));
+}
+
 /** (2) tell staff right away about trips that got no van, so they can sort it out before the day. */
 export async function alertNoVan(bookingId: string) {
   const to = alertIds();

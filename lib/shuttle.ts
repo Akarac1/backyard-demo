@@ -17,3 +17,18 @@ export async function shuttleCheck(local: string, pax: number, large = 0, small 
   const d = data as { ok: boolean; too_big?: boolean; suggestions: string[] };
   return { ok: d.ok, tooBig: !!d.too_big, suggestions: (d.suggestions ?? []).map(toBkkLocal) };
 }
+
+export type BagsResult = { vehicle: string | null; changed: boolean; no_vehicle: boolean; too_big: boolean; late: boolean };
+
+/** The customer says how many bags they have for a trip. Staff hear about it when no vehicle fits now. */
+export async function customerSetBags(uid: string, tripId: string, large: unknown, small: unknown): Promise<{ data?: BagsResult; error?: string }> {
+  if (!/^[0-9a-f-]{36}$/.test(tripId)) return { error: 'not_found' };
+  const { data, error } = await db().rpc('customer_set_trip_bags', { p_line_user_id: uid, p_trip_id: tripId, p_large: bagCount(large), p_small: bagCount(small) });
+  if (error) return { error: error.message };
+  const r = data as BagsResult;
+  if (r.no_vehicle || r.too_big || r.late) {
+    const { alertBags } = await import('./confirm');
+    await alertBags(tripId, r).catch((e) => console.error('alertBags', String(e)));
+  }
+  return { data: r };
+}

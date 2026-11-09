@@ -5,7 +5,7 @@ export async function GET(req: Request) {
   const uid = await currentUser(req);
   if (!uid) return json([], 401);
   const { data } = await db().from('bookings')
-    .select('id, code, plate, start_date, end_date, days, total_amount, status, shuttle, pax, rescheduled_at, customers!inner(line_user_id)')
+    .select('id, code, plate, start_date, end_date, days, total_amount, status, shuttle, pax, rescheduled_at, customers!inner(line_user_id), shuttle_trips(id, direction, status, large_bags, small_bags, called_at)')
     .eq('customers.line_user_id', uid)
     .order('start_date', { ascending: false })
     .limit(20);

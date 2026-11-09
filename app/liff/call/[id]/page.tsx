@@ -2,9 +2,10 @@
 import { use, useCallback, useEffect, useState } from 'react';
 import { authHeaders, useLiff } from '../../useLiff';
 import { useT } from '@/components/Lang';
+import { BagPicker } from '@/components/BagPicker';
 
 type Info = {
-  code: string; name: string; pax: number; flight: string | null; status: string; calledAt: string | null; eta: string | null;
+  code: string; name: string; pax: number; large: number; small: number; bagNote?: string | null; flight: string | null; status: string; calledAt: string | null; eta: string | null;
   meetingPoint: string; isReturn: boolean; driver: { name: string; phone: string | null } | null; shopPhone: string;
 };
 const fmtPhone = (p: string) => p.replace(/^(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3');
@@ -17,6 +18,8 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
   const [error, setError] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [bags, setBags] = useState<[number, number]>([0, 0]);
+  const [moreBags, setMoreBags] = useState(false);
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/trips/${id}/call`, { headers: authHeaders(liff.idToken) });
@@ -32,7 +35,10 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
 
   async function call() {
     setBusy(true); setError(null);
-    const r = await fetch(`/api/trips/${id}/call`, { method: 'POST', headers: authHeaders(liff.idToken) });
+    const r = await fetch(`/api/trips/${id}/call`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders(liff.idToken) },
+      body: JSON.stringify({ large: bags[0], small: bags[1] }),
+    });
     const j = await r.json().catch(() => ({}));
     setBusy(false); setAsking(false);
     if (r.ok) setInfo(j); else setError(j.error ?? t('เรียกรถไม่สำเร็จ กรุณาโทรหาร้าน'));
@@ -57,7 +63,7 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
             <h2>{t('ได้กระเป๋าแล้วหรือยัง?')}</h2>
             <p className="small">{t('กดเรียกรถเมื่อรับกระเป๋าเรียบร้อยและพร้อมออกจากโถงผู้โดยสาร คนขับจะไปถึงจุดนัดภายในประมาณ 15 นาที')}</p>
             <div className="meet"><span>{t('จุดนัดรับ')}</span><b>{t(info.meetingPoint)}</b></div>
-            <button className="btn primary big" onClick={() => setAsking(true)}>{t('เรียกรถมารับ')}</button>
+            <button className="btn primary big" onClick={() => { setBags([info.large ?? 0, info.small ?? 0]); setMoreBags(false); setAsking(true); }}>{t('เรียกรถมารับ')}</button>
             <p className="small" style={{ textAlign: 'center' }}>{t('ยังรอกระเป๋าอยู่? ไม่ต้องรีบ เปิดหน้านี้จากการ์ดในแชทได้ตลอด')}</p>
           </div>
         )}
@@ -68,6 +74,8 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
               <b>{state === 'called' ? t('เรียกรถแล้ว รอคนขับรับทราบ') : state === 'coming' ? t('คนขับกำลังไปจุดนัดรับ') : t('รถถึงจุดนัดรับแล้ว')}</b>
               {state !== 'arrived' && info.eta && <span>{t('ถึงประมาณ {t} น.', { t: time(info.eta) })}</span>}
             </div>
+            {info.bagNote === 'changed' && <p className="small call-busy">{t('ระบบเปลี่ยนเป็นรถคันที่ใส่กระเป๋าได้พอแล้ว เวลาถึงด้านบนเป็นของคันใหม่')}</p>}
+            {info.bagNote === 'staff' && <p className="small call-busy">{t('กระเป๋าเยอะกว่ารถที่ว่างตอนนี้ ร้านได้รับแจ้งแล้วและกำลังจัดรถให้ จะติดต่อกลับทางแชทหรือโทรศัพท์')}</p>}
             {state === 'called' && info.eta && info.calledAt && Date.parse(info.eta) - Date.parse(info.calledAt) > 20 * 60_000 && (
               <p className="small call-busy">{t('ตอนนี้รถทุกคันกำลังรับส่งลูกค้าอยู่ คันแรกที่ว่างจะมารับคุณทันที ขออภัยที่ต้องรอเพิ่ม')}</p>
             )}
@@ -87,6 +95,16 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
           <div className="modal">
             <h2 id="confirm-title">{t('ยืนยันเรียกรถ?')}</h2>
             <p>{t('คนขับคันที่ว่างก่อนจะออกมารับที่ {m} และหน้านี้จะบอกเวลาที่รถจะถึงหลังกดเรียก', { m: t(info.meetingPoint) })}</p>
+            <div className="bag-ask">
+              <b>{t('กระเป๋าขากลับ')}</b>
+              <span className="small">{(info.large ?? 0) + (info.small ?? 0) ? t('ตอนจองแจ้งไว้: ใหญ่ {a} · กลาง/เล็ก {b} ใบ', { a: info.large ?? 0, b: info.small ?? 0 }) : t('ตอนจองไม่ได้แจ้งกระเป๋าโหลด')}</span>
+              <div className="toggle">
+                <button type="button" className={!moreBags ? 'on' : ''} onClick={() => { setMoreBags(false); setBags([info.large ?? 0, info.small ?? 0]); }}>{t('เท่าเดิม')}</button>
+                <button type="button" className={moreBags ? 'on' : ''} onClick={() => setMoreBags(true)}>{t('มีเพิ่ม / เปลี่ยน')}</button>
+              </div>
+              {moreBags && <BagPicker large={bags[0]} small={bags[1]} onChange={(a, b) => setBags([a, b])} />}
+              {moreBags && <span className="small">{t('ไม่ต้องนับกระเป๋าถือขึ้นเครื่องและเป้ ถ้ากระเป๋าเยอะขึ้น ระบบจะส่งรถคันที่ใส่ได้พอ')}</span>}
+            </div>
             <p className="small">{t('กดเมื่อได้กระเป๋าครบและพร้อมออกจากโถงแล้วเท่านั้น')}</p>
             <div className="modal-actions">
               <button className="btn" onClick={() => setAsking(false)} disabled={busy}>{t('ยังไม่พร้อม')}</button>

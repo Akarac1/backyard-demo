@@ -760,3 +760,17 @@ svg.density { width: 100%; height: auto; display: block; }
 .trip-bags summary { cursor: pointer; color: var(--navy); font-weight: 500; }
 .trip-bags-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-top: 8px; }
 .trip-bags-form label { flex: 1 1 120px; }
+
+/* bag picker (call page, my bookings) */
+.bag-picker { display: flex; flex-direction: column; gap: 8px; margin: 8px 0; }
+.bag-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 14.5px; }
+.bag-step { display: flex; align-items: center; gap: 10px; }
+.bag-step button { width: 40px; height: 40px; border-radius: 10px; border: 1.5px solid var(--navy); background: #fff; color: var(--navy); font-size: 20px; font-weight: 700; cursor: pointer; margin: 0; padding: 0; }
+.bag-step button:disabled { opacity: .35; cursor: default; }
+.bag-step b { min-width: 22px; text-align: center; font-size: 18px; }
+.bag-ask { display: flex; flex-direction: column; gap: 6px; margin: 10px 0; padding: 12px; border-radius: 12px; background: #F4F7F4; }
+.bag-ask .toggle { margin: 4px 0 0; }
+.return-bags { margin-top: 10px; padding-top: 10px; border-top: 1px dashed #DCE3DE; font-size: 14px; }
+.return-bags-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.ok-text { color: #1F7A4C !important; }
+.bad-text { color: #A8322B !important; }
