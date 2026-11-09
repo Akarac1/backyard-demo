@@ -49,7 +49,7 @@ export default async function OpsPage({ searchParams }: { searchParams: Promise<
       </header>
 
       <section className="tiles">
-        <div className="tile"><span>รถอยู่ในลานตอนนี้</span><b>{inLot ?? 0}<small> คัน</small></b></div>
+        <div className="tile"><span>รถอยู่ในลานตอนนี้</span><b>{inLot ?? 0}<small> คัน</small></b><Link href="/ops/lot" className="b b-plain b-sm tile-btn">ดูรายการ / ตรวจลาน →</Link></div>
         <div className="tile"><span>รถเข้าวันนี้</span><b>{A.length}<small> คัน</small></b><em>ยังไม่เข้า {A.filter((b) => b.status === 'confirmed').length} คัน</em></div>
         <div className="tile"><span>รถออกวันนี้</span><b>{D.length}<small> คัน</small></b><em>ยังไม่ออก {D.filter((b) => b.status === 'checked_in').length} คัน</em></div>
         <div className={`tile ${L.length + O.length ? 'tile-warn' : ''}`}><span>ต้องตรวจสอบ</span><b>{L.length + O.length}<small> รายการ</small></b><em>เลยวันเข้า {L.length} · เกินกำหนดออก {O.length}</em></div>

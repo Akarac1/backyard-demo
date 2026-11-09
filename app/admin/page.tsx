@@ -41,7 +41,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
   ]);
   const { data: dens } = await sb.rpc('lot_density', { p_from: df, p_to: dt });
   const density = ((dens ?? []) as DensityRow[]);
-  const [occ, arrivals, departures, inLot, slips, lpr, trips, paidToday, owed, notes, calls] = await Promise.all([
+  const [occ, arrivals, departures, inLot, slips, lpr, trips, owed, notes, calls] = await Promise.all([
     sb.from('v_occupancy_30d').select('day, used, total_spots, reserve_spots').limit(14),
     sb.from('bookings').select(sel).eq('start_date', today).in('status', ['confirmed', 'checked_in']).order('created_at'),
     sb.from('bookings').select(sel).eq('end_date', today).in('status', ['confirmed', 'checked_in', 'checked_out']).order('created_at'),
@@ -50,7 +50,6 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
     sb.from('lpr_sync').select('id, plate, plate_province, action, valid_from, valid_to').neq('status', 'done').order('created_at'),
     sb.from('shuttle_trips').select('id, direction, pax, pickup_at, flight_number, status, vehicles(name), bookings(id, code, plate, customers(name, phone))')
       .gte('pickup_at', `${today}T00:00:00+07:00`).lt('pickup_at', `${addDays(today, 2)}T00:00:00+07:00`).neq('status', 'cancelled').order('pickup_at'),
-    sb.from('payments').select('amount').eq('status', 'verified').gte('paid_at', `${today}T00:00:00+07:00`),
     sb.from('payments').select('id, amount, bookings(id, code, plate)').eq('status', 'pending').eq('kind', 'overstay'),
     sb.from('shuttle_trips').select('id, direction, driver_note, note_at, vehicles(name), bookings(id, code)').eq('note_resolved', false).order('note_at'),
     sb.from('shuttle_trips').select('id, pax, called_at, called_by, bookings(id, code, customers(name, phone))').not('called_at', 'is', null).in('status', ['unassigned', 'assigned']).order('called_at'),
@@ -64,7 +63,6 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
   const dep = (departures.data ?? []) as unknown as Row[];
   const tripRows = (trips.data ?? []) as unknown as Trip[];
   const unassigned = tripRows.filter((t) => !t.vehicles);
-  const revenueToday = (paidToday.data ?? []).reduce((a, p) => a + p.amount, 0);
 
   const slipLinks: Record<string, string> = {};
   for (const p of slips.data ?? []) {
@@ -101,8 +99,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
         </div>
         <div className="tile"><span>รถเข้าวันนี้</span><b>{arr.length}<small> คัน</small></b><em>มาแล้ว {arr.filter((r) => r.status === 'checked_in').length} คัน</em></div>
         <div className="tile"><span>รถออกวันนี้</span><b>{dep.length}<small> คัน</small></b><em>รับรถแล้ว {dep.filter((r) => r.status === 'checked_out').length} คัน</em></div>
-        <div className="tile"><span>รถอยู่ในลานตอนนี้</span><b>{inLot.count ?? 0}<small> คัน</small></b><em>เช็กอินแล้วยังไม่รับรถ</em></div>
-        <div className="tile"><span>รับเงินวันนี้</span><b>{n(revenueToday)}<small> บาท</small></b><em><Link href="/exec">ดูรายงาน →</Link></em></div>
+        <div className="tile"><span>รถอยู่ในลานตอนนี้</span><b>{inLot.count ?? 0}<small> คัน</small></b><em>เช็กอินแล้วยังไม่รับรถ</em><Link href="/ops/lot" className="b b-plain b-sm tile-btn">ดูรายการ / ตรวจลาน →</Link></div>
       </section>
       <section className="panel density-panel">
         <div className="density-head">

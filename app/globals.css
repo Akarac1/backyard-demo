@@ -703,3 +703,42 @@ svg.density { width: 100%; height: auto; display: block; }
 .density-legend i.dash { height: 0; border-top: 2px dashed #1E2A23; border-radius: 0; width: 16px; vertical-align: 3px; }
 .past-toggle { width: 100%; margin: 4px 0 12px; }
 .card.past { opacity: .8; }
+
+/* ---------- lot patrol (/ops/lot) ---------- */
+.lot-tools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 10px; }
+.lot-tools input[type=search] { flex: 1 1 220px; font: inherit; font-size: 16px; padding: 10px 12px; border: 1px solid #D5DCE6; border-radius: 10px; }
+.lot-tabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip-btn.on { background: var(--navy); border-color: var(--navy); color: #fff; }
+.lot-btns { display: flex; gap: 6px; margin-left: auto; }
+.lot-list { list-style: none; padding: 0; margin: 0; }
+.lot-row { display: grid; grid-template-columns: 120px 1fr auto; gap: 12px; align-items: center; padding: 12px 8px; border-top: 1px solid #EEF2EF; border-radius: 8px; }
+.lot-row:first-child { border-top: 0; }
+.lot-row.is-ok { background: #EEF7F1; }
+.lot-row.is-miss { background: #FBEAEA; }
+.lot-plate b { display: block; font-size: 19px; letter-spacing: .5px; }
+.lot-plate small, .lot-main small { display: block; color: var(--muted); font-size: 12.5px; }
+.lot-main > div { font-size: 14.5px; }
+.lot-act { display: flex; gap: 6px; }
+.lot-b { font: inherit; font-size: 15px; font-weight: 500; min-width: 84px; min-height: 44px; border-radius: 10px; border: 1.5px solid #D5DCE6; background: #fff; cursor: pointer; }
+.lot-b.ok.on { background: var(--ok); border-color: var(--ok); color: #fff; }
+.lot-b.miss.on { background: var(--bad); border-color: var(--bad); color: #fff; }
+.lot-b.ok:not(.on):hover { border-color: var(--ok); color: var(--ok); }
+.lot-b.miss:not(.on):hover { border-color: var(--bad); color: var(--bad); }
+.tag-warn { background: #FBEAEA; color: #8C2B25; margin-left: 4px; }
+.lot-main .tag { margin-left: 4px; }
+.lot-muted { color: var(--muted); }
+.lot-head-act { display: flex; gap: 8px; }
+.print-only { display: none; }
+@media (max-width: 640px) {
+  .lot-row { grid-template-columns: 1fr; gap: 6px; }
+  .lot-act .lot-b { flex: 1; }
+  .lot-btns { margin-left: 0; }
+}
+@media print {
+  .staff-top, .no-print, nav { display: none !important; }
+  .print-only { display: block; font-size: 13px; white-space: nowrap; }
+  .lot-row { grid-template-columns: 110px 1fr auto; break-inside: avoid; background: none !important; }
+  .panel, .tile { box-shadow: none !important; }
+}
+.tile-btn { margin-top: 8px; }
+@media (max-width: 640px) { .lot-page .tiles .tile:first-child { grid-column: auto; } }
