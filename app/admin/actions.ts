@@ -13,7 +13,6 @@ export type ActionResult = { ok?: string; error?: string } | null;
 const ERR: Record<string, string> = {
   not_allowed: 'บัญชีนี้ดูได้อย่างเดียว แก้ไขรายการนี้ไม่ได้ (ถ้าควรแก้ได้ ลองออกจากระบบแล้วเข้าใหม่)',
   not_found: 'ไม่พบข้อมูล อาจถูกลบหรือเปลี่ยนไปแล้ว',
-  invalid_vehicle: 'กรอกชื่อรถ และจำนวนที่นั่ง 1–30 ที่',
   plate_taken: 'ทะเบียนนี้มีอยู่ในระบบแล้ว',
   last_vehicle: 'ต้องมีรถที่ใช้งานอยู่อย่างน้อย 1 คัน',
   invalid_range: 'วันออกต้องไม่ก่อนวันเข้า',
@@ -39,6 +38,9 @@ const ERR: Record<string, string> = {
   coupon_parking: 'คูปองส่วนลดค่าจอดใช้ได้ในหน้าจองของลูกค้าเท่านั้น',
   landing_after_pickup: 'เวลาเครื่องลงต้องไม่ช้ากว่าเวลารับ',
   too_many_pax: 'ผู้โดยสารเกินจำนวนที่นั่งของรถคันนี้',
+  too_much_luggage: 'กระเป๋าเกินกว่าที่รถคันนี้ใส่ได้ เลือกรถคันที่ใหญ่กว่า',
+  invalid_bags: 'จำนวนกระเป๋าต้องอยู่ระหว่าง 0–20 ใบ',
+  invalid_vehicle: 'ข้อมูลรถไม่ถูกต้อง (ชื่อ ที่นั่ง 1–30 ความจุกระเป๋า 0–60 หน่วย ไม่เกิน 30 ใบ ลำดับ 1–9)',
   invalid_settings: 'ค่าที่ตั้งไม่ถูกต้อง (ช่องสำรองต้องน้อยกว่าช่องทั้งหมด และเวลากันที่ 5–120 นาที)',
   weak_password: 'รหัสผ่านต้องยาวอย่างน้อย 10 ตัวอักษร',
   wrong_password: 'รหัสผ่านเดิมไม่ถูกต้อง',
@@ -124,6 +126,11 @@ export async function updateTrip(_: ActionResult, f: FormData): Promise<ActionRe
     p_trip_id: str(f, 'id'), p_vehicle_id: vehicle || null, p_pickup_at: time ? bkkLocalToIso(time) : null,
     p_landing_at: landing ? bkkLocalToIso(landing) : null,
   }, 'บันทึกเที่ยวรถแล้ว', ['/admin/trips', '/admin']);
+}
+
+export async function setTripBags(_: ActionResult, f: FormData): Promise<ActionResult> {
+  return run('admin_set_trip_bags', { p_trip_id: str(f, 'id'), p_large: num(f, 'large_bags'), p_small: num(f, 'small_bags') },
+    'บันทึกจำนวนกระเป๋าแล้ว', ['/admin/trips', '/admin', '/driver']);
 }
 
 export async function autoAssign(_: ActionResult, f: FormData): Promise<ActionResult> {
@@ -330,6 +337,8 @@ export async function saveVehicle(_: ActionResult, f: FormData): Promise<ActionR
   return run('admin_save_vehicle', {
     p_id: id, p_name: str(f, 'name'), p_plate: str(f, 'plate'), p_model: str(f, 'model'), p_seats: num(f, 'seats'),
     p_active: f.get('active') === 'on', p_note: str(f, 'note'),
+    p_luggage_units: num(f, 'luggage_units'), p_max_bags: num(f, 'max_bags'), p_priority: num(f, 'priority') || 1,
+    p_reserve: f.get('reserve') === 'on',
   }, id ? 'บันทึกข้อมูลรถแล้ว' : 'เพิ่มรถแล้ว', ['/admin/settings', '/admin/trips', '/admin/users', '/driver']);
 }
 

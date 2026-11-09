@@ -6,6 +6,15 @@ export const LANGS: Lang[] = ['th', 'en', 'zh'];
 // [English, Chinese]
 const D: Record<string, [string, string]> = {
   // ---- shuttle capacity ----
+  'กระเป๋าใบใหญ่ (28–29 นิ้ว)': ['Large bags (28–29 in)', '大行李箱（28–29 寸）'],
+  'กระเป๋าใบกลาง/เล็ก': ['Medium / small bags', '中/小行李箱'],
+  '{n} ใบ': ['{n}', '{n} 件'],
+  'นับเฉพาะกระเป๋าที่โหลดใต้เครื่อง ไม่ต้องนับกระเป๋าถือขึ้นเครื่องและเป้ ใช้เลือกรถที่ใส่กระเป๋าได้พอ': ['Count checked bags only, not cabin bags or backpacks. We use this to send a car with enough space.', '只计算托运行李，不含随身行李和背包，用于安排空间足够的车。'],
+  'จำนวนผู้โดยสารและกระเป๋าเกินกว่ารถ 1 คันรับได้': ['Too many passengers and bags for one car', '乘客和行李超出一辆车的容量'],
+  'กรุณาติดต่อร้านเพื่อจัดรถพิเศษ หรือลดจำนวนกระเป๋า': ['Please contact us to arrange a special car, or reduce the number of bags.', '请联系我们安排专车，或减少行李数量。'],
+  'กระเป๋า': ['Luggage', '行李'],
+  'ใหญ่ {a} · กลาง/เล็ก {b} ใบ': ['Large {a} · medium/small {b}', '大 {a} 件 · 中/小 {b} 件'],
+  'ไม่มีกระเป๋าโหลด': ['No checked bags', '无托运行李'],
   'รถรับส่งเวลานี้เต็มแล้ว กรุณาเลือกเวลาอื่น หรือจองแบบไม่ใช้รถรับส่ง': ['The shuttle is full at this time. Please pick another time or book parking only.', '该时段接驳车已满，请选择其他时间，或仅预订停车。'],
   'รถรับส่งเวลา {t} เต็มแล้ว': ['The shuttle at {t} is full', '{t} 的接驳车已满'],
   'เลือกเวลาที่ยังว่าง:': ['Pick a time that is still free:', '请选择仍有空位的时间：'],

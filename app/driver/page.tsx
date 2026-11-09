@@ -6,8 +6,11 @@ import { AutoRefresh, CallTools, Countdown, NoteForm, StepForm } from './StepFor
 
 export const dynamic = 'force-dynamic';
 
+const bags = (t: { large_bags: number; small_bags: number }) =>
+  t.large_bags + t.small_bags ? ` · กระเป๋า${t.large_bags ? ` ใหญ่ ${t.large_bags}` : ''}${t.small_bags ? ` เล็ก ${t.small_bags}` : ''}` : '';
+
 type Trip = {
-  id: string; direction: 'to_airport' | 'from_airport'; pax: number; pickup_at: string | null; flight_number: string | null; status: string;
+  id: string; direction: 'to_airport' | 'from_airport'; pax: number; large_bags: number; small_bags: number; pickup_at: string | null; flight_number: string | null; status: string;
   drop_door: string | null; departed_at: string | null; arrived_at: string | null; completed_at: string | null; driver_note: string | null;
   vehicle_id: string | null; driver_staff_id: string | null;
   landing_at: string | null; welcome_sent_at: string | null; called_at: string | null; called_by: string | null; vehicles: { name: string } | null; driver: { display_name: string } | null;
@@ -45,7 +48,7 @@ export default async function DriverPage({ searchParams }: { searchParams: Promi
   const myVehicle = vehicles?.find((v) => v.id === vehicleId);
 
   let q = sb.from('shuttle_trips')
-    .select('id, direction, pax, pickup_at, flight_number, status, drop_door, departed_at, arrived_at, completed_at, driver_note, vehicle_id, driver_staff_id, landing_at, welcome_sent_at, called_at, called_by, vehicles(name), driver:staff_users!shuttle_trips_driver_staff_id_fkey(display_name), bookings(code, plate, plate_province, customers(name, phone, line_user_id))')
+    .select('id, direction, pax, large_bags, small_bags, pickup_at, flight_number, status, drop_door, departed_at, arrived_at, completed_at, driver_note, vehicle_id, driver_staff_id, landing_at, welcome_sent_at, called_at, called_by, vehicles(name), driver:staff_users!shuttle_trips_driver_staff_id_fkey(display_name), bookings(code, plate, plate_province, customers(name, phone, line_user_id))')
     .gte('pickup_at', `${day}T00:00:00+07:00`).lt('pickup_at', `${addDays(day, 1)}T00:00:00+07:00`)
     .neq('status', 'cancelled').order('pickup_at');
   if (vehicleId) q = q.eq('vehicle_id', vehicleId);
@@ -70,7 +73,7 @@ export default async function DriverPage({ searchParams }: { searchParams: Promi
       <li key={t.id}>
         <time>{t.pickup_at ? thTime(t.pickup_at) : '—'}</time>
         <div>
-          <b>{t.direction === 'to_airport' ? 'ส่งสนามบิน' : 'รับกลับ'} · {c?.name} · {t.pax} คน</b>
+          <b>{t.direction === 'to_airport' ? 'ส่งสนามบิน' : 'รับกลับ'} · {c?.name} · {t.pax} คน{bags(t)}</b>
           <small>{t.driver?.display_name ?? 'ไม่ระบุคนขับ'} · {t.vehicles?.name ?? '-'}{t.called_at && t.arrived_at ? ` · ลูกค้ารอ ${Math.max(0, Math.round((Date.parse(t.arrived_at) - Date.parse(t.called_at)) / 60_000))} นาที` : ''}</small>
         </div>
         <span className="st st-done">เสร็จ {t.completed_at ? thTime(t.completed_at) : ''}</span>
@@ -99,7 +102,7 @@ export default async function DriverPage({ searchParams }: { searchParams: Promi
         <div className="job-top">
           <time>{t.pickup_at ? thTime(t.pickup_at) : '—'}</time>
           <div>
-            <b>{to ? 'ส่งไปสนามบิน' : 'รับกลับจากสนามบิน'} · {t.pax} คน</b>
+            <b>{to ? 'ส่งไปสนามบิน' : 'รับกลับจากสนามบิน'} · {t.pax} คน{bags(t)}</b>
             <small>{to ? `รับที่ลาน → ส่งชั้น 4 ขาออก${t.drop_door ? ` ประตู ${t.drop_door}` : ''}` : `รับที่${st?.pickup_meeting_point ?? 'ชั้น 2 ประตู 4'} → ลาน`}</small>
           </div>
           <span className="st st-ok">{t.vehicles?.name ?? 'ยังไม่จัดรถ'}</span>

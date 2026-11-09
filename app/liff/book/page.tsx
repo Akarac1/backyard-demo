@@ -26,7 +26,7 @@ export default function BookPage() {
   const today = todayBkk();
   const [f, setF] = useState({
     start: today, end: today, name: '', phone: '', plate: '', province: 'กรุงเทพมหานคร',
-    shuttle: true, pax: 2, outboundTime: '', returnFlight: '', returnLanding: '', flightType: 'international', refPhone: '',
+    shuttle: true, pax: 2, largeBags: 0, smallBags: 0, outboundTime: '', returnFlight: '', returnLanding: '', flightType: 'international', refPhone: '',
   });
   const [avail, setAvail] = useState<Avail[] | null>(null);
   const [pr, setPr] = useState<Prices>(DEFAULT_PRICES);
@@ -42,7 +42,8 @@ export default function BookPage() {
   const [pick, setPick] = useState<string>('');
   // the outbound van is full at the chosen time: nearby free times to pick from
   const [slotFull, setSlotFull] = useState<string[] | null>(null);
-  useEffect(() => { setSlotFull(null); }, [f.outboundTime, f.pax, f.shuttle]);
+  const [tooBig, setTooBig] = useState(false);   // no vehicle takes this many people + bags
+  useEffect(() => { setSlotFull(null); setTooBig(false); }, [f.outboundTime, f.pax, f.shuttle, f.largeBags, f.smallBags]);
 
   useEffect(() => { if (liff.name && !f.name) setF((x) => ({ ...x, name: liff.name! })); }, [liff.name]); // eslint-disable-line
 
@@ -90,10 +91,10 @@ export default function BookPage() {
     // a free van for the outbound trip? (checked again when booking)
     if (f.shuttle) {
       setBusy(true);
-      const c = await fetch('/api/shuttle/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ at: f.outboundTime, pax: f.pax }) })
-        .then((r) => (r.ok ? r.json() : null)).catch(() => null) as { ok: boolean; suggestions: string[] } | null;
+      const c = await fetch('/api/shuttle/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ at: f.outboundTime, pax: f.pax, large: f.largeBags, small: f.smallBags }) })
+        .then((r) => (r.ok ? r.json() : null)).catch(() => null) as { ok: boolean; tooBig: boolean; suggestions: string[] } | null;
       setBusy(false);
-      if (c && !c.ok) { setSlotFull(c.suggestions); document.getElementById('out')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+      if (c && !c.ok) { setSlotFull(c.suggestions); setTooBig(c.tooBig); document.getElementById('out')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
     }
     setAgree(false);
     setDisc(null);
@@ -125,7 +126,7 @@ export default function BookPage() {
     const j = await r.json();
     setBusy(false);
     if (!r.ok && j.code === 'shuttle_full') {
-      setReview(false); setSlotFull(j.suggestions ?? []);
+      setReview(false); setSlotFull(j.suggestions ?? []); setTooBig(!!j.tooBig);
       setTimeout(() => document.getElementById('out')?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50);
       return;
     }
@@ -160,6 +161,7 @@ export default function BookPage() {
             <div className="sum-head"><h2>{t('รถรับส่ง')}</h2><button type="button" className="link-btn" onClick={() => setReview(false)}>{t('แก้ไข')}</button></div>
             {f.shuttle ? <>
               <Row k={t('ผู้โดยสาร')} v={t('{n} คน', { n: f.pax })} />
+              <Row k={t('กระเป๋า')} v={f.largeBags + f.smallBags ? t('ใหญ่ {a} · กลาง/เล็ก {b} ใบ', { a: f.largeBags, b: f.smallBags }) : t('ไม่มีกระเป๋าโหลด')} />
               <Row k={t('ขาไป: มาถึงลาน')} v={thDayTime(f.outboundTime)} />
               <Row k={t('ขากลับ: เครื่องลง')} v={thDayTime(f.returnLanding)} />
               <Row k={t('เที่ยวบินขากลับ')} v={`${f.returnFlight || t('ไม่ระบุ')} · ${f.flightType === 'domestic' ? t('ในประเทศ') : t('ต่างประเทศ')}`} />
@@ -261,12 +263,23 @@ export default function BookPage() {
               <select id="pax" value={f.pax} onChange={(e) => setF({ ...f, pax: Number(e.target.value) })}>
                 {[1, 2, 3, 4, 5, 6, 7].map((n) => <option key={n} value={n}>{t('{n} คน', { n })}</option>)}
               </select>
+              <div className="row">
+                <div><label htmlFor="lbag">{t('กระเป๋าใบใหญ่ (28–29 นิ้ว)')}</label>
+                  <select id="lbag" value={f.largeBags} onChange={(e) => setF({ ...f, largeBags: Number(e.target.value) })}>
+                    {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((n) => <option key={n} value={n}>{t('{n} ใบ', { n })}</option>)}
+                  </select></div>
+                <div><label htmlFor="sbag">{t('กระเป๋าใบกลาง/เล็ก')}</label>
+                  <select id="sbag" value={f.smallBags} onChange={(e) => setF({ ...f, smallBags: Number(e.target.value) })}>
+                    {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((n) => <option key={n} value={n}>{t('{n} ใบ', { n })}</option>)}
+                  </select></div>
+              </div>
+              <p className="small">{t('นับเฉพาะกระเป๋าที่โหลดใต้เครื่อง ไม่ต้องนับกระเป๋าถือขึ้นเครื่องและเป้ ใช้เลือกรถที่ใส่กระเป๋าได้พอ')}</p>
               <label htmlFor="out">{t('ขาไป: เวลาที่จะมาถึงลานจอด')}</label>
               <input id="out" type="datetime-local" value={f.outboundTime} onChange={set('outboundTime')} aria-invalid={!!slotFull} />
               {slotFull && (
                 <div className="slot-full" role="alert">
-                  <b>{t('รถรับส่งเวลา {t} เต็มแล้ว', { t: f.outboundTime.slice(11, 16) })}</b>
-                  {slotFull.length > 0 ? (
+                  <b>{tooBig ? t('จำนวนผู้โดยสารและกระเป๋าเกินกว่ารถ 1 คันรับได้') : t('รถรับส่งเวลา {t} เต็มแล้ว', { t: f.outboundTime.slice(11, 16) })}</b>
+                  {tooBig ? <span>{t('กรุณาติดต่อร้านเพื่อจัดรถพิเศษ หรือลดจำนวนกระเป๋า')}</span> : slotFull.length > 0 ? (
                     <>
                       <span>{t('เลือกเวลาที่ยังว่าง:')}</span>
                       <div className="slot-pick">

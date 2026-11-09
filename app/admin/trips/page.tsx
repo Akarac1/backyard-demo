@@ -3,12 +3,12 @@ import { db } from '@/lib/supabase';
 import { addDays, thDate, thTime, todayBkk } from '@/lib/format';
 import { DIRECTION } from '@/lib/labels';
 import { ActionButton, ActionForm, Submit } from '@/components/ActionForm';
-import { ackTripNote, autoAssign, updateTrip } from '../actions';
+import { ackTripNote, autoAssign, setTripBags, updateTrip } from '../actions';
 
 export const dynamic = 'force-dynamic';
 
 type Trip = {
-  id: string; direction: string; pax: number; pickup_at: string | null; flight_number: string | null; status: string;
+  id: string; direction: string; pax: number; large_bags: number; small_bags: number; pickup_at: string | null; flight_number: string | null; status: string;
   vehicle_id: string | null; assignment_locked: boolean;
   departed_at: string | null; arrived_at: string | null; completed_at: string | null; driver_note: string | null; note_resolved: boolean; called_at: string | null; welcome_sent_at: string | null; landing_at: string | null;
   bookings: { id: string; code: string; plate: string; status: string; customers: { name: string; phone: string } | null } | null;
@@ -16,6 +16,12 @@ type Trip = {
 
 /** 'YYYY-MM-DDTHH:MM' in Bangkok time, for <input type="datetime-local"> */
 const TRIP_STATUS: Record<string, string> = { unassigned: 'ยังไม่มีรถ', assigned: 'จัดรถแล้ว', en_route: 'กำลังเดินทาง', arrived: 'ถึงจุดนัดแล้ว', picked_up: 'รับลูกค้าแล้ว', done: 'เสร็จแล้ว' };
+
+type Veh = { id: string; name: string; seats: number; plate: string | null; luggage_units: number; max_bags: number; priority: number; reserve: boolean };
+const fits = (v: Veh, t: { pax: number; large_bags: number; small_bags: number }) =>
+  v.seats >= t.pax && 2 * t.large_bags + t.small_bags <= v.luggage_units && t.large_bags + t.small_bags <= v.max_bags;
+const bagsText = (t: { large_bags: number; small_bags: number }) =>
+  t.large_bags + t.small_bags === 0 ? 'ไม่ระบุกระเป๋า' : `กระเป๋า${t.large_bags ? ` ใหญ่ ${t.large_bags}` : ''}${t.small_bags ? ` เล็ก ${t.small_bags}` : ''} ใบ`;
 
 const localInput = (ts: string | null) => ts ? new Date(ts).toLocaleString('sv-SE', { timeZone: 'Asia/Bangkok' }).slice(0, 16).replace(' ', 'T') : '';
 
@@ -26,10 +32,10 @@ export default async function TripsPage({ searchParams }: { searchParams: Promis
   const sb = db();
   const [{ data }, { data: vehicles }] = await Promise.all([
     sb.from('shuttle_trips')
-      .select('id, direction, pax, pickup_at, flight_number, status, vehicle_id, assignment_locked, departed_at, arrived_at, completed_at, driver_note, note_resolved, called_at, welcome_sent_at, landing_at, bookings(id, code, plate, status, customers(name, phone))')
+      .select('id, direction, pax, large_bags, small_bags, pickup_at, flight_number, status, vehicle_id, assignment_locked, departed_at, arrived_at, completed_at, driver_note, note_resolved, called_at, welcome_sent_at, landing_at, bookings(id, code, plate, status, customers(name, phone))')
       .gte('pickup_at', `${day}T00:00:00+07:00`).lt('pickup_at', `${addDays(day, 1)}T00:00:00+07:00`)
       .neq('status', 'cancelled').order('pickup_at'),
-    sb.from('vehicles').select('id, name, seats, plate').eq('active', true).order('seats'),
+    sb.from('vehicles').select('id, name, seats, plate, luggage_units, max_bags, priority, reserve').eq('active', true).is('deleted_at', null).order('reserve').order('priority').order('seats'),
   ]);
   const trips = (data ?? []) as unknown as Trip[];
   const tabs = [0, 1, 2, 3, 4, 5, 6].map((i) => addDays(today, i));
@@ -52,7 +58,7 @@ export default async function TripsPage({ searchParams }: { searchParams: Promis
             <div className="trip-top">
               <time>{thTime(t.pickup_at)}</time>
               <div>
-                <b>{DIRECTION[t.direction]} · {t.pax} คน</b>
+                <b>{DIRECTION[t.direction]} · {t.pax} คน · {bagsText(t)}</b>
                 <small><Link href={`/admin/bookings/${t.bookings?.id}`}>{t.bookings?.code}</Link> · {t.bookings?.customers?.name} · <a href={`tel:${t.bookings?.customers?.phone}`}>{t.bookings?.customers?.phone}</a>{t.flight_number ? ` · ไฟลต์ ${t.flight_number}` : ''}</small>
               </div>
             </div>
@@ -76,7 +82,10 @@ export default async function TripsPage({ searchParams }: { searchParams: Promis
               <label>รถ
                 <select name="vehicle_id" defaultValue={t.vehicle_id ?? ''}>
                   <option value="">— ยังไม่เลือก —</option>
-                  {(vehicles ?? []).map((v) => <option key={v.id} value={v.id} disabled={v.seats < t.pax}>{v.name}{v.plate ? ` (${v.plate})` : ''} · {v.seats} ที่{v.seats < t.pax ? ' (ไม่พอ)' : ''}</option>)}
+                  {((vehicles ?? []) as Veh[]).map((v) => {
+                    const why = v.seats < t.pax ? 'ที่นั่งไม่พอ' : !fits(v, t) ? 'กระเป๋าไม่พอ' : '';
+                    return <option key={v.id} value={v.id} disabled={!!why}>{v.name}{v.plate ? ` (${v.plate})` : ''} · {v.seats} ที่{v.reserve ? ' · สำรองฉุกเฉิน' : ''}{why ? ` (${why})` : ''}</option>;
+                  })}
                 </select>
               </label>
               {t.direction === 'from_airport' && (
@@ -85,6 +94,15 @@ export default async function TripsPage({ searchParams }: { searchParams: Promis
               <label>เวลารับ{t.direction === 'from_airport' && <small> (แก้เวลาเครื่องลงอย่างเดียว เวลารับจะเลื่อนตาม)</small>}<input type="datetime-local" name="pickup_at" defaultValue={localInput(t.pickup_at)} /></label>
               <div className="form-actions"><Submit small>บันทึก</Submit></div>
             </ActionForm>
+            <details className="trip-bags">
+              <summary>แก้จำนวนกระเป๋า</summary>
+              <ActionForm action={setTripBags} className="form trip-bags-form">
+                <input type="hidden" name="id" value={t.id} />
+                <label>ใบใหญ่ 28–29"<input type="number" name="large_bags" min={0} max={20} defaultValue={t.large_bags} /></label>
+                <label>ใบกลาง/เล็ก<input type="number" name="small_bags" min={0} max={20} defaultValue={t.small_bags} /></label>
+                <div className="form-actions"><Submit small>บันทึก</Submit></div>
+              </ActionForm>
+            </details>
             <div className="trip-foot">
               {t.assignment_locked ? <span className="hint">เลือกรถเองแล้ว ระบบจะไม่ย้าย</span> : <span className="hint">ระบบจัดรถให้</span>}
               {!t.vehicle_id && <ActionButton action={autoAssign} fields={{ id: t.id }} label="จัดรถอัตโนมัติ" />}

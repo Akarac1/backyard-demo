@@ -751,3 +751,12 @@ svg.density { width: 100%; height: auto; display: block; }
 .slot-b:hover { background: var(--navy); color: #fff; }
 .slot-full .link-btn { align-self: flex-start; }
 .call-busy { color: #7A4B00 !important; background: #FDF3E1; border-radius: 10px; padding: 8px 10px; margin: 8px 0 0; }
+
+/* vehicles: priority / emergency, trip luggage */
+.veh-head .st { margin-left: 8px; }
+.st-pri { background: #E5F4E4; color: #1F6B3A; }
+.st-reserve { background: #F9EEDA; color: #7A4B00; }
+.trip-bags { margin: 6px 0 2px; font-size: 13.5px; }
+.trip-bags summary { cursor: pointer; color: var(--navy); font-weight: 500; }
+.trip-bags-form { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-top: 8px; }
+.trip-bags-form label { flex: 1 1 120px; }

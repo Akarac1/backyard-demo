@@ -12,14 +12,14 @@ export async function alertNoVan(bookingId: string) {
   const to = alertIds();
   if (!to.length) return;
   const { data } = await db().from('shuttle_trips')
-    .select('direction, pax, pickup_at, bookings(code, plate, customers(name, phone))')
+    .select('direction, pax, large_bags, small_bags, pickup_at, bookings(code, plate, customers(name, phone))')
     .eq('booking_id', bookingId).is('vehicle_id', null).not('status', 'in', '(cancelled,done)');
-  const rows = (data ?? []) as unknown as { direction: string; pax: number; pickup_at: string | null; bookings: { code: string; plate: string; customers: { name: string; phone: string } | null } | null }[];
+  const rows = (data ?? []) as unknown as { direction: string; pax: number; large_bags: number; small_bags: number; pickup_at: string | null; bookings: { code: string; plate: string; customers: { name: string; phone: string } | null } | null }[];
   if (!rows.length) return;
   const b = rows[0].bookings;
-  const lines = rows.map((t) => `• ${t.direction === 'to_airport' ? 'ขาไป (ลาน → สนามบิน)' : 'ขากลับ (สนามบิน → ลาน)'} ${t.pickup_at ? `${thDate(bkkDay(t.pickup_at))} ${thTime(t.pickup_at)}` : ''} · ${t.pax} คน`);
+  const lines = rows.map((t) => `• ${t.direction === 'to_airport' ? 'ขาไป (ลาน → สนามบิน)' : 'ขากลับ (สนามบิน → ลาน)'} ${t.pickup_at ? `${thDate(bkkDay(t.pickup_at))} ${thTime(t.pickup_at)}` : ''} · ${t.pax} คน${t.large_bags + t.small_bags ? ` · กระเป๋าใหญ่ ${t.large_bags} เล็ก ${t.small_bags}` : ''}`);
   const text = [`🚐 รถรับส่งไม่พอ: ${b?.code ?? ''}`, ...lines, `ลูกค้า ${b?.customers?.name ?? '-'} ${b?.customers?.phone ?? ''} · ${b?.plate ?? ''}`,
-    'จัดรถเองหรือเลื่อนเวลาที่หน้า "รถรับส่ง" ในหลังบ้าน (ถ้ามีเที่ยวอื่นยกเลิก ระบบจะลองจัดให้อัตโนมัติ)'].join('\n');
+    'จัดรถเอง (ใช้รถสำรองฉุกเฉินได้) หรือเลื่อนเวลาที่หน้า "รถรับส่ง" ในหลังบ้าน · ถ้ามีเที่ยวอื่นยกเลิก ระบบจะลองจัดให้อัตโนมัติ'].join('\n');
   await Promise.all(to.map((id) => push(id, [{ type: 'text', text }]).catch((e) => console.error('alertNoVan', String(e)))));
 }
 

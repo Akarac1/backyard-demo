@@ -3,12 +3,13 @@ import { bkkLocalToIso, currentUser, json } from '@/lib/request';
 import { dbErrorToThai } from '@/lib/format';
 import { serverT } from '@/lib/i18nDict';
 import { afterConfirmed } from '@/lib/confirm';
-import { shuttleCheck } from '@/lib/shuttle';
+import { bagCount, shuttleCheck } from '@/lib/shuttle';
 
 type Body = {
   start: string; end: string; name: string; phone: string; plate: string; province: string;
   shuttle: boolean; pax: number; outboundTime?: string; returnFlight?: string; returnLanding?: string;
   flightType?: 'domestic' | 'international'; refPhone?: string; couponId?: string; rewardId?: string;
+  largeBags?: number; smallBags?: number;
 };
 
 export async function POST(req: Request) {
@@ -29,7 +30,8 @@ export async function POST(req: Request) {
   const isId = (v?: string) => !!v && /^[0-9a-f-]{36}$/.test(v);
   // points used on the review page: redeem + book in one transaction (create_booking_with_reward)
   const useReward = isId(b.rewardId) && !isId(b.couponId);
-  const { data, error } = await db().rpc(useReward ? 'create_booking_with_reward' : 'create_booking', {
+  // one call books it all (create_booking_bags hands the bag counts to the trips and spends points when asked)
+  const { data, error } = await db().rpc('create_booking_bags', {
     p_line_user_id: uid,
     p_name: b.name.trim(),
     p_phone: b.phone.trim(),
@@ -45,12 +47,14 @@ export async function POST(req: Request) {
     p_return_time: returnPickup,
     p_ref_phone: b.refPhone?.trim() || null,
     ...(useReward ? { p_reward: b.rewardId } : { p_coupon: isId(b.couponId) ? b.couponId : null }),
+    p_large: b.shuttle ? bagCount(b.largeBags) : 0,
+    p_small: b.shuttle ? bagCount(b.smallBags) : 0,
   });
   if (error) {
     // the van filled up between the check on the form and this booking: send nearby free times back
     if (error.message === 'shuttle_full' && b.outboundTime) {
-      const c = await shuttleCheck(b.outboundTime, b.pax);
-      return json({ error: dbErrorToThai(error.message, L.lang), code: 'shuttle_full', suggestions: c.suggestions }, 409);
+      const c = await shuttleCheck(b.outboundTime, b.pax, b.largeBags, b.smallBags);
+      return json({ error: dbErrorToThai(error.message, L.lang), code: 'shuttle_full', tooBig: c.tooBig, suggestions: c.suggestions }, 409);
     }
     return json({ error: dbErrorToThai(error.message, L.lang) }, 409);
   }
