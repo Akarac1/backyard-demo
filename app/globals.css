@@ -827,3 +827,19 @@ svg.density { width: 100%; height: auto; display: block; }
 .tv-more span { background: #13301F; border-radius: .5em; padding: .25em .7em; }
 .tv-more span.k-alarm { background: #6A1D18; } .tv-more span.k-soon { background: #3B2E0B; }
 .tv-row { padding: .5em 1em; } .tv-time { font-size: 2.3em; } .tv-who b { font-size: 1.7em; } .tv-dir { font-size: 2.1em; }
+
+/* TV: the rest of the next 24 hours, compact */
+.tv-ahead { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: .4em; margin-top: .2em; }
+.tv-ahead-head { font-size: 1.2em; color: #DCE6DF; display: flex; gap: .8em; align-items: baseline; }
+.tv-ahead-head b { color: #fff; } .tv-ahead-head span { font-size: .85em; color: #8FA597; }
+.tv-ahead-grid { flex: 1; min-height: 0; overflow: hidden; display: grid; grid-template-columns: repeat(auto-fill, minmax(22em, 1fr)); grid-auto-rows: min-content; gap: .45em; align-content: start; }
+.tv-mini { display: grid; grid-template-columns: 5.6em 4em 1fr; grid-template-rows: auto auto; column-gap: .6em; padding: .35em .7em; border-radius: .5em; background: #13301F; border-left: .35em solid #2E5E40; font-size: 1.05em; }
+.tv-mini .m-time { grid-row: span 2; font-size: 1.6em; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.1; display: flex; flex-direction: column; justify-content: center; }
+.tv-mini .m-time em { font-style: normal; font-size: .45em; font-weight: 700; color: #F5C451; }
+.tv-mini .m-dir { grid-row: span 2; align-self: center; color: #B9C9BE; }
+.tv-mini .m-who { font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-mini .m-meta { color: #B9C9BE; font-size: .9em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tv-mini .no-car { color: #FF8A7F; }
+.tv-mini.k-alarm { background: #6A1D18; border-left-color: #FF4D3D; } .tv-mini.k-soon { background: #3B2E0B; border-left-color: #F5C451; }
+.tv-mini.k-moving { border-left-color: #3FBF7A; } .tv-mini.k-wait_call { border-left-color: #5B7FA6; }
+.tv-list { min-height: 0; }

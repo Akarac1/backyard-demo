@@ -12,8 +12,9 @@ export type BoardTrip = {
 type Kind = 'alarm' | 'soon' | 'moving' | 'later' | 'wait_call';
 const REFRESH_MS = 15_000;
 const SOON_MIN = 15;
-const MAX_ROWS = 6;   // what fits a TV (5 while the red banner shows); the rest go in one line at the bottom
+const MAX_ROWS = 4;   // big rows for what needs attention now (3 while the red banner shows); the rest of the 24 hours go in compact cards below
 
+const dayKey = (ms: number) => new Date(ms).toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' });
 const hm = (ms: number) => new Date(ms).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' });
 const mins = (ms: number) => Math.round(ms / 60_000);
 const name = (s: string | undefined | null) => (s ?? '').replace(/\s*\(.*\)$/, '');
@@ -118,7 +119,7 @@ export function Board({ trips, serverNow, meetingPoint }: { trips: BoardTrip[]; 
       {alarms.length > 0 && <div className="tv-banner">⚠️ ถึงเวลาแล้ว ยังไม่มีคนรับงาน {alarms.length} งาน · กดรับงานในมือถือ</div>}
 
       <main className="tv-list">
-        {rows.length === 0 && <div className="tv-empty">✓ ตอนนี้ไม่มีงานรับส่งใน 6 ชั่วโมงข้างหน้า</div>}
+        {rows.length === 0 && <div className="tv-empty">✓ ไม่มีงานรับส่งใน 24 ชั่วโมงข้างหน้า</div>}
         {rows.slice(0, max).map(({ t, kind, text }) => {
           const to = t.direction === 'to_airport';
           const time = to ? (t.pickup_at ? hm(Date.parse(t.pickup_at)) : '--:--') : t.called_at ? hm(Date.parse(t.called_at)) : t.landing_at ? hm(Date.parse(t.landing_at)) : t.pickup_at ? hm(Date.parse(t.pickup_at)) : '--:--';
@@ -138,16 +139,27 @@ export function Board({ trips, serverNow, meetingPoint }: { trips: BoardTrip[]; 
             </section>
           );
         })}
-        {rows.length > max && (
-          <div className="tv-more">
-            <b>งานถัดไปอีก {rows.length - max} งาน</b>
-            {rows.slice(max).map(({ t, kind }) => (
-              <span key={t.id} className={`k-${kind}`}>
-                {t.direction === 'to_airport' ? '🛫' : '🛬'} {t.direction === 'to_airport' && t.pickup_at ? hm(Date.parse(t.pickup_at)) : t.landing_at ? hm(Date.parse(t.landing_at)) : ''} {t.bookings?.customers?.name}
-              </span>
-            ))}
-          </div>
-        )}
+        {rows.length > max && (() => {
+          // everything after the big rows: compact cards in time order, so the team can get ready for the day ahead
+          const rest = rows.slice(max).sort((a, b) => a.at - b.at);
+          const today = dayKey(now);
+          return (
+            <div className="tv-ahead">
+              <div className="tv-ahead-head">งานถัดไปใน 24 ชั่วโมง <b>{rest.length} งาน</b>
+                <span>ส่งสนามบิน {rest.filter((r) => r.t.direction === 'to_airport').length} · รับกลับ {rest.filter((r) => r.t.direction === 'from_airport').length}</span></div>
+              <div className="tv-ahead-grid">
+                {rest.map(({ t, kind, at }) => (
+                  <div key={t.id} className={`tv-mini k-${kind}`}>
+                    <span className="m-time">{dayKey(at) > today ? <em>พรุ่งนี้</em> : dayKey(at) < today ? <em>เมื่อวาน</em> : null}{hm(at)}</span>
+                    <span className="m-dir">{t.direction === 'to_airport' ? '🛫 ส่ง' : '🛬 รับ'}</span>
+                    <span className="m-who">{t.bookings?.customers?.name ?? '-'}</span>
+                    <span className="m-meta">{t.pax} คน{t.large_bags ? ` · 🧳${t.large_bags}` : ''} · {t.vehicles?.name ?? <b className="no-car">ไม่มีรถ</b>}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          );
+        })()}
       </main>
 
       <footer className="tv-foot">อัปเดตอัตโนมัติทุก 15 วินาที · {started ? (ctx.current ? '🔔 เปิดเสียงแจ้งเตือนแล้ว' : 'อุปกรณ์นี้ไม่รองรับเสียง') : 'ยังไม่เปิดเสียง'}</footer>
