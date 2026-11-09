@@ -103,7 +103,7 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
                 <button type="button" className={moreBags ? 'on' : ''} onClick={() => setMoreBags(true)}>{t('มีเพิ่ม / เปลี่ยน')}</button>
               </div>
               {moreBags && <BagPicker large={bags} onChange={setBags} />}
-              {moreBags && <span className="small">{t('นับเฉพาะใบใหญ่ ไม่ต้องนับกระเป๋าถือขึ้นเครื่อง เป้ หรือใบเล็ก ถ้าใบใหญ่เพิ่มขึ้น ระบบจะส่งรถคันที่ใส่ได้พอ')}</span>}
+              {moreBags && <p className="bag-warn" role="note"><span aria-hidden>⚠️</span><span><b>{t('นับเฉพาะใบใหญ่')}</b> {t('ไม่ต้องนับกระเป๋าถือขึ้นเครื่อง เป้ หรือใบเล็ก ถ้าใบใหญ่เพิ่มขึ้น ระบบจะส่งรถคันที่ใส่ได้พอ')}</span></p>}
             </div>
             <p className="small">{t('กดเมื่อได้กระเป๋าครบและพร้อมออกจากโถงแล้วเท่านั้น')}</p>
             <div className="modal-actions">

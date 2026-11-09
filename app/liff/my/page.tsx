@@ -224,7 +224,7 @@ function ReturnBags({ trip, idToken }: { trip: Trip; idToken: string | null }) {
       {open && (
         <>
           <BagPicker large={bags} onChange={setBags} />
-          <p className="small" style={{ margin: '4px 0 8px' }}>{t('ซื้อของเพิ่มระหว่างทริป? แจ้งไว้ก่อนได้ ระบบจะจัดรถที่ใส่กระเป๋าได้พอมารับ')}</p>
+          <p className="bag-warn" role="note"><span aria-hidden>⚠️</span><span><b>{t('นับเฉพาะใบใหญ่')}</b> {t('ไม่ต้องนับกระเป๋าถือขึ้นเครื่อง เป้ หรือใบเล็ก ซื้อของเพิ่มระหว่างทริป แจ้งไว้ก่อนได้ ระบบจะจัดรถที่ใส่ได้พอ')}</span></p>
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" className="btn primary" style={{ marginTop: 0 }} onClick={save} disabled={busy}>{busy ? t('กำลังบันทึก…') : t('บันทึก')}</button>
             <button type="button" className="btn" style={{ marginTop: 0 }} onClick={() => { setOpen(false); setBags(saved); }} disabled={busy}>{t('ยกเลิก')}</button>

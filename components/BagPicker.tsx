@@ -7,7 +7,7 @@ export function BagPicker({ large, onChange }: { large: number; onChange: (large
   return (
     <div className="bag-picker">
       <div className="bag-row">
-        <span>{t('กระเป๋าเดินทางใบใหญ่')}<small>{t('โหลดใต้เครื่อง ประมาณ 24 นิ้วขึ้นไป')}</small></span>
+        <span className="bag-label">🧳 {t('กระเป๋าเดินทางใบใหญ่')}<small>{t('โหลดใต้เครื่อง ประมาณ 24 นิ้วขึ้นไป')}</small></span>
         <div className="bag-step">
           <button type="button" aria-label={t('ลด')} onClick={() => onChange(Math.max(0, large - 1))} disabled={large <= 0}>−</button>
           <b aria-live="polite">{large}</b>

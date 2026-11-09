@@ -263,11 +263,11 @@ export default function BookPage() {
               <select id="pax" value={f.pax} onChange={(e) => setF({ ...f, pax: Number(e.target.value) })}>
                 {[1, 2, 3, 4, 5, 6, 7].map((n) => <option key={n} value={n}>{t('{n} คน', { n })}</option>)}
               </select>
-              <label htmlFor="lbag">{t('กระเป๋าเดินทางใบใหญ่ (โหลดใต้เครื่อง ประมาณ 24 นิ้วขึ้นไป)')}</label>
+              <label htmlFor="lbag" className="bag-label">🧳 {t('กระเป๋าเดินทางใบใหญ่')} <span>{t('(โหลดใต้เครื่อง ประมาณ 24 นิ้วขึ้นไป)')}</span></label>
               <select id="lbag" value={f.largeBags} onChange={(e) => setF({ ...f, largeBags: Number(e.target.value) })}>
                 {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((n) => <option key={n} value={n}>{t('{n} ใบ', { n })}</option>)}
               </select>
-              <p className="small">{t('🧳 นับเฉพาะใบใหญ่ ไม่ต้องนับกระเป๋าถือขึ้นเครื่อง เป้ หรือใบเล็ก ใช้เลือกรถที่ใส่กระเป๋าได้พอ')}</p>
+              <p className="bag-warn" role="note"><span aria-hidden>⚠️</span><span><b>{t('นับเฉพาะใบใหญ่')}</b> {t('ไม่ต้องนับกระเป๋าถือขึ้นเครื่อง เป้ หรือใบเล็ก ระบบใช้จำนวนนี้เลือกรถที่ใส่กระเป๋าได้พอ')}</span></p>
               <label htmlFor="out">{t('ขาไป: เวลาที่จะมาถึงลานจอด')}</label>
               <input id="out" type="datetime-local" value={f.outboundTime} onChange={set('outboundTime')} aria-invalid={!!slotFull} />
               {slotFull && (

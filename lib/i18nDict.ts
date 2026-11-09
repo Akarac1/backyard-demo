@@ -6,6 +6,11 @@ export const LANGS: Lang[] = ['th', 'en', 'zh'];
 // [English, Chinese]
 const D: Record<string, [string, string]> = {
   // ---- shuttle capacity ----
+  '(โหลดใต้เครื่อง ประมาณ 24 นิ้วขึ้นไป)': ['(checked, about 24 in and up)', '（托运，约 24 寸以上）'],
+  'นับเฉพาะใบใหญ่': ['Large suitcases only.', '只计算大行李箱。'],
+  'ไม่ต้องนับกระเป๋าถือขึ้นเครื่อง เป้ หรือใบเล็ก ระบบใช้จำนวนนี้เลือกรถที่ใส่กระเป๋าได้พอ': ['Don’t count cabin bags, backpacks or small bags. We use this number to send a car with enough room.', '不计随身行李、背包或小包。我们按此数量安排空间足够的车。'],
+  'ไม่ต้องนับกระเป๋าถือขึ้นเครื่อง เป้ หรือใบเล็ก ถ้าใบใหญ่เพิ่มขึ้น ระบบจะส่งรถคันที่ใส่ได้พอ': ['Don’t count cabin bags, backpacks or small bags. If you have more large ones, we’ll send a car with enough room.', '不计随身行李、背包或小包。大行李箱增加时，我们会派空间足够的车。'],
+  'ไม่ต้องนับกระเป๋าถือขึ้นเครื่อง เป้ หรือใบเล็ก ซื้อของเพิ่มระหว่างทริป แจ้งไว้ก่อนได้ ระบบจะจัดรถที่ใส่ได้พอ': ['Don’t count cabin bags, backpacks or small bags. Bought more on your trip? Tell us ahead and we’ll send a car with enough room.', '不计随身行李、背包或小包。旅途中买了更多东西？可提前告知，我们会安排空间足够的车。'],
   'กระเป๋าเดินทางใบใหญ่': ['Large suitcases', '大行李箱'],
   'โหลดใต้เครื่อง ประมาณ 24 นิ้วขึ้นไป': ['Checked, about 24 in and up', '托运，约 24 寸以上'],
   'กระเป๋าเดินทางใบใหญ่ (โหลดใต้เครื่อง ประมาณ 24 นิ้วขึ้นไป)': ['Large suitcases (checked, about 24 in and up)', '大行李箱（托运，约 24 寸以上）'],
