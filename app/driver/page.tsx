@@ -31,7 +31,7 @@ const waiting = (t: { direction: string; called_at: string | null; status: strin
   t.direction === 'from_airport' && !!t.called_at && !['en_route', 'arrived', 'done'].includes(t.status);
 
 export default async function DriverPage({ searchParams }: { searchParams: Promise<{ d?: string; v?: string; view?: string }> }) {
-  const me = await requireStaff(['admin', 'driver']);
+  const me = await requireStaff(['admin', 'driver', 'ops', 'exec']);
   const sp = await searchParams;
   const today = todayBkk();
   const day = sp.d === 'tomorrow' ? addDays(today, 1) : sp.d === 'yesterday' ? addDays(today, -1) : sp.d && /^\d{4}-\d{2}-\d{2}$/.test(sp.d) ? sp.d : today;

@@ -4,6 +4,6 @@ import { StaffShell } from '@/components/StaffShell';
 export const dynamic = 'force-dynamic';
 
 export default async function AccountLayout({ children }: { children: React.ReactNode }) {
-  const staff = await requireStaff(['admin', 'exec', 'driver']);
+  const staff = await requireStaff(['admin', 'exec', 'driver', 'ops']);
   return <StaffShell staff={staff}>{children}</StaffShell>;
 }

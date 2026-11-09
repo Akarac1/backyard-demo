@@ -11,7 +11,7 @@ import { thDate } from '@/lib/format';
 export type ActionResult = { ok?: string; error?: string } | null;
 
 const ERR: Record<string, string> = {
-  not_allowed: 'ไม่มีสิทธิ์ทำรายการนี้ ลองออกจากระบบแล้วเข้าใหม่',
+  not_allowed: 'บัญชีนี้ดูได้อย่างเดียว แก้ไขรายการนี้ไม่ได้ (ถ้าควรแก้ได้ ลองออกจากระบบแล้วเข้าใหม่)',
   not_found: 'ไม่พบข้อมูล อาจถูกลบหรือเปลี่ยนไปแล้ว',
   invalid_vehicle: 'กรอกชื่อรถ และจำนวนที่นั่ง 1–30 ที่',
   plate_taken: 'ทะเบียนนี้มีอยู่ในระบบแล้ว',

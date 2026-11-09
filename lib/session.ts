@@ -51,10 +51,13 @@ export async function readSession(value: string | undefined | null): Promise<Ses
 
 /** Which roles may open a path. */
 export function rolesFor(path: string): Role[] | null {
-  if (path.startsWith('/admin') || path.startsWith('/api/admin')) return ['admin'];
+  if (path.startsWith('/api/admin')) return ['admin'];
+  // overview: the site lead too; every admin page: the executive too (view only — actions still need admin)
+  if (path === '/admin' || path === '/admin/') return ['admin', 'ops', 'exec'];
+  if (path.startsWith('/admin')) return ['admin', 'exec'];
   if (path.startsWith('/exec')) return ['admin', 'exec'];
-  if (path.startsWith('/ops')) return ['admin', 'ops'];
-  if (path.startsWith('/driver')) return ['admin', 'driver', 'ops'];
+  if (path.startsWith('/ops')) return ['admin', 'ops', 'exec'];
+  if (path.startsWith('/driver')) return ['admin', 'driver', 'ops', 'exec'];
   if (path.startsWith('/account')) return ['admin', 'exec', 'driver', 'ops'];
   return null;
 }

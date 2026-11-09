@@ -80,6 +80,9 @@ type Row = { id: string; code: string; plate: string; start_date: string; end_da
 type Points = { points: number; pointValue: number; enabled: boolean; expiring: number; expiringAt: string | null; moves: { at: string; points: number; label: string }[]; perBaht: number; referral: number; months: number };
 type Member = { memberNo: string | null; name: string | null; tier: string; tierName: string; multiplier: number; spend: number; windowMonths: number; nextTierName: string | null; nextMin: number | null; points: number; manual: boolean; campaigns: { name: string; description: string | null; business: string; effect: string | null; endsAt: string | null; stay: string | null }[] };
 
+/** bookings still in progress; everything else is history */
+const ACTIVE = ['pending_payment', 'confirmed', 'checked_in'];
+
 const STATUS: Record<string, [string, string]> = {
   pending_payment: ['รอชำระเงิน', 'amber'], confirmed: ['ยืนยันแล้ว', 'navy'], checked_in: ['รถอยู่ในลาน', 'navy'],
   checked_out: ['เสร็จสิ้น', ''], cancelled: ['ยกเลิก', ''], expired: ['หมดเวลาชำระ', ''], no_show: ['ไม่มาตามนัด', ''],
@@ -92,6 +95,7 @@ export default function MyBookings() {
   const [denied, setDenied] = useState(false);
   const [pts, setPts] = useState<Points | null>(null);
   const [showMoves, setShowMoves] = useState(false);
+  const [showPast, setShowPast] = useState(false);
   const [mem, setMem] = useState<Member | null>(null);
   const [shop, setShop] = useState<{ shop_phone?: string; admin_hours?: string; reschedule_min_days?: number } | null>(null);
   useEffect(() => { fetch('/api/prices').then((r) => (r.ok ? r.json() : null)).then((j) => j && setShop(j)).catch(() => {}); }, []);
@@ -149,18 +153,36 @@ export default function MyBookings() {
         {!rows && <p className="small">{t('กำลังโหลด…')}</p>}
         {denied && <div className="alert bad">{t('ยืนยันตัวตนกับ LINE ไม่สำเร็จ กรุณาปิดหน้านี้แล้วกด “สมาชิก & การจอง” จากเมนูใน LINE อีกครั้ง')}</div>}
         {!denied && rows?.length === 0 && <div className="card">{t('ยังไม่มีการจอง')} <Link className="btn primary" href="/liff/book">{t('จองที่จอดรถ')}</Link></div>}
-        {rows?.map((r) => {
-          const [label, tone] = STATUS[r.status] ?? [r.status, ''];
+        {(() => {
+          // open bookings first; finished ones (picked up, cancelled, expired, no-show) behind a button
+          const open = (rows ?? []).filter((r) => ACTIVE.includes(r.status));
+          const past = (rows ?? []).filter((r) => !ACTIVE.includes(r.status));
+          const card = (r: Row) => {
+            const [label, tone] = STATUS[r.status] ?? [r.status, ''];
+            return (
+              <div className={`card${ACTIVE.includes(r.status) ? '' : ' past'}`} key={r.id}>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><b>{r.code}</b><span className={`tag ${tone}`}>{t(label)}</span></div>
+                <p style={{ margin: '6px 0' }}>{r.plate} · {day(r.start_date)} – {day(r.end_date)} ({t('{n} วัน', { n: r.days })})</p>
+                <p className="small" style={{ margin: 0 }}>{r.shuttle ? t('รถรับส่ง {n} คน · ', { n: r.pax ?? 0 }) : ''}{money(r.total_amount)}{r.rescheduled_at ? t(' · ใช้สิทธิ์เลื่อนแล้ว') : ''}</p>
+                {['confirmed', 'checked_in'].includes(r.status) && !r.shuttle && <BookingQr code={r.code} />}
+                {r.status === 'pending_payment' && <Link className="btn primary" href={`/liff/pay/${r.id}`}>{t('ชำระเงิน / ส่งสลิป')}</Link>}
+              </div>
+            );
+          };
+          if (!rows || rows.length === 0) return null;
           return (
-            <div className="card" key={r.id}>
-              <div style={{ display: 'flex', justifyContent: 'space-between' }}><b>{r.code}</b><span className={`tag ${tone}`}>{t(label)}</span></div>
-              <p style={{ margin: '6px 0' }}>{r.plate} · {day(r.start_date)} – {day(r.end_date)} ({t('{n} วัน', { n: r.days })})</p>
-              <p className="small" style={{ margin: 0 }}>{r.shuttle ? t('รถรับส่ง {n} คน · ', { n: r.pax ?? 0 }) : ''}{money(r.total_amount)}{r.rescheduled_at ? t(' · ใช้สิทธิ์เลื่อนแล้ว') : ''}</p>
-              {['confirmed', 'checked_in'].includes(r.status) && !r.shuttle && <BookingQr code={r.code} />}
-              {r.status === 'pending_payment' && <Link className="btn primary" href={`/liff/pay/${r.id}`}>{t('ชำระเงิน / ส่งสลิป')}</Link>}
-            </div>
+            <>
+              {open.length === 0 && <div className="card">{t('ไม่มีการจองที่กำลังดำเนินการ')} <Link className="btn primary" href="/liff/book">{t('จองที่จอดรถ')}</Link></div>}
+              {open.map(card)}
+              {past.length > 0 && (
+                <button type="button" className="btn past-toggle" onClick={() => setShowPast(!showPast)} aria-expanded={showPast}>
+                  {showPast ? t('ซ่อนประวัติการจอง') : t('ดูประวัติการจองเพิ่มเติม ({n})', { n: past.length })}
+                </button>
+              )}
+              {showPast && past.map(card)}
+            </>
           );
-        })}
+        })()}
         <p className="small">{t('ต้องการเลื่อนวัน? ทักแอดมินในแชท ({h}) ต้องเลื่อนล่วงหน้าอย่างน้อย {n} วัน', { h: t(shop?.admin_hours ?? '08:00–20:00'), n: shop?.reschedule_min_days ?? 7 })}{shop?.shop_phone ? <> · <a href={`tel:${shop.shop_phone}`}>{t('โทร')} {shop.shop_phone.replace(/^(\d{3})(\d{3})(\d{4})$/, '$1-$2-$3')}</a></> : null}</p>
       </div>
     </main>

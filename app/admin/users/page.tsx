@@ -11,7 +11,7 @@ const ROLE = { admin: ['แอดมิน', 'st-in'], exec: ['ผู้บร�
 const when = (ts: string) => `${thDate(new Date(ts).toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }))} ${thTime(ts)}`;
 
 export default async function UsersPage() {
-  const me = await requireStaff(['admin']);
+  const me = await requireStaff(['admin', 'exec']);
   const { data } = await db().from('staff_users').select('id, username, display_name, role, active, last_login_at, locked_until, vehicle_id, phone').order('created_at');
   const users = (data ?? []) as U[];
   return (

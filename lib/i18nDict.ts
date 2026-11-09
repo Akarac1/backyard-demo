@@ -208,6 +208,9 @@ const D: Record<string, [string, string]> = {
   'คุณมีการจองที่รอชำระเงินอยู่ 2 รายการแล้ว ชำระหรือรอให้หมดเวลาก่อน แล้วค่อยจองใหม่': ['You already have 2 bookings awaiting payment. Pay for one or let it expire, then book again.', '您已有 2 个待付款的预订，请先付款或等待其过期后再预订。'],
   'รองรับเฉพาะรูป JPG, PNG หรือ WebP': ['Only JPG, PNG or WebP images are accepted', '仅支持 JPG、PNG 或 WebP 图片'],
   'ส่งสลิปครบจำนวนครั้งแล้ว แอดมินจะตรวจสลิปล่าสุดให้ หรือทักแชทหาร้าน': ['You’ve reached the slip upload limit. Our team will check your latest slip, or message us in the chat.', '上传次数已达上限，客服将核验您最近的凭证，或请在聊天中联系我们。'],
+  'ไม่มีการจองที่กำลังดำเนินการ': ['No bookings in progress', '暂无进行中的预订'],
+  'ซ่อนประวัติการจอง': ['Hide booking history', '隐藏预订记录'],
+  'ดูประวัติการจองเพิ่มเติม ({n})': ['Show booking history ({n})', '查看预订记录（{n}）'],
   // ---- trip rating ----
   'รถส่งไปสนามบิน': ['Ride to the airport', '送机接驳'],
   'ให้คะแนนการเดินทาง': ['Rate your ride', '为行程评分'],

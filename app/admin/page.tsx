@@ -4,6 +4,7 @@ import { requireStaff } from '@/lib/auth';
 import { addDays, bkkDay, thDate, thTime, todayBkk } from '@/lib/format';
 import { DIRECTION, StatusTag } from '@/lib/labels';
 import { ActionButton } from '@/components/ActionForm';
+import { DensityChart, DensityLegend, type DensityRow } from '@/components/DensityChart';
 import { ackTripNote, autoAssign, confirmSlip, lprDone, quickSearch, setStatus } from './actions';
 
 export const dynamic = 'force-dynamic';
@@ -17,15 +18,29 @@ const n = (v: number) => v.toLocaleString('th-TH');
 
 const sb0 = () => db();
 
-export default async function AdminHome() {
-  const staff = await requireStaff(['admin']);
+const isDay = (v?: string) => !!v && /^\d{4}-\d{2}-\d{2}$/.test(v);
+const span = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 864e5);
+
+export default async function AdminHome({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
+  const staff = await requireStaff(['admin', 'ops', 'exec']);
+  const canAct = staff.role === 'admin';
+  // buttons on this page change data: admin only (the site lead does the same on the ops page; the executive views)
+  const Act = (canAct ? ActionButton : () => null) as typeof ActionButton;
   const today = todayBkk();
+  // density range: default the next 30 days, never more than 30 days
+  const sp = await searchParams;
+  let df = isDay(sp.df) ? sp.df! : today;
+  let dt = isDay(sp.dt) ? sp.dt! : addDays(df, 29);
+  if (dt < df) [df, dt] = [dt, df];
+  if (span(df, dt) > 29) dt = addDays(df, 29);
   const sb = db();
   const sel = 'id, code, plate, plate_province, status, shuttle, pax, start_date, end_date, customers(name, phone)';
   const [{ count: lateIn }, { count: overOut }] = await Promise.all([
     sb0().from('bookings').select('id', { count: 'exact', head: true }).eq('status', 'confirmed').lt('start_date', today),
     sb0().from('bookings').select('id', { count: 'exact', head: true }).eq('status', 'checked_in').lt('end_date', today),
   ]);
+  const { data: dens } = await sb.rpc('lot_density', { p_from: df, p_to: dt });
+  const density = ((dens ?? []) as DensityRow[]);
   const [occ, arrivals, departures, inLot, slips, lpr, trips, paidToday, owed, notes, calls] = await Promise.all([
     sb.from('v_occupancy_30d').select('day, used, total_spots, reserve_spots').limit(14),
     sb.from('bookings').select(sel).eq('start_date', today).in('status', ['confirmed', 'checked_in']).order('created_at'),
@@ -66,15 +81,17 @@ export default async function AdminHome() {
           <h1>สวัสดี {staff.name}</h1>
           <p>วัน{DAYS[d.getUTCDay()]}ที่ {thDate(today)} · {todo ? `มี ${todo} เรื่องรอจัดการ` : 'ไม่มีงานค้าง'}</p>
         </div>
-        <form action={quickSearch} className="search">
+        {staff.role !== 'ops' && <form action={quickSearch} className="search">
           <input name="q" placeholder="ค้นหา รหัส / ทะเบียน / ชื่อ / เบอร์" aria-label="ค้นหาการจอง" />
           <button className="b b-primary">ค้นหา</button>
-        </form>
+        </form>}
       </header>
 
       {((lateIn ?? 0) + (overOut ?? 0)) > 0 && (
         <Link href="/ops" className="alert-strip">⚠ ต้องตรวจสอบ: เลยวันเข้าแต่ยังไม่มีบันทึกรถเข้า {lateIn ?? 0} รายการ · เลยวันรับรถแต่รถยังอยู่ในลาน {overOut ?? 0} รายการ → ดูที่หน้างาน</Link>
       )}
+
+
       <section className="tiles">
         <div className="tile">
           <span>ที่จอดวันนี้</span>
@@ -86,6 +103,27 @@ export default async function AdminHome() {
         <div className="tile"><span>รถออกวันนี้</span><b>{dep.length}<small> คัน</small></b><em>รับรถแล้ว {dep.filter((r) => r.status === 'checked_out').length} คัน</em></div>
         <div className="tile"><span>รถอยู่ในลานตอนนี้</span><b>{inLot.count ?? 0}<small> คัน</small></b><em>เช็กอินแล้วยังไม่รับรถ</em></div>
         <div className="tile"><span>รับเงินวันนี้</span><b>{n(revenueToday)}<small> บาท</small></b><em><Link href="/exec">ดูรายงาน →</Link></em></div>
+      </section>
+      <section className="panel density-panel">
+        <div className="density-head">
+          <div>
+            <h2>ความหนาแน่นของรถในลาน</h2>
+            <p className="hint">{thDate(df)} – {thDate(dt)} · เฉลี่ย {density.length ? Math.round(density.reduce((a, r) => a + r.cars, 0) / density.length) : 0} คัน/วัน · เต็ม {density.filter((r) => r.cars >= r.cap).length} วัน · ใกล้เต็ม {density.filter((r) => r.cars < r.cap && r.cars >= r.cap * 0.8).length} วัน</p>
+          </div>
+          <form method="get" className="density-filter">
+            <label>ตั้งแต่<input type="date" name="df" defaultValue={df} /></label>
+            <label>ถึง<input type="date" name="dt" defaultValue={dt} /></label>
+            <button className="b b-primary b-sm">ดู</button>
+          </form>
+        </div>
+        <nav className="seg seg-sm density-quick" aria-label="ช่วงที่ใช้บ่อย">
+          <Link href={`/admin?df=${today}&dt=${addDays(today, 29)}`} className={df === today && dt === addDays(today, 29) ? 'on' : ''}>30 วันข้างหน้า</Link>
+          <Link href={`/admin?df=${addDays(today, -7)}&dt=${addDays(today, 7)}`} className={df === addDays(today, -7) && dt === addDays(today, 7) ? 'on' : ''}>สัปดาห์ก่อน–หลัง</Link>
+          <Link href={`/admin?df=${addDays(today, -29)}&dt=${today}`} className={df === addDays(today, -29) && dt === today ? 'on' : ''}>30 วันที่ผ่านมา</Link>
+        </nav>
+        <DensityChart rows={density} today={today} />
+        <DensityLegend />
+        <p className="hint">ชี้ที่แท่งเพื่อดูจำนวนรถ ที่ว่าง รถเข้า และรถออกของวันนั้น · เลือกได้ครั้งละไม่เกิน 30 วัน</p>
       </section>
 
       <section className="panel">
@@ -109,7 +147,7 @@ export default async function AdminHome() {
               <li key={`n${t.id}`}>
                 <span className="todo-kind k-del">คนขับแจ้ง</span>
                 <div className="todo-main"><b>{t.driver_note}</b><small>{v?.name} · {DIRECTION[t.direction]} · <Link href={`/admin/bookings/${b?.id}`}>{b?.code}</Link>{t.note_at ? ` · ${thTime(t.note_at)}` : ''}</small></div>
-                <div className="todo-act"><ActionButton action={ackTripNote} fields={{ id: t.id }} label="รับทราบ" /></div>
+                <div className="todo-act"><Act action={ackTripNote} fields={{ id: t.id }} label="รับทราบ" /></div>
               </li>
             );
           })}
@@ -121,7 +159,7 @@ export default async function AdminHome() {
                 <div className="todo-main"><Link href={`/admin/bookings/${b?.id}`}><b>{b?.code}</b> · {b?.plate}</Link><small>{n(p.amount)} บาท · ส่งเมื่อ {thTime(p.created_at)}</small></div>
                 <div className="todo-act">
                   {slipLinks[p.id] && <a className="b b-plain b-sm" href={slipLinks[p.id]} target="_blank" rel="noreferrer">ดูสลิป</a>}
-                  <ActionButton action={confirmSlip} fields={{ payment_id: p.id }} label="ยืนยันรับเงิน" variant="primary" confirm={`ยืนยันว่าได้รับเงิน ${n(p.amount)} บาทแล้ว?`} />
+                  <Act action={confirmSlip} fields={{ payment_id: p.id }} label="ยืนยันรับเงิน" variant="primary" confirm={`ยืนยันว่าได้รับเงิน ${n(p.amount)} บาทแล้ว?`} />
                 </div>
               </li>
             );
@@ -130,7 +168,7 @@ export default async function AdminHome() {
             <li key={`l${r.id}`}>
               <span className={`todo-kind ${r.action === 'add' ? 'k-add' : 'k-del'}`}>{r.action === 'add' ? 'เพิ่มทะเบียน' : 'ลบทะเบียน'}</span>
               <div className="todo-main"><b>{r.plate}</b> {r.plate_province}<small>ระบบไม้กั้น · {r.valid_from && thDate(r.valid_from)} – {r.valid_to && thDate(r.valid_to)}</small></div>
-              <div className="todo-act"><ActionButton action={lprDone} fields={{ id: r.id }} label="ทำแล้ว" /></div>
+              <div className="todo-act"><Act action={lprDone} fields={{ id: r.id }} label="ทำแล้ว" /></div>
             </li>
           ))}
           {unassigned.map((t) => (
@@ -138,7 +176,7 @@ export default async function AdminHome() {
               <span className="todo-kind k-trip">ยังไม่มีรถ</span>
               <div className="todo-main"><b>{thDate(bkkDay(t.pickup_at))} {thTime(t.pickup_at)}</b> · {DIRECTION[t.direction]} {t.pax} คน<small>{t.bookings?.customers?.name} · {t.bookings?.code}</small></div>
               <div className="todo-act">
-                <ActionButton action={autoAssign} fields={{ id: t.id }} label="จัดรถอัตโนมัติ" />
+                <Act action={autoAssign} fields={{ id: t.id }} label="จัดรถอัตโนมัติ" />
                 <Link className="b b-plain b-sm" href="/admin/trips">เลือกเอง</Link>
               </div>
             </li>
@@ -165,7 +203,7 @@ export default async function AdminHome() {
               <li key={r.id}>
                 <div><Link href={`/admin/bookings/${r.id}`}><b>{r.plate}</b> {r.plate_province}</Link><small>{r.customers?.name} · <a href={`tel:${r.customers?.phone}`}>{r.customers?.phone}</a>{r.shuttle ? ` · รถรับส่ง ${r.pax} คน` : ''}</small></div>
                 {r.status === 'confirmed'
-                  ? <ActionButton action={setStatus} fields={{ id: r.id, status: 'checked_in' }} label="เช็กอิน" variant="primary" />
+                  ? <Act action={setStatus} fields={{ id: r.id, status: 'checked_in' }} label="เช็กอิน" variant="primary" />
                   : <StatusTag status={r.status} />}
               </li>
             ))}
@@ -179,7 +217,7 @@ export default async function AdminHome() {
               <li key={r.id}>
                 <div><Link href={`/admin/bookings/${r.id}`}><b>{r.plate}</b> {r.plate_province}</Link><small>{r.customers?.name} · <a href={`tel:${r.customers?.phone}`}>{r.customers?.phone}</a></small></div>
                 {r.status === 'checked_in'
-                  ? <ActionButton action={setStatus} fields={{ id: r.id, status: 'checked_out' }} label="รับรถแล้ว" variant="primary" />
+                  ? <Act action={setStatus} fields={{ id: r.id, status: 'checked_out' }} label="รับรถแล้ว" variant="primary" />
                   : <StatusTag status={r.status} />}
               </li>
             ))}
@@ -199,24 +237,6 @@ export default async function AdminHome() {
                 <span className={`st ${t.status === 'done' ? 'st-done' : t.status === 'en_route' || t.status === 'arrived' ? 'st-in' : t.vehicles ? 'st-ok' : 'st-wait'}`}>{t.status === 'done' ? 'เสร็จแล้ว' : t.status === 'en_route' ? 'กำลังเดินทาง' : t.status === 'arrived' ? 'ถึงจุดนัด' : t.vehicles?.name ?? 'ยังไม่มีรถ'}</span>
               </li>
             ))}
-          </ul>
-        </section>
-        <section className="panel">
-          <h2>ที่ว่าง 14 วันข้างหน้า</h2>
-          <p className="hint">เปิดให้ลูกค้าจอง {total - (t0?.reserve_spots ?? 5)} ช่อง ไม่รวมช่องสำรอง</p>
-          <ul className="avail">
-            {days.map((x) => {
-              const cap = x.total_spots - x.reserve_spots;
-              const free = Math.max(0, cap - x.used);
-              const tone = free === 0 ? 'full' : free <= cap * 0.2 ? 'low' : 'ok';
-              return (
-                <li key={x.day} className={tone}>
-                  <span>{thDate(x.day)}</span>
-                  <div className="bar"><i style={{ width: `${Math.min(100, (x.used / cap) * 100)}%` }} /></div>
-                  <b>{free === 0 ? 'เต็ม' : `ว่าง ${free}`}</b>
-                </li>
-              );
-            })}
           </ul>
         </section>
       </div>

@@ -15,9 +15,8 @@ const ADMIN_ITEMS = [
   { href: '/admin/users', label: 'ผู้ใช้' },
   { href: '/admin/system', label: 'สถานะระบบ' },
 ];
-const EXEC_ITEMS = [{ href: '/exec', label: 'รายงาน' }];
 const DRIVER_ITEMS = [{ href: '/driver', label: 'งานของฉัน' }];
-const OPS_ITEMS = [{ href: '/ops', label: 'หน้างาน' }, { href: '/driver', label: 'รถรับส่ง' }];
+const OPS_ITEMS = [{ href: '/admin', label: 'ภาพรวม' }, { href: '/ops', label: 'หน้างาน' }, { href: '/driver', label: 'รถรับส่ง' }];
 const ROLE_LABEL = { admin: 'แอดมิน', exec: 'ผู้บริหาร', driver: 'คนขับ', ops: 'หัวหน้าหน้างาน' } as const;
 
 export function StaffShell({ staff, children }: { staff: Session; children: React.ReactNode }) {
@@ -29,7 +28,7 @@ export function StaffShell({ staff, children }: { staff: Session; children: Reac
             <img src="/logo.png" alt="" width={36} height={35} />
             <span>Backyard<small>หลังบ้าน</small></span>
           </Link>
-          <StaffNav items={staff.role === 'admin' ? ADMIN_ITEMS : staff.role === 'driver' ? DRIVER_ITEMS : staff.role === 'ops' ? OPS_ITEMS : EXEC_ITEMS} />
+          <StaffNav items={staff.role === 'admin' || staff.role === 'exec' ? ADMIN_ITEMS : staff.role === 'driver' ? DRIVER_ITEMS : OPS_ITEMS} />
           <div className="staff-user">
             <Link href="/account" title="บัญชีของฉัน">{staff.name}<small>{ROLE_LABEL[staff.role]}</small></Link>
             <form action="/api/auth/logout" method="post"><button className="btn-ghost">ออกจากระบบ</button></form>
