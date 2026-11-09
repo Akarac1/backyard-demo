@@ -2,6 +2,7 @@ import { db } from '@/lib/supabase';
 import { ActionForm, Submit } from '@/components/ActionForm';
 import { setContact, updateSettings } from '../actions';
 import { Vehicles } from './Vehicles';
+import { TvLink } from './TvLink';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,6 +28,7 @@ export default async function SettingsPage() {
         </ActionForm>
       </section>
       <Vehicles />
+      <TvLink token={s.tv_token ?? null} />
       <ActionForm action={updateSettings} className="stack">
         <section className="panel">
           <h2>ที่จอด</h2>

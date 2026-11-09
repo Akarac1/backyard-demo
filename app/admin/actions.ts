@@ -128,6 +128,10 @@ export async function updateTrip(_: ActionResult, f: FormData): Promise<ActionRe
   }, 'บันทึกเที่ยวรถแล้ว', ['/admin/trips', '/admin']);
 }
 
+export async function rotateTvLink(_: ActionResult): Promise<ActionResult> {
+  return run('admin_rotate_tv_token', {}, 'สร้างลิงก์จอ TV ใหม่แล้ว ลิงก์เก่าใช้ไม่ได้ทันที', ['/admin/settings']);
+}
+
 export async function setTripBags(_: ActionResult, f: FormData): Promise<ActionResult> {
   return run('admin_set_trip_bags', { p_trip_id: str(f, 'id'), p_large: num(f, 'large_bags'), p_small: num(f, 'small_bags') },
     'บันทึกจำนวนกระเป๋าแล้ว', ['/admin/trips', '/admin', '/driver']);
