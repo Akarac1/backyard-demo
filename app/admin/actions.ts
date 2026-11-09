@@ -337,7 +337,8 @@ export async function saveVehicle(_: ActionResult, f: FormData): Promise<ActionR
   return run('admin_save_vehicle', {
     p_id: id, p_name: str(f, 'name'), p_plate: str(f, 'plate'), p_model: str(f, 'model'), p_seats: num(f, 'seats'),
     p_active: f.get('active') === 'on', p_note: str(f, 'note'),
-    p_luggage_units: num(f, 'luggage_units'), p_max_bags: num(f, 'max_bags'), p_priority: num(f, 'priority') || 1,
+    // one number on screen: large bags; stored as units (2 per large bag) + max bags
+    p_luggage_units: 2 * num(f, 'large_cap'), p_max_bags: num(f, 'large_cap'), p_priority: num(f, 'priority') || 1,
     p_reserve: f.get('reserve') === 'on',
   }, id ? 'บันทึกข้อมูลรถแล้ว' : 'เพิ่มรถแล้ว', ['/admin/settings', '/admin/trips', '/admin/users', '/driver']);
 }

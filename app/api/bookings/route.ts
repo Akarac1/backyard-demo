@@ -48,12 +48,12 @@ export async function POST(req: Request) {
     p_ref_phone: b.refPhone?.trim() || null,
     ...(useReward ? { p_reward: b.rewardId } : { p_coupon: isId(b.couponId) ? b.couponId : null }),
     p_large: b.shuttle ? bagCount(b.largeBags) : 0,
-    p_small: b.shuttle ? bagCount(b.smallBags) : 0,
+    p_small: 0,   // only large bags are counted
   });
   if (error) {
     // the van filled up between the check on the form and this booking: send nearby free times back
     if (error.message === 'shuttle_full' && b.outboundTime) {
-      const c = await shuttleCheck(b.outboundTime, b.pax, b.largeBags, b.smallBags);
+      const c = await shuttleCheck(b.outboundTime, b.pax, b.largeBags);
       return json({ error: dbErrorToThai(error.message, L.lang), code: 'shuttle_full', tooBig: c.tooBig, suggestions: c.suggestions }, 409);
     }
     return json({ error: dbErrorToThai(error.message, L.lang) }, 409);

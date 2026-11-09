@@ -20,8 +20,7 @@ const TRIP_STATUS: Record<string, string> = { unassigned: 'ยังไม่ม
 type Veh = { id: string; name: string; seats: number; plate: string | null; luggage_units: number; max_bags: number; priority: number; reserve: boolean };
 const fits = (v: Veh, t: { pax: number; large_bags: number; small_bags: number }) =>
   v.seats >= t.pax && 2 * t.large_bags + t.small_bags <= v.luggage_units && t.large_bags + t.small_bags <= v.max_bags;
-const bagsText = (t: { large_bags: number; small_bags: number }) =>
-  t.large_bags + t.small_bags === 0 ? 'ไม่ระบุกระเป๋า' : `กระเป๋า${t.large_bags ? ` ใหญ่ ${t.large_bags}` : ''}${t.small_bags ? ` เล็ก ${t.small_bags}` : ''} ใบ`;
+const bagsText = (t: { large_bags: number }) => (t.large_bags ? `กระเป๋าใหญ่ ${t.large_bags} ใบ` : 'ไม่มีกระเป๋าใหญ่');
 
 const localInput = (ts: string | null) => ts ? new Date(ts).toLocaleString('sv-SE', { timeZone: 'Asia/Bangkok' }).slice(0, 16).replace(' ', 'T') : '';
 
@@ -98,8 +97,8 @@ export default async function TripsPage({ searchParams }: { searchParams: Promis
               <summary>แก้จำนวนกระเป๋า</summary>
               <ActionForm action={setTripBags} className="form trip-bags-form">
                 <input type="hidden" name="id" value={t.id} />
-                <label>ใบใหญ่ 28–29"<input type="number" name="large_bags" min={0} max={20} defaultValue={t.large_bags} /></label>
-                <label>ใบกลาง/เล็ก<input type="number" name="small_bags" min={0} max={20} defaultValue={t.small_bags} /></label>
+                <label>กระเป๋าใบใหญ่ (24 นิ้วขึ้นไป)<input type="number" name="large_bags" min={0} max={20} defaultValue={t.large_bags} /></label>
+                <input type="hidden" name="small_bags" value="0" />
                 <div className="form-actions"><Submit small>บันทึก</Submit></div>
               </ActionForm>
             </details>

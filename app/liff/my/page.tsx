@@ -199,15 +199,15 @@ export default function MyBookings() {
 function ReturnBags({ trip, idToken }: { trip: Trip; idToken: string | null }) {
   const { t } = useT();
   const [open, setOpen] = useState(false);
-  const [bags, setBags] = useState<[number, number]>([trip.large_bags, trip.small_bags]);
-  const [saved, setSaved] = useState<[number, number]>([trip.large_bags, trip.small_bags]);
+  const [bags, setBags] = useState(trip.large_bags);
+  const [saved, setSaved] = useState(trip.large_bags);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
   async function save() {
     setBusy(true); setMsg(null);
     const r = await fetch(`/api/trips/${trip.id}/bags`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders(idToken) },
-      body: JSON.stringify({ large: bags[0], small: bags[1] }),
+      body: JSON.stringify({ large: bags }),
     });
     const j = await r.json().catch(() => ({}));
     setBusy(false);
@@ -218,12 +218,12 @@ function ReturnBags({ trip, idToken }: { trip: Trip; idToken: string | null }) {
   return (
     <div className="return-bags">
       <div className="return-bags-head">
-        <span>{t('กระเป๋าขากลับ')}: <b>{saved[0] + saved[1] ? t('ใหญ่ {a} · กลาง/เล็ก {b} ใบ', { a: saved[0], b: saved[1] }) : t('ไม่มีกระเป๋าโหลด')}</b></span>
+        <span>{t('กระเป๋าขากลับ')}: <b>{saved ? t('ใบใหญ่ {n} ใบ', { n: saved }) : t('ไม่มีใบใหญ่')}</b></span>
         {!open && <button type="button" className="link-btn" onClick={() => { setOpen(true); setMsg(null); }}>{t('แก้ไข')}</button>}
       </div>
       {open && (
         <>
-          <BagPicker large={bags[0]} small={bags[1]} onChange={(a, b) => setBags([a, b])} />
+          <BagPicker large={bags} onChange={setBags} />
           <p className="small" style={{ margin: '4px 0 8px' }}>{t('ซื้อของเพิ่มระหว่างทริป? แจ้งไว้ก่อนได้ ระบบจะจัดรถที่ใส่กระเป๋าได้พอมารับ')}</p>
           <div style={{ display: 'flex', gap: 8 }}>
             <button type="button" className="btn primary" style={{ marginTop: 0 }} onClick={save} disabled={busy}>{busy ? t('กำลังบันทึก…') : t('บันทึก')}</button>

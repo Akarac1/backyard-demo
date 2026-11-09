@@ -23,7 +23,7 @@ export type BagsResult = { vehicle: string | null; changed: boolean; no_vehicle:
 /** The customer says how many bags they have for a trip. Staff hear about it when no vehicle fits now. */
 export async function customerSetBags(uid: string, tripId: string, large: unknown, small: unknown): Promise<{ data?: BagsResult; error?: string }> {
   if (!/^[0-9a-f-]{36}$/.test(tripId)) return { error: 'not_found' };
-  const { data, error } = await db().rpc('customer_set_trip_bags', { p_line_user_id: uid, p_trip_id: tripId, p_large: bagCount(large), p_small: bagCount(small) });
+  const { data, error } = await db().rpc('customer_set_trip_bags', { p_line_user_id: uid, p_trip_id: tripId, p_large: bagCount(large), p_small: 0 });
   if (error) return { error: error.message };
   const r = data as BagsResult;
   if (r.no_vehicle || r.too_big || r.late) {

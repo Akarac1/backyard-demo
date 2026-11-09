@@ -18,7 +18,7 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
   const [error, setError] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [bags, setBags] = useState<[number, number]>([0, 0]);
+  const [bags, setBags] = useState(0);
   const [moreBags, setMoreBags] = useState(false);
 
   const load = useCallback(async () => {
@@ -37,7 +37,7 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
     setBusy(true); setError(null);
     const r = await fetch(`/api/trips/${id}/call`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders(liff.idToken) },
-      body: JSON.stringify({ large: bags[0], small: bags[1] }),
+      body: JSON.stringify({ large: bags }),
     });
     const j = await r.json().catch(() => ({}));
     setBusy(false); setAsking(false);
@@ -63,7 +63,7 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
             <h2>{t('ได้กระเป๋าแล้วหรือยัง?')}</h2>
             <p className="small">{t('กดเรียกรถเมื่อรับกระเป๋าเรียบร้อยและพร้อมออกจากโถงผู้โดยสาร คนขับจะไปถึงจุดนัดภายในประมาณ 15 นาที')}</p>
             <div className="meet"><span>{t('จุดนัดรับ')}</span><b>{t(info.meetingPoint)}</b></div>
-            <button className="btn primary big" onClick={() => { setBags([info.large ?? 0, info.small ?? 0]); setMoreBags(false); setAsking(true); }}>{t('เรียกรถมารับ')}</button>
+            <button className="btn primary big" onClick={() => { setBags(info.large ?? 0); setMoreBags(false); setAsking(true); }}>{t('เรียกรถมารับ')}</button>
             <p className="small" style={{ textAlign: 'center' }}>{t('ยังรอกระเป๋าอยู่? ไม่ต้องรีบ เปิดหน้านี้จากการ์ดในแชทได้ตลอด')}</p>
           </div>
         )}
@@ -97,13 +97,13 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
             <p>{t('คนขับคันที่ว่างก่อนจะออกมารับที่ {m} และหน้านี้จะบอกเวลาที่รถจะถึงหลังกดเรียก', { m: t(info.meetingPoint) })}</p>
             <div className="bag-ask">
               <b>{t('กระเป๋าขากลับ')}</b>
-              <span className="small">{(info.large ?? 0) + (info.small ?? 0) ? t('ตอนจองแจ้งไว้: ใหญ่ {a} · กลาง/เล็ก {b} ใบ', { a: info.large ?? 0, b: info.small ?? 0 }) : t('ตอนจองไม่ได้แจ้งกระเป๋าโหลด')}</span>
+              <span className="small">{info.large ? t('ตอนจองแจ้งไว้: ใบใหญ่ {n} ใบ', { n: info.large }) : t('ตอนจองไม่ได้แจ้งกระเป๋าใบใหญ่')}</span>
               <div className="toggle">
-                <button type="button" className={!moreBags ? 'on' : ''} onClick={() => { setMoreBags(false); setBags([info.large ?? 0, info.small ?? 0]); }}>{t('เท่าเดิม')}</button>
+                <button type="button" className={!moreBags ? 'on' : ''} onClick={() => { setMoreBags(false); setBags(info.large ?? 0); }}>{t('เท่าเดิม')}</button>
                 <button type="button" className={moreBags ? 'on' : ''} onClick={() => setMoreBags(true)}>{t('มีเพิ่ม / เปลี่ยน')}</button>
               </div>
-              {moreBags && <BagPicker large={bags[0]} small={bags[1]} onChange={(a, b) => setBags([a, b])} />}
-              {moreBags && <span className="small">{t('ไม่ต้องนับกระเป๋าถือขึ้นเครื่องและเป้ ถ้ากระเป๋าเยอะขึ้น ระบบจะส่งรถคันที่ใส่ได้พอ')}</span>}
+              {moreBags && <BagPicker large={bags} onChange={setBags} />}
+              {moreBags && <span className="small">{t('นับเฉพาะใบใหญ่ ไม่ต้องนับกระเป๋าถือขึ้นเครื่อง เป้ หรือใบเล็ก ถ้าใบใหญ่เพิ่มขึ้น ระบบจะส่งรถคันที่ใส่ได้พอ')}</span>}
             </div>
             <p className="small">{t('กดเมื่อได้กระเป๋าครบและพร้อมออกจากโถงแล้วเท่านั้น')}</p>
             <div className="modal-actions">

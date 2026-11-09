@@ -6,8 +6,7 @@ import { AutoRefresh, CallTools, Countdown, NoteForm, StepForm } from './StepFor
 
 export const dynamic = 'force-dynamic';
 
-const bags = (t: { large_bags: number; small_bags: number }) =>
-  t.large_bags + t.small_bags ? ` · กระเป๋า${t.large_bags ? ` ใหญ่ ${t.large_bags}` : ''}${t.small_bags ? ` เล็ก ${t.small_bags}` : ''}` : '';
+const bags = (t: { large_bags: number }) => (t.large_bags ? ` · กระเป๋าใหญ่ ${t.large_bags}` : '');
 
 type Trip = {
   id: string; direction: 'to_airport' | 'from_airport'; pax: number; large_bags: number; small_bags: number; pickup_at: string | null; flight_number: string | null; status: string;

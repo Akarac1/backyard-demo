@@ -16,8 +16,7 @@ function Fields({ v }: { v?: V }) {
         <label>ทะเบียนรถ<input name="plate" defaultValue={v?.plate ?? ''} placeholder="ฮห 1234 กรุงเทพมหานคร" maxLength={30} /><small>แสดงในการ์ดที่ส่งให้ลูกค้า</small></label>
         <label>รุ่น / สี<input name="model" defaultValue={v?.model ?? ''} placeholder="Toyota Commuter สีขาว" maxLength={60} /><small>ช่วยให้ลูกค้าหารถเจอ</small></label>
         <label>รองรับผู้โดยสาร<span className="with-unit"><input name="seats" type="number" min={1} max={30} defaultValue={v?.seats ?? 7} required /><em>คน</em></span></label>
-        <label>ความจุกระเป๋า<span className="with-unit"><input name="luggage_units" type="number" min={0} max={60} defaultValue={v?.luggage_units ?? 6} required /><em>หน่วย</em></span><small>ใบใหญ่ 28–29" = 2 หน่วย · ใบกลาง/เล็ก = 1 หน่วย</small></label>
-        <label>ใส่ได้รวมไม่เกิน<span className="with-unit"><input name="max_bags" type="number" min={0} max={30} defaultValue={v?.max_bags ?? 4} required /><em>ใบ</em></span><small>นับทุกขนาด (ไม่นับกระเป๋าถือขึ้นเครื่อง)</small></label>
+        <label>ใส่กระเป๋าใบใหญ่ได้<span className="with-unit"><input name="large_cap" type="number" min={0} max={30} defaultValue={v ? largeFit(v) : 3} required /><em>ใบ</em></span><small>นับใบ 24–29 นิ้ว (คิดจากใบ 29 นิ้ว) · ใบเล็กและกระเป๋าถือขึ้นเครื่องไม่นับ</small></label>
         <label>ลำดับการใช้<span className="with-unit"><input name="priority" type="number" min={1} max={9} defaultValue={v?.priority ?? 1} required /><em>(1 = ใช้ก่อน)</em></span><small>ลำดับเท่ากัน ระบบเลือกคันที่เล็กที่สุดที่พอ เพื่อเก็บคันใหญ่ไว้ให้กลุ่มใหญ่</small></label>
         <label className="check veh-active"><input type="checkbox" name="reserve" defaultChecked={v?.reserve ?? false} /> รถสำรองฉุกเฉิน (ลูกค้าจองไม่ถึง ระบบไม่จัดให้เอง แอดมินเลือกใช้เองในหน้ารถรับส่ง)</label>
         <label className="veh-note">หมายเหตุ (เห็นเฉพาะทีมงาน)<input name="note" defaultValue={v?.note ?? ''} placeholder="เช่น ต่อภาษีเดือน มี.ค." maxLength={120} /></label>
@@ -36,14 +35,14 @@ export async function Vehicles() {
   return (
     <section className="panel">
       <h2>รถรับส่ง</h2>
-      <p className="hint">ทะเบียนและรุ่นจะแสดงในการ์ดที่ส่งให้ลูกค้าตอนคนขับออกรถ · ระบบจัดรถให้อัตโนมัติจากจำนวนที่นั่งและกระเป๋า (ต้องพอทั้งสองอย่าง) ใช้รถลำดับ 1 ก่อน · รถสำรองฉุกเฉินไม่นับรวมตอนลูกค้าจอง</p>
+      <p className="hint">ทะเบียนและรุ่นจะแสดงในการ์ดที่ส่งให้ลูกค้าตอนคนขับออกรถ · ระบบจัดรถให้อัตโนมัติจากจำนวนที่นั่งและกระเป๋าใบใหญ่ (ต้องพอทั้งสองอย่าง) ใช้รถลำดับ 1 ก่อน · รถสำรองฉุกเฉินไม่นับรวมตอนลูกค้าจอง</p>
       <div className="veh-list">
         {list.map((v, i) => (
           <div key={v.id} className={`veh-card${v.active ? '' : ' off'}`}>
             <div className="veh-head">
               <div>
                 <b>{v.name}</b>{!v.active && <span className="st">ปิดใช้งาน</span>}{v.reserve ? <span className="st st-reserve">สำรองฉุกเฉิน</span> : <span className="st st-pri">ใช้ลำดับ {v.priority}</span>}
-                <span className="veh-sub">{[v.model, v.plate ?? 'ยังไม่ใส่ทะเบียน'].filter(Boolean).join(' · ')} · {v.seats} ที่นั่ง · กระเป๋าใหญ่ได้ {largeFit(v)} ใบ หรือรวม {v.max_bags} ใบ ({v.luggage_units} หน่วย){counts[i] ? ` · งานที่รออยู่ ${counts[i]} งาน` : ''}</span>
+                <span className="veh-sub">{[v.model, v.plate ?? 'ยังไม่ใส่ทะเบียน'].filter(Boolean).join(' · ')} · {v.seats} ที่นั่ง · กระเป๋าใหญ่ได้ {largeFit(v)} ใบ{counts[i] ? ` · งานที่รออยู่ ${counts[i]} งาน` : ''}</span>
               </div>
               <ActionForm action={deleteVehicle} className="veh-del"
                 confirm={`ลบ “${v.name}”${v.plate ? ` (${v.plate})` : ''}? ถ้ามีประวัติงาน ระบบจะเก็บประวัติไว้ในรายงาน แต่รถจะหายจากรายการ`}>

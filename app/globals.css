@@ -774,3 +774,4 @@ svg.density { width: 100%; height: auto; display: block; }
 .return-bags-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
 .ok-text { color: #1F7A4C !important; }
 .bad-text { color: #A8322B !important; }
+.bag-row span small { display: block; font-size: 12px; color: var(--muted); }

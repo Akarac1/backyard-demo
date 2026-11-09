@@ -1,23 +1,19 @@
 'use client';
 import { useT } from '@/components/Lang';
 
-/** Two steppers: large (28-29") and medium/small checked bags. */
-export function BagPicker({ large, small, onChange }: { large: number; small: number; onChange: (large: number, small: number) => void }) {
+/** Stepper for large bags (checked suitcases, about 24" and up). Small bags and cabin bags are not counted. */
+export function BagPicker({ large, onChange }: { large: number; onChange: (large: number) => void }) {
   const { t } = useT();
-  const row = (label: string, v: number, set: (n: number) => void) => (
-    <div className="bag-row">
-      <span>{label}</span>
-      <div className="bag-step">
-        <button type="button" aria-label={t('ลด')} onClick={() => set(Math.max(0, v - 1))} disabled={v <= 0}>−</button>
-        <b aria-live="polite">{v}</b>
-        <button type="button" aria-label={t('เพิ่ม')} onClick={() => set(Math.min(20, v + 1))} disabled={v >= 20}>+</button>
-      </div>
-    </div>
-  );
   return (
     <div className="bag-picker">
-      {row(t('กระเป๋าใบใหญ่ (28–29 นิ้ว)'), large, (n) => onChange(n, small))}
-      {row(t('กระเป๋าใบกลาง/เล็ก'), small, (n) => onChange(large, n))}
+      <div className="bag-row">
+        <span>{t('กระเป๋าเดินทางใบใหญ่')}<small>{t('โหลดใต้เครื่อง ประมาณ 24 นิ้วขึ้นไป')}</small></span>
+        <div className="bag-step">
+          <button type="button" aria-label={t('ลด')} onClick={() => onChange(Math.max(0, large - 1))} disabled={large <= 0}>−</button>
+          <b aria-live="polite">{large}</b>
+          <button type="button" aria-label={t('เพิ่ม')} onClick={() => onChange(Math.min(20, large + 1))} disabled={large >= 20}>+</button>
+        </div>
+      </div>
     </div>
   );
 }

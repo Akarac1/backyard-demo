@@ -6,6 +6,17 @@ export const LANGS: Lang[] = ['th', 'en', 'zh'];
 // [English, Chinese]
 const D: Record<string, [string, string]> = {
   // ---- shuttle capacity ----
+  'กระเป๋าเดินทางใบใหญ่': ['Large suitcases', '大行李箱'],
+  'โหลดใต้เครื่อง ประมาณ 24 นิ้วขึ้นไป': ['Checked, about 24 in and up', '托运，约 24 寸以上'],
+  'กระเป๋าเดินทางใบใหญ่ (โหลดใต้เครื่อง ประมาณ 24 นิ้วขึ้นไป)': ['Large suitcases (checked, about 24 in and up)', '大行李箱（托运，约 24 寸以上）'],
+  '🧳 นับเฉพาะใบใหญ่ ไม่ต้องนับกระเป๋าถือขึ้นเครื่อง เป้ หรือใบเล็ก ใช้เลือกรถที่ใส่กระเป๋าได้พอ': ['🧳 Large suitcases only. Don’t count cabin bags, backpacks or small bags. We use this to send a car with enough room.', '🧳 只计算大行李箱，不含随身行李、背包或小包，用于安排空间足够的车。'],
+  'กระเป๋าใบใหญ่': ['Large suitcases', '大行李箱'],
+  'ไม่มี': ['None', '无'],
+  'ตอนจองแจ้งไว้: ใบใหญ่ {n} ใบ': ['At booking: {n} large suitcase(s)', '预订时：大行李箱 {n} 件'],
+  'ตอนจองไม่ได้แจ้งกระเป๋าใบใหญ่': ['No large suitcases given at booking', '预订时未填写大行李箱'],
+  'นับเฉพาะใบใหญ่ ไม่ต้องนับกระเป๋าถือขึ้นเครื่อง เป้ หรือใบเล็ก ถ้าใบใหญ่เพิ่มขึ้น ระบบจะส่งรถคันที่ใส่ได้พอ': ['Large suitcases only, not cabin bags, backpacks or small bags. If you have more, we’ll send a car with enough room.', '只计算大行李箱，不含随身行李、背包或小包。数量增加时，我们会派空间足够的车。'],
+  'ใบใหญ่ {n} ใบ': ['{n} large', '大 {n} 件'],
+  'ไม่มีใบใหญ่': ['No large suitcases', '无大行李箱'],
   'ลด': ['Less', '减少'],
   'เพิ่ม': ['More', '增加'],
   'กระเป๋าขากลับ': ['Bags for the return trip', '回程行李'],
