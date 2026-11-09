@@ -43,6 +43,7 @@ export function dbErrorToThai(msg: string, lang: Lang = 'th'): string {
     reward_closed: 'ของรางวัลนี้ปิดแลกแล้ว',
     out_of_stock: 'ของรางวัลนี้หมดแล้ว',
     not_found: 'ไม่พบของรางวัลนี้',
+    too_many_holds: 'คุณมีการจองที่รอชำระเงินอยู่ 2 รายการแล้ว ชำระหรือรอให้หมดเวลาก่อน แล้วค่อยจองใหม่',
     trip_not_done: 'ให้คะแนนได้เมื่อการเดินทางเสร็จแล้ว',
     invalid_rating: 'กรุณาเลือกดาว 1–5 ดวง',
     rating_closed: 'เลยเวลาแก้ไขคะแนนแล้ว (แก้ได้ภายใน 7 วัน)',

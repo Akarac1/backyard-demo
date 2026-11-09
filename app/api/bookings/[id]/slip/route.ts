@@ -19,14 +19,20 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   const file = form.get('slip');
   if (!(file instanceof File) || file.size === 0) return json({ message: L('กรุณาแนบรูปสลิป') }, 400);
   if (file.size > 4_000_000) return json({ message: L('รูปใหญ่เกิน 4 MB') }, 400);
+  // images only, judged by the file's first bytes (the name and type the phone sends can be anything)
+  const kind = imageKind(new Uint8Array(await file.slice(0, 12).arrayBuffer()));
+  if (!kind) return json({ message: L('รองรับเฉพาะรูป JPG, PNG หรือ WebP') }, 400);
 
   const { data: payment } = await db().from('payments').select('*')
     .eq('booking_id', id).eq('kind', 'booking').eq('status', 'pending').maybeSingle();
   if (!payment) return json({ message: L('ไม่พบรายการชำระเงิน') }, 404);
+  // at most 6 tries per payment: protects the slip-check quota
+  const { error: tooMany } = await db().rpc('payment_slip_attempt', { p_payment: payment.id });
+  if (tooMany) return json({ message: L('ส่งสลิปครบจำนวนครั้งแล้ว แอดมินจะตรวจสลิปล่าสุดให้ หรือทักแชทหาร้าน') }, 429);
 
   // Keep the slip for the admin, whatever the check says.
-  const path = `${id}/${Date.now()}-${file.name.replace(/[^\w.-]/g, '_')}`;
-  await db().storage.from('slips').upload(path, file, { contentType: file.type || 'image/jpeg' });
+  const path = `${id}/${Date.now()}.${kind.ext}`;
+  await db().storage.from('slips').upload(path, file, { contentType: kind.type });
   await db().from('payments').update({ slip_path: path }).eq('id', payment.id);
   // Slip received: hold the spot longer so a slow bank check or the admin can still confirm it.
   await db().from('bookings').update({ hold_expires_at: new Date(Date.now() + 60 * 60_000).toISOString() })
@@ -44,4 +50,13 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
 
   await afterConfirmed(id);
   return json({ confirmed: true, message: L('ชำระเงินสำเร็จ ยืนยันการจองแล้ว') });
+}
+
+/** JPG / PNG / WebP from the magic bytes, or null. */
+function imageKind(b: Uint8Array): { ext: string; type: string } | null {
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return { ext: 'jpg', type: 'image/jpeg' };
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return { ext: 'png', type: 'image/png' };
+  if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50)
+    return { ext: 'webp', type: 'image/webp' };
+  return null;
 }
