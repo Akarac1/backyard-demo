@@ -1,6 +1,6 @@
 import { db } from '@/lib/supabase';
 import { ActionForm, Submit } from '@/components/ActionForm';
-import { setContact, setDispatch, updateSettings } from '../actions';
+import { setContact, setDispatch, setExitMinutes, updateSettings } from '../actions';
 import { Vehicles } from './Vehicles';
 import { TvLink } from './TvLink';
 
@@ -37,6 +37,15 @@ export default async function SettingsPage() {
           <label>เลือกคันประหยัดกว่าได้ ถ้าช้ากว่าไม่เกิน<span className="with-unit"><input name="slack" type="number" min={0} max={60} defaultValue={s.cheaper_slack_minutes ?? 10} required /><em>นาที</em></span><small>เทียบกับคันที่ถึงเร็วที่สุด (0 = เอาคันเร็วสุดเสมอ)</small></label>
           <label>ไม่เปลี่ยนรถเมื่อเหลือเวลาก่อนรับน้อยกว่า<span className="with-unit"><input name="freeze" type="number" min={0} max={60} defaultValue={s.freeze_minutes ?? 10} required /><em>นาที</em></span><small>กันคนขับสับสนจากรถเปลี่ยนกะทันหัน</small></label>
           <div className="form-actions span2"><Submit>บันทึกการจัดรถ</Submit></div>
+        </ActionForm>
+      </section>
+      <section className="panel">
+        <h2>เวลาจากเครื่องลงถึงออกโถง</h2>
+        <p className="hint">ลูกค้ากรอกเวลาเครื่องลงตอนจอง ระบบบวกเวลานี้เป็นเวลานัดรับโดยประมาณ ใช้เช็กว่ารถพอไหมและแสดงบนจอ TV/หน้าคนขับ · รถออกจริงเมื่อลูกค้ากดเรียก · มีผลกับการจองใหม่ (การจองเดิมไม่เปลี่ยน)</p>
+        <ActionForm action={setExitMinutes} className="form grid2">
+          <label>เที่ยวบินในประเทศ<span className="with-unit"><input name="domestic" type="number" min={0} max={180} defaultValue={s.exit_minutes_domestic ?? 30} required /><em>นาที</em></span><small>ลงเครื่อง + รอกระเป๋า</small></label>
+          <label>เที่ยวบินต่างประเทศ<span className="with-unit"><input name="international" type="number" min={0} max={180} defaultValue={s.exit_minutes_international ?? 60} required /><em>นาที</em></span><small>ลงเครื่อง + ผ่าน ตม. + รอกระเป๋า</small></label>
+          <div className="form-actions span2"><Submit>บันทึกเวลาออกจากโถง</Submit></div>
         </ActionForm>
       </section>
       <TvLink token={s.tv_token ?? null} />

@@ -39,6 +39,7 @@ const ERR: Record<string, string> = {
   landing_after_pickup: 'เวลาเครื่องลงต้องไม่ช้ากว่าเวลารับ',
   too_many_pax: 'ผู้โดยสารเกินจำนวนที่นั่งของรถคันนี้',
   too_much_luggage: 'กระเป๋าเกินกว่าที่รถคันนี้ใส่ได้ เลือกรถคันที่ใหญ่กว่า',
+  invalid_exit_minutes: 'เวลาออกจากโถงต้องอยู่ระหว่าง 0–180 นาที',
   invalid_bags: 'จำนวนกระเป๋าต้องอยู่ระหว่าง 0–20 ใบ',
   invalid_vehicle: 'ข้อมูลรถไม่ถูกต้อง (ชื่อ ที่นั่ง 1–30 ความจุกระเป๋า 0–60 หน่วย ไม่เกิน 30 ใบ ลำดับ 1–9)',
   invalid_settings: 'ค่าที่ตั้งไม่ถูกต้อง (ช่องสำรองต้องน้อยกว่าช่องทั้งหมด และเวลากันที่ 5–120 นาที)',
@@ -131,6 +132,11 @@ export async function updateTrip(_: ActionResult, f: FormData): Promise<ActionRe
 export async function setDispatch(_: ActionResult, f: FormData): Promise<ActionResult> {
   return run('admin_set_dispatch', { p_drive: num(f, 'drive'), p_wait: num(f, 'wait'), p_slack: num(f, 'slack'), p_freeze: num(f, 'freeze') },
     'บันทึกการจัดรถแล้ว', ['/admin/settings']);
+}
+
+export async function setExitMinutes(_: ActionResult, f: FormData): Promise<ActionResult> {
+  return run('admin_set_exit_minutes', { p_domestic: num(f, 'domestic'), p_international: num(f, 'international') },
+    'บันทึกเวลาออกจากโถงแล้ว มีผลกับการจองใหม่', ['/admin/settings']);
 }
 
 export async function rotateTvLink(_: ActionResult): Promise<ActionResult> {
