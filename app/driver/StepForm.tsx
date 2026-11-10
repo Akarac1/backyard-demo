@@ -108,8 +108,14 @@ function Small({ children, variant = 'plain' }: { children: React.ReactNode; var
   return <button className={`b b-${variant} b-sm`} disabled={pending}>{pending ? 'กำลังส่ง…' : children}</button>;
 }
 
-export function NoteForm({ tripId, hasLine, customer }: { tripId: string; hasLine: boolean; customer: string }) {
+export function NoteForm({ tripId, hasLine, customer, presets = [] }: { tripId: string; hasLine: boolean; customer: string; presets?: string[] }) {
   const [state, action] = useActionState<ActionResult, FormData>(addTripNote, null);
+  const box = useRef<HTMLTextAreaElement>(null);
+  // a ready-made phrase goes into the box (replacing what was there) so the driver can still edit it
+  const pick = (text: string) => {
+    const el = box.current; if (!el) return;
+    el.value = text; el.focus(); el.setSelectionRange(text.length, text.length);
+  };
   const { form, intercept, dialog } = useConfirm();
   return (
     <details className="note-box">
@@ -120,7 +126,12 @@ export function NoteForm({ tripId, hasLine, customer }: { tripId: string; hasLin
         return { title: 'ส่งหมายเหตุนี้?', body: `“${note}”${notify ? '' : ' · แจ้งแอดมินอย่างเดียว ไม่ส่งถึงลูกค้า'}`, preview: notify ? `แจ้งจากคนขับ (ถึง${customer})` : null };
       })}>
         <input type="hidden" name="id" value={tripId} />
-        <textarea name="note" rows={2} maxLength={500} placeholder="เช่น รถติดหนัก ถึงช้าประมาณ 15 นาที / ลูกค้ายังไม่ออกจากโถง" required />
+        {presets.length > 0 && (
+          <div className="note-presets">
+            {presets.map((p) => <button key={p} type="button" onClick={() => pick(p)}>{p}</button>)}
+          </div>
+        )}
+        <textarea ref={box} name="note" rows={2} maxLength={500} placeholder="เช่น รถติดหนัก ถึงช้าประมาณ 15 นาที / ลูกค้ายังไม่ออกจากโถง" required />
         <div className="note-row">
           <label className="notify"><input type="checkbox" name="notify" value="on" defaultChecked={hasLine} disabled={!hasLine} /> ส่งให้ลูกค้าด้วย</label>
           <Small>ส่งหมายเหตุ</Small>

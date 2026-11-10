@@ -853,3 +853,15 @@ svg.density { width: 100%; height: auto; display: block; }
 .pickup-map summary::-webkit-details-marker { display: none; }
 .pickup-map img { display: block; width: 100%; height: auto; }
 .pickup-map.open > b { display: block; padding: 12px 14px 8px; }
+
+/* driver note: ready-made phrases */
+.note-presets { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.note-presets button { font: inherit; font-size: 13px; text-align: left; background: #F4F7F4; color: var(--ink, #1B2A22); border: 1.5px solid #D5DCE6; border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+.note-presets button:active { background: #E3ECE5; }
+/* settings: preset list editor */
+.preset-list { list-style: decimal; padding-left: 22px; display: grid; gap: 8px; margin: 0; }
+.preset-list li { display: flex; gap: 6px; align-items: center; }
+.preset-list input { flex: 1; min-width: 0; }
+.icon-btn { font: inherit; width: 36px; height: 36px; border-radius: 8px; border: 1px solid #D5DCE6; background: #fff; cursor: pointer; }
+.icon-btn:disabled { opacity: .35; cursor: default; }
+.icon-btn.del { color: var(--bad, #C0392B); }

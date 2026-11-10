@@ -40,6 +40,7 @@ const ERR: Record<string, string> = {
   too_many_pax: 'ผู้โดยสารเกินจำนวนที่นั่งของรถคันนี้',
   too_much_luggage: 'กระเป๋าเกินกว่าที่รถคันนี้ใส่ได้ เลือกรถคันที่ใหญ่กว่า',
   invalid_exit_minutes: 'เวลาออกจากโถงต้องอยู่ระหว่าง 0–180 นาที',
+  invalid_presets: 'ข้อความสำเร็จรูปมีได้ไม่เกิน 12 ข้อความ ข้อความละไม่เกิน 200 ตัวอักษร',
   invalid_bags: 'จำนวนกระเป๋าต้องอยู่ระหว่าง 0–20 ใบ',
   invalid_vehicle: 'ข้อมูลรถไม่ถูกต้อง (ชื่อ ที่นั่ง 1–30 ความจุกระเป๋า 0–60 หน่วย ไม่เกิน 30 ใบ ลำดับ 1–9)',
   invalid_settings: 'ค่าที่ตั้งไม่ถูกต้อง (ช่องสำรองต้องน้อยกว่าช่องทั้งหมด และเวลากันที่ 5–120 นาที)',
@@ -137,6 +138,11 @@ export async function setDispatch(_: ActionResult, f: FormData): Promise<ActionR
 export async function setExitMinutes(_: ActionResult, f: FormData): Promise<ActionResult> {
   return run('admin_set_exit_minutes', { p_domestic: num(f, 'domestic'), p_international: num(f, 'international') },
     'บันทึกเวลาออกจากโถงแล้ว มีผลกับการจองใหม่', ['/admin/settings']);
+}
+
+export async function setNotePresets(_: ActionResult, f: FormData): Promise<ActionResult> {
+  const presets = f.getAll('preset').map((v) => String(v).trim()).filter(Boolean);
+  return run('admin_set_note_presets', { p_presets: presets }, 'บันทึกข้อความสำเร็จรูปแล้ว', ['/admin/settings', '/driver']);
 }
 
 export async function rotateTvLink(_: ActionResult): Promise<ActionResult> {

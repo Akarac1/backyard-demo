@@ -41,7 +41,7 @@ export default async function DriverPage({ searchParams }: { searchParams: Promi
   const sb = db();
   const [{ data: vehicles }, { data: st }] = await Promise.all([
     sb.from('vehicles').select('id, name').eq('active', true).order('seats'),
-    sb.from('settings').select('pickup_meeting_point').eq('id', 1).single(),
+    sb.from('settings').select('pickup_meeting_point, driver_note_presets').eq('id', 1).single(),
   ]);
   const vehicleId = sp.v || null;
   const myVehicle = vehicles?.find((v) => v.id === vehicleId);
@@ -122,7 +122,7 @@ export default async function DriverPage({ searchParams }: { searchParams: Promi
         {t.driver_note && <p className="note">หมายเหตุล่าสุด: {t.driver_note}</p>}
         <StepForm tripId={t.id} direction={t.direction} steps={steps} next={next} hasLine={hasLine} customer={`${c?.name ?? 'ลูกค้า'} · ${t.pax} คน`}
           takenBy={me.role === 'driver' && t.driver_staff_id && t.driver_staff_id !== me.uid ? t.driver?.display_name ?? 'คนขับอื่น' : null} />
-        <NoteForm tripId={t.id} hasLine={hasLine} customer={c?.name ?? 'ลูกค้า'} />
+        <NoteForm tripId={t.id} hasLine={hasLine} customer={c?.name ?? 'ลูกค้า'} presets={(st?.driver_note_presets as string[] | null) ?? []} />
       </section>
     );
   };

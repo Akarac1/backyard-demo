@@ -3,6 +3,7 @@ import { ActionForm, Submit } from '@/components/ActionForm';
 import { setContact, setDispatch, setExitMinutes, updateSettings } from '../actions';
 import { Vehicles } from './Vehicles';
 import { TvLink } from './TvLink';
+import { NotePresets } from './NotePresets';
 
 export const dynamic = 'force-dynamic';
 
@@ -48,6 +49,7 @@ export default async function SettingsPage() {
           <div className="form-actions span2"><Submit>บันทึกเวลาออกจากโถง</Submit></div>
         </ActionForm>
       </section>
+      <NotePresets initial={(s.driver_note_presets as string[] | null) ?? []} />
       <TvLink token={s.tv_token ?? null} />
       <ActionForm action={updateSettings} className="stack">
         <section className="panel">
