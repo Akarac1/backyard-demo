@@ -131,13 +131,17 @@ export async function runChecks(): Promise<Check[]> {
   await guard('queue', 'งานค้าง', async () => {
     const t30 = new Date(Date.now() - 30 * 60_000).toISOString();
     const t15 = new Date(Date.now() - 15 * 60_000).toISOString();
-    const [{ count: slips }, { count: calls }, { count: notes }] = await Promise.all([
+    const t12h = new Date(Date.now() - 12 * 3600_000).toISOString();
+    const [{ count: slips }, { count: calls }, { count: notes }, { count: welcome }] = await Promise.all([
       sb.from('payments').select('id', { count: 'exact', head: true }).eq('status', 'pending').not('slip_path', 'is', null).lt('created_at', t30),
       sb.from('shuttle_trips').select('id', { count: 'exact', head: true }).not('called_at', 'is', null).lt('called_at', t15).not('status', 'in', '(en_route,arrived,done,cancelled)'),
       sb.from('shuttle_trips').select('id', { count: 'exact', head: true }).not('driver_note', 'is', null).eq('note_resolved', false),
+      // landed more than 15 minutes ago, still waiting, but no welcome card went out
+      sb.from('shuttle_trips').select('id', { count: 'exact', head: true }).eq('direction', 'from_airport').is('welcome_sent_at', null)
+        .is('called_at', null).in('status', ['unassigned', 'assigned']).lt('landing_at', t15).gt('landing_at', t12h),
     ]);
-    const parts = [slips ? `สลิปรอตรวจเกิน 30 นาที ${slips}` : '', calls ? `ลูกค้าเรียกรถแล้วยังไม่มีคนขับรับเกิน 15 นาที ${calls}` : '', notes ? `คนขับแจ้งปัญหายังไม่รับทราบ ${notes}` : ''].filter(Boolean);
-    return { level: calls ? 'error' : parts.length ? 'warn' : 'ok', summary: parts.length ? parts.join(' · ') : 'ไม่มีงานค้าง', detail: { slips, calls, notes } };
+    const parts = [slips ? `สลิปรอตรวจเกิน 30 นาที ${slips}` : '', calls ? `ลูกค้าเรียกรถแล้วยังไม่มีคนขับรับเกิน 15 นาที ${calls}` : '', notes ? `คนขับแจ้งปัญหายังไม่รับทราบ ${notes}` : '', welcome ? `เครื่องลงเกิน 15 นาทีแล้วยังไม่ได้ส่งข้อความต้อนรับ ${welcome}` : ''].filter(Boolean);
+    return { level: calls ? 'error' : parts.length ? 'warn' : 'ok', summary: parts.length ? parts.join(' · ') : 'ไม่มีงานค้าง', detail: { slips, calls, notes, welcome } };
   });
 
   // 8. configuration
