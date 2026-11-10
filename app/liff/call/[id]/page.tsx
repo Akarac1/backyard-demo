@@ -63,6 +63,10 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
             <h2>{t('ได้กระเป๋าแล้วหรือยัง?')}</h2>
             <p className="small">{t('กดเรียกรถเมื่อรับกระเป๋าเรียบร้อยและพร้อมออกจากโถงผู้โดยสาร คนขับจะไปถึงจุดนัดภายในประมาณ 15 นาที')}</p>
             <div className="meet"><span>{t('จุดนัดรับ')}</span><b>{t(info.meetingPoint)}</b></div>
+            <details className="pickup-map">
+              <summary>{t('ดูรูปจุดขึ้นรถ')}</summary>
+              <img src="/pickup-point.png" alt={t('แผนที่จุดขึ้นรถ: ออกประตู 7 ชั้น 2 เดินไปทางซ้าย ข้ามทางม้าลาย รอที่ป้ายทางเข้า 7')} />
+            </details>
             <button className="btn primary big" onClick={() => { setBags(info.large ?? 0); setMoreBags(false); setAsking(true); }}>{t('เรียกรถมารับ')}</button>
             <p className="small" style={{ textAlign: 'center' }}>{t('ยังรอกระเป๋าอยู่? ไม่ต้องรีบ เปิดหน้านี้จากการ์ดในแชทได้ตลอด')}</p>
           </div>
@@ -80,6 +84,12 @@ export default function CallPage({ params }: { params: Promise<{ id: string }> }
               <p className="small call-busy">{t('ตอนนี้รถทุกคันกำลังรับส่งลูกค้าอยู่ คันแรกที่ว่างจะมารับคุณทันที ขออภัยที่ต้องรอเพิ่ม')}</p>
             )}
             <div className="meet"><span>{t('จุดนัดรับ')}</span><b>{t(info.meetingPoint)}</b></div>
+            {state !== 'arrived' && (
+              <div className="pickup-map open">
+                <b>{t('เดินไปรอที่จุดนี้ได้เลย')}</b>
+                <img src="/pickup-point.png" alt={t('แผนที่จุดขึ้นรถ: ออกประตู 7 ชั้น 2 เดินไปทางซ้าย ข้ามทางม้าลาย รอที่ป้ายทางเข้า 7')} />
+              </div>
+            )}
             {info.driver && <div className="meet"><span>{t('คนขับ')}</span><b>{info.driver.name}</b></div>}
             <p className="small">{t('เรียกรถเมื่อ {t} น. · หน้านี้อัปเดตเองทุก 20 วินาที', { t: info.calledAt ? time(info.calledAt) : '' })}</p>
           </div>

@@ -845,3 +845,11 @@ svg.density { width: 100%; height: auto; display: block; }
 .tv-list { min-height: 0; }
 .wait-car { color: #A9C4E4 !important; font-weight: 600; } .muted-note { color: var(--muted); display:block; margin-top:4px; }
 .tv-day { display: block; font-style: normal; font-size: .36em; font-weight: 800; color: #F5C451; letter-spacing: .02em; margin-bottom: .1em; }
+
+/* pickup-point picture on the call page */
+.pickup-map { margin-top: 10px; border-radius: 12px; background: #F4F7F4; overflow: hidden; }
+.pickup-map summary { cursor: pointer; padding: 12px 14px; font-weight: 600; color: var(--green, #16301F); list-style: none; }
+.pickup-map summary::before { content: '🗺️ '; }
+.pickup-map summary::-webkit-details-marker { display: none; }
+.pickup-map img { display: block; width: 100%; height: auto; }
+.pickup-map.open > b { display: block; padding: 12px 14px 8px; }

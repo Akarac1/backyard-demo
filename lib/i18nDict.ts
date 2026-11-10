@@ -5,6 +5,10 @@ export const LANGS: Lang[] = ['th', 'en', 'zh'];
 
 // [English, Chinese]
 const D: Record<string, [string, string]> = {
+  // ---- pickup-point picture ----
+  'ดูรูปจุดขึ้นรถ': ['See the pickup point', '查看上车地点'],
+  'เดินไปรอที่จุดนี้ได้เลย': ['Head to this spot and wait there', '请前往此处等候'],
+  'แผนที่จุดขึ้นรถ: ออกประตู 7 ชั้น 2 เดินไปทางซ้าย ข้ามทางม้าลาย รอที่ป้ายทางเข้า 7': ['Pickup map: exit Door 7 on Level 2, walk left, cross the zebra crossing, wait at the Entrance 7 sign', '上车地图：从 2 楼 7 号门出来，向左走，过斑马线，在 7 号入口牌处等候'],
   // ---- shuttle capacity ----
   '(โหลดใต้เครื่อง ประมาณ 24 นิ้วขึ้นไป)': ['(checked, about 24 in and up)', '（托运，约 24 寸以上）'],
   'นับเฉพาะใบใหญ่': ['Large suitcases only.', '只计算大行李箱。'],

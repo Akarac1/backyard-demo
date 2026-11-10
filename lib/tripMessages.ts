@@ -229,6 +229,19 @@ export function welcomeMessage(c: Ctx): LineMessage {
   });
 }
 
+/** The pickup-point picture, sent with the welcome card. null when the site address is not set (LINE needs a full https URL). */
+export function pickupPointImage(): LineMessage | null {
+  const base = (process.env.NEXT_PUBLIC_BASE_URL ?? '').replace(/\/$/, '');
+  if (!base.startsWith('https://')) return null;
+  return { type: 'image', originalContentUrl: `${base}/pickup-point.png`, previewImageUrl: `${base}/pickup-point-preview.jpg` };
+}
+
+/** Welcome card with the pickup-point picture above it: one push, so it counts as one message. */
+export function welcomeMessages(c: Ctx): LineMessage[] {
+  const img = pickupPointImage();
+  return img ? [img, welcomeMessage(c)] : [welcomeMessage(c)];
+}
+
 export function noteMessage(c: Ctx, note: string): LineMessage {
   return card({
     alt: `แจ้งจากคนขับ: ${note}`, icon: '📢', title: 'แจ้งจากคนขับ', subtitle: c.direction === 'to_airport' ? 'รถรับส่งขาไปสนามบิน' : 'รถรับส่งขากลับ',
@@ -237,10 +250,10 @@ export function noteMessage(c: Ctx, note: string): LineMessage {
 }
 
 /** Push to the customer's LINE. Returns 'sent' | 'no_line' | 'failed'. Push messages count against the OA quota. */
-export async function sendToCustomer(c: Ctx, message: LineMessage): Promise<'sent' | 'no_line' | 'failed'> {
+export async function sendToCustomer(c: Ctx, message: LineMessage | LineMessage[]): Promise<'sent' | 'no_line' | 'failed'> {
   if (!c.lineUserId || c.lineUserId.startsWith('demo-')) return 'no_line';
   try {
-    const ok = await push(c.lineUserId, [message]);
+    const ok = await push(c.lineUserId, Array.isArray(message) ? message : [message]);
     return ok ? 'sent' : 'failed';
   } catch (e) {
     console.error('trip message', e);

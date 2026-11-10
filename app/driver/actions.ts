@@ -2,7 +2,7 @@
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/supabase';
 import { staffForAction } from '@/lib/auth';
-import { noteMessage, sendToCustomer, statusMessage, tripContext, welcomeMessage, type TripStep } from '@/lib/tripMessages';
+import { noteMessage, sendToCustomer, statusMessage, tripContext, welcomeMessages, type TripStep } from '@/lib/tripMessages';
 import type { ActionResult } from '@/app/admin/actions';
 
 const ERR: Record<string, string> = {
@@ -92,7 +92,7 @@ export async function sendWelcome(_: ActionResult, f: FormData): Promise<ActionR
   const { error } = await db().rpc('staff_mark_welcome', { p_actor: me.uid, p_trip_id: tripId });
   if (error) return { error: ERR[error.message] ?? 'ส่งไม่สำเร็จ ลองใหม่อีกครั้ง' };
   const ctx = await tripContext(tripId, '', 'ทีมงาน Backyard');
-  const r = ctx ? await sendToCustomer(ctx, welcomeMessage(ctx)) : 'failed';
+  const r = ctx ? await sendToCustomer(ctx, welcomeMessages(ctx)) : 'failed';
   revalidatePath('/driver');
   return r === 'sent' ? { ok: 'ส่งข้อความต้อนรับแล้ว' } : { error: SENT[r] };
 }

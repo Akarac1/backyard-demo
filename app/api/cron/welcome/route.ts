@@ -1,6 +1,6 @@
 import { db } from '@/lib/supabase';
 import { json } from '@/lib/request';
-import { sendToCustomer, tripContext, welcomeMessage } from '@/lib/tripMessages';
+import { sendToCustomer, tripContext, welcomeMessages } from '@/lib/tripMessages';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +22,7 @@ export async function GET(req: Request) {
     const { data: first } = await db().rpc('trip_mark_welcome', { p_trip_id: id });
     if (!first) continue;
     const ctx = await tripContext(id, '', 'ทีมงาน Backyard');
-    results[id] = ctx ? await sendToCustomer(ctx, welcomeMessage(ctx)) : 'not_found';
+    results[id] = ctx ? await sendToCustomer(ctx, welcomeMessages(ctx)) : 'not_found';
   }
   return json({ checked: due?.length ?? 0, sent: results });
 }
