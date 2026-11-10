@@ -32,6 +32,7 @@ function classify(t: BoardTrip, now: number): { kind: Kind; at: number; text: st
     }
     if (taken(t)) return { kind: 'moving', at: pick, text: t.status === 'arrived' ? 'ถึงจุดนัดรับแล้ว' : 'กำลังไปรับ' };
     const land = t.landing_at ? Date.parse(t.landing_at) : pick;
+    if (!t.landing_at && !t.dispatched_at) return { kind: 'wait_call', at: pick, text: `นัดรับ ${hm(pick)} · รอลูกค้าเรียก` };
     if (t.dispatched_at && t.vehicles) return { kind: 'wait_call', at: land, text: `รถรอที่สนามบิน · ลูกค้าน่าจะพร้อม ${hm(pick)}` };
     return { kind: 'wait_call', at: land, text: now < land ? `เครื่องลง ${hm(land)}` : `เครื่องลงแล้ว ${hm(land)} · รอลูกค้าเรียก` };
   }
@@ -69,7 +70,7 @@ export function Board({ trips, serverNow, meetingPoint }: { trips: BoardTrip[]; 
   useEffect(() => { const t = setInterval(() => router.refresh(), REFRESH_MS); return () => clearInterval(t); }, [router]);
 
   const rows = useMemo(() => {
-    const order: Record<Kind, number> = { alarm: 0, soon: 1, moving: 2, later: 3, wait_call: 4 };
+    const order: Record<Kind, number> = { alarm: 0, soon: 1, moving: 2, later: 3, wait_call: 3 };
     return trips.map((t) => ({ t, ...classify(t, now) })).sort((a, b) => order[a.kind] - order[b.kind] || a.at - b.at);
   }, [trips, now]);
   const alarms = rows.filter((r) => r.kind === 'alarm');
@@ -126,7 +127,7 @@ export function Board({ trips, serverNow, meetingPoint }: { trips: BoardTrip[]; 
           const time = to ? (t.pickup_at ? hm(Date.parse(t.pickup_at)) : '--:--') : t.called_at ? hm(Date.parse(t.called_at)) : t.landing_at ? hm(Date.parse(t.landing_at)) : t.pickup_at ? hm(Date.parse(t.pickup_at)) : '--:--';
           return (
             <section key={t.id} className={`tv-row k-${kind}`}>
-              <div className="tv-time">{time}<small>{to ? 'เวลารับที่ลาน' : t.called_at ? 'เวลาเรียกรถ' : t.landing_at ? 'เวลาเครื่องลง' : 'เวลารับ'}</small></div>
+              <div className="tv-time">{(() => { const at0 = to ? (t.pickup_at ? Date.parse(t.pickup_at) : now) : Date.parse(t.called_at ?? t.landing_at ?? t.pickup_at ?? new Date(now).toISOString()); const dk = dayKey(at0), td = dayKey(now); return dk > td ? <em className="tv-day">พรุ่งนี้</em> : dk < td ? <em className="tv-day">เมื่อวาน</em> : null; })()}{time}<small>{to ? 'เวลารับที่ลาน' : t.called_at ? 'เวลาเรียกรถ' : t.landing_at ? 'เวลาเครื่องลง' : 'เวลารับ'}</small></div>
               <div className="tv-dir">{to ? '🛫' : '🛬'}<small>{to ? 'ส่งสนามบิน' : 'รับกลับ'}</small></div>
               <div className="tv-who">
                 <b>{t.bookings?.customers?.name ?? '-'}</b> <span className="tv-code">{t.bookings?.code}</span>

@@ -844,3 +844,4 @@ svg.density { width: 100%; height: auto; display: block; }
 .tv-mini.k-moving { border-left-color: #3FBF7A; } .tv-mini.k-wait_call { border-left-color: #5B7FA6; }
 .tv-list { min-height: 0; }
 .wait-car { color: #A9C4E4 !important; font-weight: 600; } .muted-note { color: var(--muted); display:block; margin-top:4px; }
+.tv-day { display: block; font-style: normal; font-size: .36em; font-weight: 800; color: #F5C451; letter-spacing: .02em; margin-bottom: .1em; }
