@@ -843,3 +843,4 @@ svg.density { width: 100%; height: auto; display: block; }
 .tv-mini.k-alarm { background: #6A1D18; border-left-color: #FF4D3D; } .tv-mini.k-soon { background: #3B2E0B; border-left-color: #F5C451; }
 .tv-mini.k-moving { border-left-color: #3FBF7A; } .tv-mini.k-wait_call { border-left-color: #5B7FA6; }
 .tv-list { min-height: 0; }
+.wait-car { color: #A9C4E4 !important; font-weight: 600; } .muted-note { color: var(--muted); display:block; margin-top:4px; }

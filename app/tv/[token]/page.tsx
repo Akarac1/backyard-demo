@@ -18,7 +18,7 @@ export default async function TvPage({ params }: { params: Promise<{ token: stri
   const now = Date.now();
   const from = new Date(now - 3 * 3600_000).toISOString();
   const to = new Date(now + 24 * 3600_000).toISOString();   // the next 24 hours, to get ready
-  const sel = 'id, direction, pax, large_bags, pickup_at, landing_at, called_at, status, departed_at, arrived_at, driver_staff_id, flight_number, drop_door, vehicles(name), driver:staff_users!shuttle_trips_driver_staff_id_fkey(display_name), bookings!inner(code, status, customers(name))';
+  const sel = 'id, direction, pax, large_bags, pickup_at, landing_at, called_at, dispatched_at, status, departed_at, arrived_at, driver_staff_id, flight_number, drop_door, vehicles(name), driver:staff_users!shuttle_trips_driver_staff_id_fkey(display_name), bookings!inner(code, status, customers(name))';
   const [{ data: soon }, { data: called }] = await Promise.all([
     sb.from('shuttle_trips').select(sel).gte('pickup_at', from).lt('pickup_at', to)
       .not('status', 'in', '(done,cancelled)').in('bookings.status', ['confirmed', 'checked_in']).order('pickup_at'),

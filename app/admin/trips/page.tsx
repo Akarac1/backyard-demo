@@ -43,7 +43,7 @@ export default async function TripsPage({ searchParams }: { searchParams: Promis
   return (
     <main className="page">
       <header className="page-head">
-        <div><h1>รถรับส่ง</h1><p>{thDate(day)} · {trips.length} เที่ยว · ยังไม่มีรถ {trips.filter((t) => !t.vehicle_id).length} เที่ยว</p></div>
+        <div><h1>รถรับส่ง</h1><p>{thDate(day)} · {trips.length} เที่ยว · ยังไม่มีรถ {trips.filter((t) => !t.vehicle_id && (t.direction === 'to_airport' || t.called_at)).length} เที่ยว · ขากลับจัดรถตอนลูกค้าเรียก (หรือให้รถที่อยู่สนามบินรับต่อ)</p></div>
         <form className="search" action="/admin/trips"><input type="date" name="d" defaultValue={day} aria-label="เลือกวัน" /><button className="b b-plain">ไปวันที่</button></form>
       </header>
       <nav className="seg" aria-label="เลือกวัน">
@@ -104,7 +104,8 @@ export default async function TripsPage({ searchParams }: { searchParams: Promis
             </details>
             <div className="trip-foot">
               {t.assignment_locked ? <span className="hint">เลือกรถเองแล้ว ระบบจะไม่ย้าย</span> : <span className="hint">ระบบจัดรถให้</span>}
-              {!t.vehicle_id && <ActionButton action={autoAssign} fields={{ id: t.id }} label="จัดรถอัตโนมัติ" />}
+              {!t.vehicle_id && (t.direction === 'to_airport' || t.called_at) && <ActionButton action={autoAssign} fields={{ id: t.id }} label="จัดรถอัตโนมัติ" />}
+              {!t.vehicle_id && t.direction === 'from_airport' && !t.called_at && <small className="muted-note">จัดรถให้เองตอนลูกค้ากดเรียก · เลือกรถเองได้ถ้าต้องการล็อกไว้</small>}
             </div>
           </section>
         ))}

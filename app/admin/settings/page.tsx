@@ -1,6 +1,6 @@
 import { db } from '@/lib/supabase';
 import { ActionForm, Submit } from '@/components/ActionForm';
-import { setContact, updateSettings } from '../actions';
+import { setContact, setDispatch, updateSettings } from '../actions';
 import { Vehicles } from './Vehicles';
 import { TvLink } from './TvLink';
 
@@ -28,6 +28,17 @@ export default async function SettingsPage() {
         </ActionForm>
       </section>
       <Vehicles />
+      <section className="panel">
+        <h2>การจัดรถอัตโนมัติ</h2>
+        <p className="hint">ขาไป: จัดรถตอนลูกค้าชำระเงิน และคิดใหม่เองเมื่อรถว่างเร็วกว่าแผน · ขากลับ: จัดรถตอนลูกค้ากดเรียก ตามคิว ให้คันที่ถึงเร็วที่สุด (คันที่อยู่สนามบินก่อน) ถ้าถึงใกล้กันเลือกคันที่เล็กและประหยัดกว่า · รถที่เพิ่งส่งลูกค้าที่สนามบินรับลูกค้าขากลับที่พร้อมใกล้ ๆ ต่อได้เลย · ระบบรู้ตำแหน่งรถจากปุ่มสถานะของคนขับ</p>
+        <ActionForm action={setDispatch} className="form grid2">
+          <label>เวลาวิ่ง ลาน ↔ สนามบิน<span className="with-unit"><input name="drive" type="number" min={5} max={90} defaultValue={s.drive_minutes ?? 15} required /><em>นาที</em></span><small>ใช้คำนวณเวลาที่รถจะถึง</small></label>
+          <label>รอรับต่อที่สนามบินได้ไม่เกิน<span className="with-unit"><input name="wait" type="number" min={0} max={60} defaultValue={s.airport_wait_minutes ?? 15} required /><em>นาที</em></span><small>คนขับที่ส่งลูกค้าแล้วรอรับคนที่พร้อมภายในเวลานี้ (0 = ไม่รอ)</small></label>
+          <label>เลือกคันประหยัดกว่าได้ ถ้าช้ากว่าไม่เกิน<span className="with-unit"><input name="slack" type="number" min={0} max={60} defaultValue={s.cheaper_slack_minutes ?? 10} required /><em>นาที</em></span><small>เทียบกับคันที่ถึงเร็วที่สุด (0 = เอาคันเร็วสุดเสมอ)</small></label>
+          <label>ไม่เปลี่ยนรถเมื่อเหลือเวลาก่อนรับน้อยกว่า<span className="with-unit"><input name="freeze" type="number" min={0} max={60} defaultValue={s.freeze_minutes ?? 10} required /><em>นาที</em></span><small>กันคนขับสับสนจากรถเปลี่ยนกะทันหัน</small></label>
+          <div className="form-actions span2"><Submit>บันทึกการจัดรถ</Submit></div>
+        </ActionForm>
+      </section>
       <TvLink token={s.tv_token ?? null} />
       <ActionForm action={updateSettings} className="stack">
         <section className="panel">

@@ -48,7 +48,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
     sb.from('bookings').select('id', { count: 'exact', head: true }).eq('status', 'checked_in'),
     sb.from('payments').select('id, amount, slip_path, created_at, bookings(id, code, plate)').eq('status', 'pending').eq('kind', 'booking').not('slip_path', 'is', null).order('created_at'),
     sb.from('lpr_sync').select('id, plate, plate_province, action, valid_from, valid_to').neq('status', 'done').order('created_at'),
-    sb.from('shuttle_trips').select('id, direction, pax, pickup_at, flight_number, status, vehicles(name), bookings(id, code, plate, customers(name, phone))')
+    sb.from('shuttle_trips').select('id, direction, pax, pickup_at, flight_number, status, called_at, vehicles(name), bookings(id, code, plate, customers(name, phone))')
       .gte('pickup_at', `${today}T00:00:00+07:00`).lt('pickup_at', `${addDays(today, 2)}T00:00:00+07:00`).neq('status', 'cancelled').order('pickup_at'),
     sb.from('payments').select('id, amount, bookings(id, code, plate)').eq('status', 'pending').eq('kind', 'overstay'),
     sb.from('shuttle_trips').select('id, direction, driver_note, note_at, vehicles(name), bookings(id, code)').eq('note_resolved', false).order('note_at'),
@@ -62,7 +62,8 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
   const arr = (arrivals.data ?? []) as unknown as Row[];
   const dep = (departures.data ?? []) as unknown as Row[];
   const tripRows = (trips.data ?? []) as unknown as Trip[];
-  const unassigned = tripRows.filter((t) => !t.vehicles);
+  // a return trip gets its vehicle when the customer calls (or a vehicle at the airport takes it): not a to-do before that
+  const unassigned = tripRows.filter((t) => !t.vehicles && (t.direction === 'to_airport' || !!(t as { called_at?: string | null }).called_at));
 
   const slipLinks: Record<string, string> = {};
   for (const p of slips.data ?? []) {

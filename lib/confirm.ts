@@ -28,12 +28,15 @@ export async function alertNoVan(bookingId: string) {
   const to = alertIds();
   if (!to.length) return;
   const { data } = await db().from('shuttle_trips')
-    .select('direction, pax, large_bags, small_bags, pickup_at, bookings(code, plate, customers(name, phone))')
+    .select('id, direction, pax, large_bags, small_bags, pickup_at, called_at, bookings(code, plate, customers(name, phone))')
     .eq('booking_id', bookingId).is('vehicle_id', null).not('status', 'in', '(cancelled,done)');
-  const rows = (data ?? []) as unknown as { direction: string; pax: number; large_bags: number; small_bags: number; pickup_at: string | null; bookings: { code: string; plate: string; customers: { name: string; phone: string } | null } | null }[];
+  // outbound without a vehicle, a called return trip without one, or a return trip whose planned time is full
+  const { data: bad } = await db().rpc('booking_shuttle_problems', { p_booking: bookingId });
+  const badIds = new Set(((bad ?? []) as unknown[]).map((x) => String(typeof x === 'object' && x ? Object.values(x)[0] : x)));
+  const rows = ((data ?? []) as unknown as { id: string; called_at: string | null; direction: string; pax: number; large_bags: number; small_bags: number; pickup_at: string | null; bookings: { code: string; plate: string; customers: { name: string; phone: string } | null } | null }[]).filter((t) => badIds.has(t.id));
   if (!rows.length) return;
   const b = rows[0].bookings;
-  const lines = rows.map((t) => `• ${t.direction === 'to_airport' ? 'ขาไป (ลาน → สนามบิน)' : 'ขากลับ (สนามบิน → ลาน)'} ${t.pickup_at ? `${thDate(bkkDay(t.pickup_at))} ${thTime(t.pickup_at)}` : ''} · ${t.pax} คน${t.large_bags ? ` · กระเป๋าใหญ่ ${t.large_bags}` : ''}`);
+  const lines = rows.map((t) => `• ${t.direction === 'to_airport' ? 'ขาไป (ลาน → สนามบิน)' : t.called_at ? 'ขากลับ · ลูกค้าเรียกรถแล้วแต่ไม่มีรถว่าง' : 'ขากลับ (ช่วงเวลานี้รถอาจไม่พอ)'} ${t.pickup_at ? `${thDate(bkkDay(t.pickup_at))} ${thTime(t.pickup_at)}` : ''} · ${t.pax} คน${t.large_bags ? ` · กระเป๋าใหญ่ ${t.large_bags}` : ''}`);
   const text = [`🚐 รถรับส่งไม่พอ: ${b?.code ?? ''}`, ...lines, `ลูกค้า ${b?.customers?.name ?? '-'} ${b?.customers?.phone ?? ''} · ${b?.plate ?? ''}`,
     'จัดรถเอง (ใช้รถสำรองฉุกเฉินได้) หรือเลื่อนเวลาที่หน้า "รถรับส่ง" ในหลังบ้าน · ถ้ามีเที่ยวอื่นยกเลิก ระบบจะลองจัดให้อัตโนมัติ'].join('\n');
   await Promise.all(to.map((id) => push(id, [{ type: 'text', text }]).catch((e) => console.error('alertNoVan', String(e)))));
@@ -41,9 +44,9 @@ export async function alertNoVan(bookingId: string) {
 
 /** After a booking is confirmed: assign shuttle vehicles and send the confirmation to the customer. */
 export async function afterConfirmed(bookingId: string) {
-  const { data: trips } = await db().from('shuttle_trips').select('id, pickup_at').eq('booking_id', bookingId);
+  const { data: trips } = await db().from('shuttle_trips').select('id, pickup_at, direction').eq('booking_id', bookingId);
   for (const t of trips ?? []) {
-    if (t.pickup_at) {
+    if (t.pickup_at && t.direction === 'to_airport') {   // return trips get a vehicle when the customer calls
       const { error } = await db().rpc('assign_vehicle', { p_trip_id: t.id });
       if (error) console.error('assign_vehicle', error.message);
     }

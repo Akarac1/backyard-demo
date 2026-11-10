@@ -31,7 +31,22 @@ export async function setTripStatus(_: ActionResult, f: FormData): Promise<Actio
     return { error: ERR[error.message] ?? 'บันทึกไม่สำเร็จ ลองใหม่อีกครั้ง' };
   }
 
-  const label = LABEL[String(f.get('direction'))]?.[step] ?? 'บันทึกแล้ว';
+  let label = LABEL[String(f.get('direction'))]?.[step] ?? 'บันทึกแล้ว';
+  // dropped at the airport: the system may have given this vehicle a return customer waiting there
+  if (step === 'done' && f.get('direction') === 'to_airport') {
+    const { data: me2 } = await db().from('shuttle_trips').select('vehicle_id').eq('id', tripId).single();
+    if (me2?.vehicle_id) {
+      const { data: next } = await db().from('shuttle_trips')
+        .select('pax, large_bags, called_at, pickup_at, bookings(code, customers(name))')
+        .eq('vehicle_id', me2.vehicle_id).eq('direction', 'from_airport').eq('status', 'assigned')
+        .gte('dispatched_at', new Date(Date.now() - 120_000).toISOString()).limit(1).maybeSingle();
+      const n = next as unknown as { pax: number; large_bags: number; called_at: string | null; pickup_at: string | null; bookings: { code: string; customers: { name: string } | null } | null } | null;
+      if (n) {
+        const when = n.called_at ? 'ลูกค้าเรียกรถแล้ว' : `ลูกค้าน่าจะพร้อม ${new Date(n.pickup_at ?? Date.now()).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', timeZone: 'Asia/Bangkok' })} น.`;
+        label += ` · 🛬 มีงานรับกลับต่อ: ${n.bookings?.customers?.name ?? ''} (${n.bookings?.code ?? ''}) ${n.pax} คน${n.large_bags ? ` กระเป๋าใหญ่ ${n.large_bags}` : ''} · ${when} รอที่สนามบินได้เลย`;
+      }
+    }
+  }
   let result: ActionResult = { ok: label };
   if (f.get('notify') === 'on') {
     const ctx = await tripContext(tripId, me.uid, me.name);

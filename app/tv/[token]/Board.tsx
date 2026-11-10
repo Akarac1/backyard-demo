@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 
 export type BoardTrip = {
   id: string; direction: 'to_airport' | 'from_airport'; pax: number; large_bags: number; pickup_at: string | null; landing_at: string | null;
-  called_at: string | null; status: string; departed_at: string | null; arrived_at: string | null; driver_staff_id: string | null;
+  called_at: string | null; dispatched_at?: string | null; status: string; departed_at: string | null; arrived_at: string | null; driver_staff_id: string | null;
   flight_number: string | null; drop_door: string | null; vehicles: { name: string } | null; driver: { display_name: string } | null;
   bookings: { code: string; status: string; customers: { name: string } | null } | null;
 };
@@ -32,6 +32,7 @@ function classify(t: BoardTrip, now: number): { kind: Kind; at: number; text: st
     }
     if (taken(t)) return { kind: 'moving', at: pick, text: t.status === 'arrived' ? 'ถึงจุดนัดรับแล้ว' : 'กำลังไปรับ' };
     const land = t.landing_at ? Date.parse(t.landing_at) : pick;
+    if (t.dispatched_at && t.vehicles) return { kind: 'wait_call', at: land, text: `รถรอที่สนามบิน · ลูกค้าน่าจะพร้อม ${hm(pick)}` };
     return { kind: 'wait_call', at: land, text: now < land ? `เครื่องลง ${hm(land)}` : `เครื่องลงแล้ว ${hm(land)} · รอลูกค้าเรียก` };
   }
   if (taken(t)) return { kind: 'moving', at: pick, text: t.status === 'en_route' ? 'กำลังไปสนามบิน' : 'พร้อมรับที่ลาน' };
@@ -132,7 +133,7 @@ export function Board({ trips, serverNow, meetingPoint }: { trips: BoardTrip[]; 
                 <div className="tv-meta">👤 {t.pax} คน{t.large_bags ? ` · 🧳 ${t.large_bags} ใบ` : ''}{t.flight_number ? ` · ✈ ${t.flight_number}` : ''}{to && t.drop_door ? ` · ประตู ${t.drop_door}` : ''}</div>
               </div>
               <div className="tv-car">
-                {t.vehicles?.name ? <b>{t.vehicles.name}</b> : <b className="no-car">ยังไม่มีรถ</b>}
+                {t.vehicles?.name ? <b>{t.vehicles.name}</b> : kind === 'wait_call' ? <b className="wait-car">จัดรถตอนเรียก</b> : <b className="no-car">ยังไม่มีรถ</b>}
                 <small>{t.driver?.display_name ? `คนขับ: ${name(t.driver.display_name)}` : 'ยังไม่มีคนรับงาน'}</small>
               </div>
               <div className="tv-state">{text}</div>
@@ -153,7 +154,7 @@ export function Board({ trips, serverNow, meetingPoint }: { trips: BoardTrip[]; 
                     <span className="m-time">{dayKey(at) > today ? <em>พรุ่งนี้</em> : dayKey(at) < today ? <em>เมื่อวาน</em> : null}{hm(at)}</span>
                     <span className="m-dir">{t.direction === 'to_airport' ? '🛫 ส่ง' : '🛬 รับ'}</span>
                     <span className="m-who">{t.bookings?.customers?.name ?? '-'}</span>
-                    <span className="m-meta">{t.pax} คน{t.large_bags ? ` · 🧳${t.large_bags}` : ''} · {t.vehicles?.name ?? <b className="no-car">ไม่มีรถ</b>}</span>
+                    <span className="m-meta">{t.pax} คน{t.large_bags ? ` · 🧳${t.large_bags}` : ''} · {t.vehicles?.name ?? (kind === 'wait_call' ? <b className="wait-car">จัดรถตอนเรียก</b> : <b className="no-car">ไม่มีรถ</b>)}</span>
                   </div>
                 ))}
               </div>

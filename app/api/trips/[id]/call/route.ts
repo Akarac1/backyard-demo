@@ -69,6 +69,15 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
     };
     return json({ error: serverT(req)(msg[error.message] ?? 'เรียกรถไม่สำเร็จ กรุณาโทรหาร้าน') }, 409);
   }
+  // the call gives the trip its vehicle (see dispatch_return); none free -> staff hear about it now
+  {
+    const { data: after } = await db().from('shuttle_trips').select('vehicle_id, booking_id').eq('id', id).single();
+    if (after && !after.vehicle_id) {
+      const { alertNoVan } = await import('@/lib/confirm');
+      await alertNoVan(after.booking_id).catch((e) => console.error('alertNoVan', String(e)));
+      bagNote = bagNote ?? 'staff';
+    }
+  }
   const t = await load(id, uid);
   return json(t ? { ...(await view(t)), bagNote } : { ok: true, bagNote });
 }

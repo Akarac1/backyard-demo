@@ -128,6 +128,11 @@ export async function updateTrip(_: ActionResult, f: FormData): Promise<ActionRe
   }, 'บันทึกเที่ยวรถแล้ว', ['/admin/trips', '/admin']);
 }
 
+export async function setDispatch(_: ActionResult, f: FormData): Promise<ActionResult> {
+  return run('admin_set_dispatch', { p_drive: num(f, 'drive'), p_wait: num(f, 'wait'), p_slack: num(f, 'slack'), p_freeze: num(f, 'freeze') },
+    'บันทึกการจัดรถแล้ว', ['/admin/settings']);
+}
+
 export async function rotateTvLink(_: ActionResult): Promise<ActionResult> {
   return run('admin_rotate_tv_token', {}, 'สร้างลิงก์จอ TV ใหม่แล้ว ลิงก์เก่าใช้ไม่ได้ทันที', ['/admin/settings']);
 }
