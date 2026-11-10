@@ -86,6 +86,8 @@ function card(o: {
   highlight?: { title: string; lines: string[] }; message?: string; buttons?: Button[];
   /** 1–5 stars that open the rating page: who is being rated and the trip */
   rate?: { tripId: string; driver: string };
+  /** picture between the green header and the text; tapping it opens `link` */
+  hero?: { url: string; aspectRatio: string; link: string };
 }): LineMessage {
   const body: unknown[] = [];
   if (o.message) body.push({ type: 'text', text: o.message, size: 'sm', color: GREEN, wrap: true });
@@ -121,6 +123,7 @@ function card(o: {
     type: 'flex', altText: o.alt,
     contents: {
       type: 'bubble', size: 'mega',
+      ...(o.hero ? { hero: { type: 'image', url: o.hero.url, size: 'full', aspectRatio: o.hero.aspectRatio, aspectMode: 'cover', action: { type: 'uri', label: 'ดูรูปจุดขึ้นรถ', uri: o.hero.link } } } : {}),
       header: {
         type: 'box', layout: 'vertical', backgroundColor: GREEN, paddingAll: '18px', spacing: 'xs',
         contents: [
@@ -226,20 +229,16 @@ export function welcomeMessage(c: Ctx): LineMessage {
     rows: [['จุดนัดรับ', c.meetingPoint], ['ผู้โดยสาร', `${c.pax} ท่าน`], ...(c.flight ? [['เที่ยวบิน', c.flight] as Row] : [])],
     highlight: { title: 'ยังรอกระเป๋าอยู่?', lines: ['ไม่ต้องรีบ กดเรียกรถเมื่อพร้อมออกจากโถงได้เลย', 'เที่ยวบินล่าช้า ไม่ต้องแจ้ง ระบบรอให้คุณกด'] },
     buttons: [{ label: 'เรียกรถมารับ', uri: liff(`/call/${c.tripId}`), primary: true }, { label: `โทรหาร้าน ${fmtPhone(c.shopPhone)}`, uri: `tel:${c.shopPhone}` }],
+    ...(siteBase() ? { hero: { url: `${siteBase()}/pickup-point-hero.jpg`, aspectRatio: '1080:787', link: `${siteBase()}/pickup-point.png` } } : {}),
   });
 }
 
-/** The pickup-point picture, sent with the welcome card. null when the site address is not set (LINE needs a full https URL). */
-export function pickupPointImage(): LineMessage | null {
-  const base = (process.env.NEXT_PUBLIC_BASE_URL ?? '').replace(/\/$/, '');
-  if (!base.startsWith('https://')) return null;
-  return { type: 'image', originalContentUrl: `${base}/pickup-point.png`, previewImageUrl: `${base}/pickup-point-preview.jpg` };
-}
+/** Site address for pictures LINE fetches itself (needs full https). Empty when not set. */
+const siteBase = () => { const b = (process.env.NEXT_PUBLIC_BASE_URL ?? '').replace(/\/$/, ''); return b.startsWith('https://') ? b : ''; };
 
-/** Welcome card with the pickup-point picture above it: one push, so it counts as one message. */
+/** The welcome card, with the pickup-point map inside it (tap opens the full step-by-step picture). */
 export function welcomeMessages(c: Ctx): LineMessage[] {
-  const img = pickupPointImage();
-  return img ? [img, welcomeMessage(c)] : [welcomeMessage(c)];
+  return [welcomeMessage(c)];
 }
 
 export function noteMessage(c: Ctx, note: string): LineMessage {
