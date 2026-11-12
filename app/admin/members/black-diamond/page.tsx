@@ -1,22 +1,35 @@
 import { db } from '@/lib/supabase';
+import { requireStaff } from '@/lib/auth';
 import { ActionButton, ActionForm, Submit } from '@/components/ActionForm';
-import { addVipPlate, removeVipPlate, setVipActive } from '../../actions';
+import { addVipPlate, grantBlackDiamond, removeVipPlate, revokeBlackDiamond, setBlackDiamondActive } from '../../actions';
 import { thDate, bkkDay } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
 
-type Vip = { id: string; plate: string; plate_province: string; holder_name: string | null; note: string | null; active: boolean; created_at: string };
+type Card = { customer_id: string; note: string | null; active: boolean; created_at: string; customers: { name: string; phone: string; member_no: string | null } | null };
+type Plate = { id: string; customer_id: string; plate: string; plate_province: string };
+type Found = { id: string; name: string; phone: string; member_no: string | null };
+const fmtPhone = (p: string) => p.length === 10 ? `${p.slice(0, 3)}-${p.slice(3, 6)}-${p.slice(6)}` : p;
 
-/** Secret page: Black Diamond plates. Plate only, no member account, no end date. */
-export default async function BlackDiamondPage() {
+/** Secret page, admins only: the Black Diamond card is held by a member; their plates are let in by the plate reader. */
+export default async function BlackDiamondPage({ searchParams }: { searchParams: Promise<{ m?: string }> }) {
+  await requireStaff(['admin']);
+  const { m } = await searchParams;
+  const mq = (m ?? '').replace(/[%,()\\]/g, ' ').trim().slice(0, 40);
   const sb = db();
-  const [{ data }, { data: s }, { count: pending }] = await Promise.all([
-    sb.from('vip_plates').select('*').order('created_at', { ascending: false }),
+  const [{ data: cards }, { data: plates }, { data: s }, { count: pending }, found] = await Promise.all([
+    sb.from('black_diamond').select('customer_id, note, active, created_at, customers(name, phone, member_no)').order('created_at', { ascending: false }),
+    sb.from('vip_plates').select('id, customer_id, plate, plate_province').order('created_at'),
     sb.from('settings').select('reserve_spots').eq('id', 1).single(),
     sb.from('lpr_vip_sync').select('id', { count: 'exact', head: true }).neq('status', 'done'),
+    mq ? sb.rpc('customer_lookup', { p_q: mq, p_only_manual: false }) : Promise.resolve({ data: [] as Found[] }),
   ]);
-  const list = (data ?? []) as Vip[];
-  const active = list.filter((v) => v.active).length;
+  const list = (cards ?? []) as unknown as Card[];
+  const byCustomer = new Map<string, Plate[]>();
+  for (const p of (plates ?? []) as Plate[]) byCustomer.set(p.customer_id, [...(byCustomer.get(p.customer_id) ?? []), p]);
+  const have = new Set(list.map((c) => c.customer_id));
+  const hits = ((found.data ?? []) as Found[]).slice(0, 10);
+  const activePlates = list.filter((c) => c.active).reduce((a, c) => a + (byCustomer.get(c.customer_id)?.length ?? 0), 0);
   const reserve = s?.reserve_spots ?? 0;
 
   return (
@@ -24,50 +37,75 @@ export default async function BlackDiamondPage() {
       <header className="page-head">
         <div>
           <h1>Black Diamond</h1>
-          <p>บัตรสำหรับครอบครัวและบุคคลพิเศษ แยกจากระบบสมาชิก เพิ่มแค่ป้ายทะเบียน เมื่อเชื่อมกล้องอ่านป้ายแล้วรถเข้าลานได้เลยโดยไม่ต้องจอง ไม่จำกัดวัน ใช้ช่องสำรอง</p>
+          <p>บัตรสำหรับครอบครัวและบุคคลพิเศษ ผูกกับสมาชิก และมีแอดมินเท่านั้นที่มอบบัตรได้ เมื่อเชื่อมกล้องอ่านป้ายทะเบียนแล้ว รถของสมาชิกที่เพิ่มป้ายไว้เข้าลานได้เลยโดยไม่ต้องจอง ไม่จำกัดวัน ใช้ช่องสำรอง</p>
         </div>
       </header>
 
       <section className="tiles">
-        <div className="tile"><span>ป้ายที่เปิดสิทธิ์</span><b>{active}<small> ป้าย</small></b><em>ทั้งหมด {list.length} ป้าย</em></div>
-        <div className={`tile ${active > reserve ? 'tile-warn' : ''}`}><span>ช่องสำรองของลาน</span><b>{reserve}<small> ช่อง</small></b><em>{active > reserve ? 'ป้ายมากกว่าช่องสำรอง ถ้าเข้าพร้อมกันอาจไม่พอ' : 'ใช้ร่วมกับรถที่จอดเกินวัน'}</em></div>
+        <div className="tile"><span>สมาชิกที่มีบัตร</span><b>{list.filter((c) => c.active).length}<small> คน</small></b><em>ทั้งหมด {list.length} บัตร</em></div>
+        <div className={`tile ${activePlates > reserve ? 'tile-warn' : ''}`}><span>ป้ายที่เปิดสิทธิ์ / ช่องสำรอง</span><b>{activePlates}<small> / {reserve}</small></b><em>{activePlates > reserve ? 'ป้ายมากกว่าช่องสำรอง ถ้าเข้าพร้อมกันอาจไม่พอ' : 'ใช้ร่วมกับรถที่จอดเกินวัน'}</em></div>
         <div className="tile"><span>รอส่งให้ระบบกล้อง</span><b>{pending ?? 0}<small> รายการ</small></b><em>ส่งอัตโนมัติเมื่อเชื่อมกล้องแล้ว</em></div>
       </section>
 
       <section className="panel">
-        <h2>เพิ่มป้ายทะเบียน</h2>
-        <ActionForm action={addVipPlate} className="form grid2" resetOnOk>
-          <label>ทะเบียน<input name="plate" placeholder="เช่น กข 1234" required maxLength={14} /></label>
-          <label>จังหวัด (ไม่บังคับ)<input name="province" placeholder="กรุงเทพมหานคร" /></label>
-          <label>ชื่อ/ครอบครัว (ไม่บังคับ)<input name="holder" placeholder="ใช้จำเท่านั้น ไม่แสดงให้ลูกค้า" /></label>
-          <label>หมายเหตุ<input name="note" /></label>
-          <div className="form-actions span2"><Submit>เพิ่มป้ายทะเบียน</Submit></div>
-        </ActionForm>
-      </section>
-
-      <section className="panel">
-        <h2>รายการป้ายทะเบียน</h2>
-        {!list.length ? <p className="empty">ยังไม่มีป้ายทะเบียน</p> : (
+        <div className="panel-head">
+          <h2>มอบบัตรให้สมาชิก</h2>
+          <form className="search" action="/admin/members/black-diamond"><input name="m" defaultValue={m ?? ''} placeholder="ชื่อ / เบอร์โทร / เลขสมาชิก (BY…)" aria-label="ค้นหาสมาชิก" /><button className="b b-primary">ค้นหา</button></form>
+        </div>
+        {!mq ? <p className="hint">ค้นหาสมาชิกก่อน แล้วกด “มอบบัตร” · ต้องเป็นลูกค้าที่มีในระบบแล้ว</p> : !hits.length ? <p className="empty">ไม่พบสมาชิกที่ตรงกับ “{mq}”</p> : (
           <table className="tbl">
-            <thead><tr><th>ทะเบียน</th><th>ชื่อ/ครอบครัว</th><th>หมายเหตุ</th><th>เพิ่มเมื่อ</th><th>สถานะ</th><th></th></tr></thead>
+            <thead><tr><th>สมาชิก</th><th>เลขสมาชิก</th><th></th></tr></thead>
             <tbody>
-              {list.map((v) => (
-                <tr key={v.id}>
-                  <td><b>{v.plate}</b>{v.plate_province && <small>{v.plate_province}</small>}</td>
-                  <td>{v.holder_name ?? '—'}</td>
-                  <td>{v.note ?? '—'}</td>
-                  <td>{thDate(bkkDay(v.created_at))}</td>
-                  <td>{v.active ? 'เปิดสิทธิ์' : 'พักสิทธิ์'}</td>
-                  <td style={{ display: 'flex', gap: 6 }}>
-                    <ActionButton action={setVipActive} fields={{ id: v.id, active: v.active ? '0' : '1' }} label={v.active ? 'พักสิทธิ์' : 'เปิดสิทธิ์'} />
-                    <ActionButton action={removeVipPlate} fields={{ id: v.id }} label="ลบ" variant="danger" confirm={`ลบป้าย ${v.plate} ออกจากรายการ?`} />
-                  </td>
+              {hits.map((h) => (
+                <tr key={h.id}>
+                  <td><b>{h.name}</b><small>{fmtPhone(h.phone)}</small></td>
+                  <td>{h.member_no ?? '—'}</td>
+                  <td>{have.has(h.id) ? <small>มีบัตรแล้ว</small> : (
+                    <ActionForm action={grantBlackDiamond} className="tier-row" confirm={`มอบบัตร Black Diamond ให้ ${h.name}?`}>
+                      <input type="hidden" name="customer_id" value={h.id} />
+                      <input name="note" placeholder="หมายเหตุ (ไม่บังคับ)" aria-label="หมายเหตุ" />
+                      <Submit small>มอบบัตร</Submit>
+                    </ActionForm>
+                  )}</td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
-        <p className="hint">ตอนนี้ยังไม่ได้เชื่อมกล้องอ่านป้ายทะเบียน รายการที่เพิ่ม/พัก/ลบจะเข้าคิว แล้วส่งให้กล้องเมื่อเชื่อมต่อแล้ว · การเปลี่ยนแปลงทุกครั้งมีบันทึกประวัติ</p>
+      </section>
+
+      <section className="panel">
+        <h2>บัตรที่มอบแล้ว</h2>
+        {!list.length ? <p className="empty">ยังไม่มีสมาชิกที่ได้รับบัตร</p> : list.map((c) => {
+          const ps = byCustomer.get(c.customer_id) ?? [];
+          return (
+            <div key={c.customer_id} className="bd-card">
+              <div className="bd-head">
+                <div><b>◆ {c.customers?.name ?? '-'}</b><small>{c.customers?.phone ? fmtPhone(c.customers.phone) : ''}{c.customers?.member_no ? ` · ${c.customers.member_no}` : ''} · มอบเมื่อ {thDate(bkkDay(c.created_at))}{c.note ? ` · ${c.note}` : ''}</small></div>
+                <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <span className={`tag ${c.active ? '' : 'tag-warn'}`}>{c.active ? 'เปิดสิทธิ์' : 'พักสิทธิ์'}</span>
+                  <ActionButton action={setBlackDiamondActive} fields={{ customer_id: c.customer_id, active: c.active ? '0' : '1' }} label={c.active ? 'พักสิทธิ์' : 'เปิดสิทธิ์'} />
+                  <ActionButton action={revokeBlackDiamond} fields={{ customer_id: c.customer_id }} label="ยกเลิกบัตร" variant="danger" confirm={`ยกเลิกบัตรของ ${c.customers?.name ?? ''} และลบป้ายทะเบียนทั้งหมดของบัตรนี้?`} />
+                </div>
+              </div>
+              <div className="bd-plates">
+                {ps.length === 0 && <small>ยังไม่มีป้ายทะเบียน</small>}
+                {ps.map((p) => (
+                  <span key={p.id} className="bd-plate"><b>{p.plate}</b>{p.plate_province && <small>{p.plate_province}</small>}
+                    <ActionButton action={removeVipPlate} fields={{ id: p.id }} label="✕" variant="plain" confirm={`ลบป้าย ${p.plate}?`} />
+                  </span>
+                ))}
+              </div>
+              <ActionForm action={addVipPlate} className="tier-row" resetOnOk>
+                <input type="hidden" name="customer_id" value={c.customer_id} />
+                <input name="plate" placeholder="ทะเบียน เช่น กข 1234" required maxLength={14} aria-label="ทะเบียน" />
+                <input name="province" placeholder="จังหวัด (ไม่บังคับ)" aria-label="จังหวัด" />
+                <Submit small>เพิ่มป้าย</Submit>
+              </ActionForm>
+            </div>
+          );
+        })}
+        <p className="hint">ยังไม่ได้เชื่อมกล้องอ่านป้ายทะเบียน การเพิ่ม/พัก/ลบจะเข้าคิวแล้วส่งให้กล้องเมื่อเชื่อมต่อ · ทุกการเปลี่ยนแปลงมีบันทึกประวัติ</p>
       </section>
     </main>
   );

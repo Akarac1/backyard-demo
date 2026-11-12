@@ -83,6 +83,8 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
   const sum0 = ((vsum ?? []) as { customers_with_visit: number; repeat_customers: number; total_visits: number; avg_gap_days: number | null }[])[0];
   type VRow = { id: string; name: string; phone: string; member_no: string | null; bookings: number; visits: number; repeats: number; first_visit: string | null; last_visit: string | null; avg_gap_days: number | null; visits_12m: number; total_days: number; total_count: number };
   const visitRows = (vrows ?? []) as VRow[];
+  const { data: bdRows } = await sb.from('black_diamond').select('customer_id').eq('active', true);
+  const bd = new Set((bdRows ?? []).map((x) => x.customer_id));
   const vTotal = visitRows[0]?.total_count ?? 0;
   const freq = (r: VRow) => r.avg_gap_days == null ? (r.visits >= 2 ? '—' : r.visits === 1 ? 'มาครั้งแรก' : 'ยังไม่เคยมาใช้') : r.avg_gap_days <= 10 ? 'บ่อยมาก (ทุก ~' + Math.round(r.avg_gap_days) + ' วัน)' : r.avg_gap_days <= 45 ? 'ทุกเดือน (ทุก ~' + Math.round(r.avg_gap_days) + ' วัน)' : r.avg_gap_days <= 120 ? 'ทุกไตรมาส (ทุก ~' + Math.round(r.avg_gap_days) + ' วัน)' : 'นาน ๆ ครั้ง (ทุก ~' + Math.round(r.avg_gap_days) + ' วัน)';
   const vlink = (o: { s?: string; p?: number }) => `/admin/members?${new URLSearchParams({ ...(vq ? { v: vq } : {}), vs: o.s ?? sortKey, vp: String(o.p ?? 0) })}#visits`;
@@ -116,7 +118,7 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
               <tbody>
                 {visitRows.map((r) => (
                   <tr key={r.id}>
-                    <td><b>{r.name}</b><small>{fmtPhone(r.phone)}{r.member_no ? ` · ${r.member_no}` : ''}</small></td>
+                    <td><b>{bd.has(r.id) && <span title="Black Diamond">◆ </span>}{r.name}</b><small>{fmtPhone(r.phone)}{r.member_no ? ` · ${r.member_no}` : ''}</small></td>
                     <td className="r">{r.visits}{r.bookings > r.visits && <small>จองอยู่ {r.bookings - r.visits}</small>}</td>
                     <td className="r">{r.repeats}</td>
                     <td className="r">{r.visits_12m}</td>

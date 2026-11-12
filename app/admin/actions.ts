@@ -150,13 +150,18 @@ export async function setNotePresets(_: ActionResult, f: FormData): Promise<Acti
   return run('admin_set_note_presets', { p_presets: presets }, 'บันทึกข้อความสำเร็จรูปแล้ว', ['/admin/settings', '/driver']);
 }
 
-export async function addVipPlate(_: ActionResult, f: FormData): Promise<ActionResult> {
-  return run('admin_vip_add', { p_plate: str(f, 'plate'), p_province: str(f, 'province'), p_holder: str(f, 'holder'), p_note: str(f, 'note') },
-    'เพิ่มป้ายทะเบียนแล้ว', ['/admin/members/black-diamond'], ['admin']);
+export async function grantBlackDiamond(_: ActionResult, f: FormData): Promise<ActionResult> {
+  return run('admin_bd_grant', { p_customer: str(f, 'customer_id'), p_note: str(f, 'note') }, 'มอบบัตร Black Diamond ให้สมาชิกแล้ว · เพิ่มป้ายทะเบียนของสมาชิกได้เลย', ['/admin/members/black-diamond', '/admin/members'], ['admin']);
 }
-export async function setVipActive(_: ActionResult, f: FormData): Promise<ActionResult> {
+export async function setBlackDiamondActive(_: ActionResult, f: FormData): Promise<ActionResult> {
   const on = str(f, 'active') === '1';
-  return run('admin_vip_set_active', { p_id: str(f, 'id'), p_active: on }, on ? 'เปิดสิทธิ์แล้ว' : 'พักสิทธิ์แล้ว', ['/admin/members/black-diamond']);
+  return run('admin_bd_set_active', { p_customer: str(f, 'customer_id'), p_active: on }, on ? 'เปิดสิทธิ์แล้ว' : 'พักสิทธิ์แล้ว', ['/admin/members/black-diamond', '/admin/members'], ['admin']);
+}
+export async function revokeBlackDiamond(_: ActionResult, f: FormData): Promise<ActionResult> {
+  return run('admin_bd_revoke', { p_customer: str(f, 'customer_id') }, 'ยกเลิกบัตรและลบป้ายทะเบียนของสมาชิกแล้ว', ['/admin/members/black-diamond', '/admin/members'], ['admin']);
+}
+export async function addVipPlate(_: ActionResult, f: FormData): Promise<ActionResult> {
+  return run('admin_bd_add_plate', { p_customer: str(f, 'customer_id'), p_plate: str(f, 'plate'), p_province: str(f, 'province') }, 'เพิ่มป้ายทะเบียนแล้ว', ['/admin/members/black-diamond'], ['admin']);
 }
 export async function removeVipPlate(_: ActionResult, f: FormData): Promise<ActionResult> {
   return run('admin_vip_remove', { p_id: str(f, 'id') }, 'ลบป้ายทะเบียนแล้ว', ['/admin/members/black-diamond']);

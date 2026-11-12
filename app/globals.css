@@ -865,3 +865,11 @@ svg.density { width: 100%; height: auto; display: block; }
 .icon-btn { font: inherit; width: 36px; height: 36px; border-radius: 8px; border: 1px solid #D5DCE6; background: #fff; cursor: pointer; }
 .icon-btn:disabled { opacity: .35; cursor: default; }
 .icon-btn.del { color: var(--bad, #C0392B); }
+
+/* Black Diamond cards (admin) */
+.bd-card { border: 1px solid var(--line, #e3e9e5); border-radius: 12px; padding: 14px; margin: 10px 0; display: grid; gap: 10px; }
+.bd-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; align-items: center; }
+.bd-head small { display: block; color: #6b7a70; }
+.bd-plates { display: flex; flex-wrap: wrap; gap: 8px; }
+.bd-plate { display: inline-flex; align-items: center; gap: 6px; background: #f3f6f4; border-radius: 999px; padding: 4px 6px 4px 12px; }
+.bd-plate small { color: #6b7a70; }
