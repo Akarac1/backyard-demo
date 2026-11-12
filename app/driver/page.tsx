@@ -32,7 +32,7 @@ const STEPS = {
 const waiting = (t: { direction: string; called_at: string | null; status: string }) =>
   t.direction === 'from_airport' && !!t.called_at && !['en_route', 'arrived', 'done'].includes(t.status);
 
-export default async function DriverPage({ searchParams }: { searchParams: Promise<{ d?: string; v?: string; view?: string }> }) {
+export default async function DriverPage({ searchParams }: { searchParams: Promise<{ d?: string; v?: string; view?: string; all?: string }> }) {
   const me = await requireStaff(['admin', 'driver', 'ops', 'exec']);
   const sp = await searchParams;
   const today = todayBkk();
@@ -46,13 +46,31 @@ export default async function DriverPage({ searchParams }: { searchParams: Promi
   const vehicleId = sp.v || null;
   const myVehicle = vehicles?.find((v) => v.id === vehicleId);
 
+  const SEL = 'id, direction, pax, large_bags, small_bags, pickup_at, flight_number, status, drop_door, departed_at, arrived_at, completed_at, driver_note, vehicle_id, driver_staff_id, landing_at, welcome_sent_at, called_at, called_by, vehicles(name), driver:staff_users!shuttle_trips_driver_staff_id_fkey(display_name), bookings(code, plate, plate_province, customers(name, phone, line_user_id))';
   let q = sb.from('shuttle_trips')
-    .select('id, direction, pax, large_bags, small_bags, pickup_at, flight_number, status, drop_door, departed_at, arrived_at, completed_at, driver_note, vehicle_id, driver_staff_id, landing_at, welcome_sent_at, called_at, called_by, vehicles(name), driver:staff_users!shuttle_trips_driver_staff_id_fkey(display_name), bookings(code, plate, plate_province, customers(name, phone, line_user_id))')
+    .select(SEL)
     .gte('pickup_at', `${day}T00:00:00+07:00`).lt('pickup_at', `${addDays(day, 1)}T00:00:00+07:00`)
     .neq('status', 'cancelled').order('pickup_at');
   if (vehicleId) q = q.eq('vehicle_id', vehicleId);
   const { data } = await q;
-  const trips = (data ?? []) as unknown as Trip[];
+  let trips = (data ?? []) as unknown as Trip[];
+  // Focus mode (driver accounts): once a driver has accepted a job they see only the jobs of that vehicle
+  // (their own + the next ones assigned to the same van, incl. a customer who just called) until it is finished.
+  // A driver with nothing accepted sees every job to pick from. ?all=1 lifts it for an emergency.
+  let focusName: string | null = null;
+  if (me.role === 'driver' && sp.all !== '1' && !vehicleId) {
+    const { data: mine } = await sb.from('shuttle_trips').select(SEL)
+      .eq('driver_staff_id', me.uid).not('status', 'in', '(done,cancelled)').order('pickup_at').limit(10);
+    const mineTrips = (mine ?? []) as unknown as Trip[];
+    if (mineTrips.length) {
+      const vids = new Set(mineTrips.map((t) => t.vehicle_id).filter(Boolean) as string[]);
+      const byId = new Map(trips.map((t) => [t.id, t]));
+      for (const t of mineTrips) byId.set(t.id, t);
+      trips = [...byId.values()].filter((t) => t.driver_staff_id === me.uid || (t.vehicle_id !== null && vids.has(t.vehicle_id)))
+        .sort((a, b) => (a.pickup_at ?? '').localeCompare(b.pickup_at ?? ''));
+      focusName = mineTrips.find((t) => t.vehicles)?.vehicles?.name ?? 'ของคุณ';
+    }
+  }
   // customers who called and nobody is on the way yet come first
   const open = trips.filter((t) => t.status !== 'done').sort((a, b) => Number(waiting(b)) - Number(waiting(a)));
   const urgent = open.filter(waiting).length;
@@ -151,13 +169,16 @@ export default async function DriverPage({ searchParams }: { searchParams: Promi
               <Link href={href(undefined, sp.v)} className={day === today ? 'on' : ''}>วันนี้</Link>
               <Link href={href('tomorrow', sp.v)} className={day === addDays(today, 1) ? 'on' : ''}>พรุ่งนี้</Link>
             </>}
-        {<>
+        {!focusName && <>
           <span className="seg-gap" />
           <Link href={href(sp.d, undefined)} className={!sp.v ? 'on' : ''}>ทุกคัน</Link>
           {(vehicles ?? []).map((v) => <Link key={v.id} href={href(sp.d, v.id)} className={sp.v === v.id ? 'on' : ''}>{v.name}</Link>)}
         </>}
       </nav>
 
+      {focusName && !showDone && (
+        <p className="hint" style={{ margin: '0 0 8px' }}>โหมดโฟกัส: แสดงเฉพาะงานของรถ {focusName} · งานคันอื่นจะกลับมาเมื่องานของคุณเสร็จ · <Link href={href(sp.d, undefined) + (href(sp.d, undefined).includes('?') ? '&' : '?') + 'all=1'}>ดูทุกคัน (กรณีฉุกเฉิน)</Link></p>
+      )}
       {!showDone && <>
         {!open.length && !recent.length && <section className="panel"><p className="empty">{done.length ? `งาน${thDate(day)}เสร็จครบแล้ว ${done.length} งาน` : 'ไม่มีงาน'}</p></section>}
         {/* one keyed list, so a card keeps its message for a moment after it is finished */}
