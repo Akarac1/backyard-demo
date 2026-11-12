@@ -43,6 +43,7 @@ const ERR: Record<string, string> = {
   invalid_plate: 'ทะเบียนไม่ถูกต้อง (2–12 ตัวอักษร)',
   plate_exists: 'ทะเบียนนี้อยู่ในรายการแล้ว',
   invalid_grace_hour: 'ชั่วโมงต้องอยู่ระหว่าง 18–23',
+  invalid_group_max: 'จำนวนรถต่อกลุ่มต้องอยู่ระหว่าง 2–20',
   not_in_lot: 'รถคันนี้ไม่ได้อยู่ในลานแล้ว',
   invalid_exit_minutes: 'เวลาออกจากโถงต้องอยู่ระหว่าง 0–180 นาที',
   invalid_presets: 'ข้อความสำเร็จรูปมีได้ไม่เกิน 12 ข้อความ ข้อความละไม่เกิน 200 ตัวอักษร',
@@ -98,7 +99,13 @@ export async function setStatus(_: ActionResult, f: FormData): Promise<ActionRes
 export async function markPaid(_: ActionResult, f: FormData): Promise<ActionResult> {
   const id = str(f, 'id');
   const r = await run('admin_mark_paid', { p_booking_id: id, p_method: str(f, 'method') || 'cash' }, 'บันทึกรับเงินและยืนยันการจองแล้ว', [`/admin/bookings/${id}`, '/admin', '/admin/bookings']);
-  if (r?.ok) await afterConfirmed(id).catch((e) => console.error('afterConfirmed', e));
+  if (r?.ok) {
+    // group booking: the shuttle and the confirmation belong to the lead car
+    const { data: bk } = await db().from('bookings').select('group_id').eq('id', id).maybeSingle();
+    let leadId = id;
+    if (bk?.group_id) { const { data: g } = await db().from('booking_groups').select('lead_booking_id').eq('id', bk.group_id).maybeSingle(); if (g?.lead_booking_id) leadId = g.lead_booking_id; }
+    await afterConfirmed(leadId).catch((e) => console.error('afterConfirmed', e));
+  }
   return r;
 }
 
@@ -143,6 +150,10 @@ export async function setDispatch(_: ActionResult, f: FormData): Promise<ActionR
 export async function setExitMinutes(_: ActionResult, f: FormData): Promise<ActionResult> {
   return run('admin_set_exit_minutes', { p_domestic: num(f, 'domestic'), p_international: num(f, 'international') },
     'บันทึกเวลาออกจากโถงแล้ว มีผลกับการจองใหม่', ['/admin/settings']);
+}
+
+export async function setGroupMax(_: ActionResult, f: FormData): Promise<ActionResult> {
+  return run('admin_set_group_max', { p_max: num(f, 'max') }, 'บันทึกจำนวนรถต่อกลุ่มแล้ว มีผลกับการจองใหม่', ['/admin/settings']);
 }
 
 export async function setNotePresets(_: ActionResult, f: FormData): Promise<ActionResult> {

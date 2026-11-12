@@ -17,7 +17,7 @@ const TABS = [
 ];
 const PAGE = 50;
 
-type Row = { id: string; code: string; plate: string; plate_province: string; status: string; start_date: string; end_date: string; days: number; total_amount: number; shuttle: boolean; pax: number | null; customers: { name: string; phone: string } | null };
+type Row = { id: string; code: string; plate: string; plate_province: string; status: string; start_date: string; end_date: string; days: number; total_amount: number; shuttle: boolean; pax: number | null; group_id?: string | null; customers: { name: string; phone: string } | null };
 
 export default async function BookingsPage({ searchParams }: { searchParams: Promise<{ q?: string; s?: string; from?: string; p?: string }> }) {
   const sp = await searchParams;
@@ -35,7 +35,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
   }));
 
   let query = sb.from('bookings')
-    .select('id, code, plate, plate_province, status, start_date, end_date, days, total_amount, shuttle, pax, customers(name, phone)', { count: 'exact' });
+    .select('id, code, plate, plate_province, status, start_date, end_date, days, total_amount, shuttle, pax, group_id, customers(name, phone)', { count: 'exact' });
   if (tab.statuses) query = query.in('status', tab.statuses);
   if (sp.from) query = query.gte('start_date', sp.from);
   if (q) {
@@ -79,7 +79,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
                 {rows.map((r) => (
                   <tr key={r.id}>
                     <td><Link href={`/admin/bookings/${r.id}`} className="code">{r.code}</Link></td>
-                    <td><b>{r.plate}</b><small>{r.plate_province}</small></td>
+                    <td><b>{r.plate}</b><small>{r.plate_province}{r.group_id ? ' · กลุ่ม' : ''}</small></td>
                     <td>{r.customers?.name}<small>{r.customers?.phone}</small></td>
                     <td>{thDate(r.start_date)} – {thDate(r.end_date)}<small>{r.days} วัน</small></td>
                     <td>{r.shuttle ? `${r.pax} คน` : '–'}</td>

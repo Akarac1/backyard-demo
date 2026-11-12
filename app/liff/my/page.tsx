@@ -77,7 +77,7 @@ function BookingQr({ code }: { code: string }) {
 }
 
 type Trip = { id: string; direction: string; status: string; large_bags: number; small_bags: number; called_at: string | null };
-type Row = { id: string; code: string; plate: string; start_date: string; end_date: string; days: number; total_amount: number; status: string; shuttle: boolean; pax: number | null; rescheduled_at: string | null; shuttle_trips?: Trip[] };
+type Row = { id: string; code: string; plate: string; start_date: string; end_date: string; days: number; total_amount: number; status: string; shuttle: boolean; pax: number | null; rescheduled_at: string | null; group_id?: string | null; shuttle_trips?: Trip[] };
 
 type Points = { points: number; pointValue: number; enabled: boolean; expiring: number; expiringAt: string | null; moves: { at: string; points: number; label: string }[]; perBaht: number; referral: number; months: number };
 type Member = { memberNo: string | null; name: string | null; tier: string; tierName: string; multiplier: number; spend: number; windowMonths: number; nextTierName: string | null; nextMin: number | null; points: number; manual: boolean; campaigns: { name: string; description: string | null; business: string; effect: string | null; endsAt: string | null; stay: string | null }[] };
@@ -163,7 +163,7 @@ export default function MyBookings() {
             const [label, tone] = STATUS[r.status] ?? [r.status, ''];
             return (
               <div className={`card${ACTIVE.includes(r.status) ? '' : ' past'}`} key={r.id}>
-                <div style={{ display: 'flex', justifyContent: 'space-between' }}><b>{r.code}</b><span className={`tag ${tone}`}>{t(label)}</span></div>
+                <div style={{ display: 'flex', justifyContent: 'space-between' }}><b>{r.code}{r.group_id ? <span className="small"> · {t('จองหลายคัน')}</span> : null}</b><span className={`tag ${tone}`}>{t(label)}</span></div>
                 <p style={{ margin: '6px 0' }}>{r.plate} · {day(r.start_date)} – {day(r.end_date)} ({t('{n} วัน', { n: r.days })})</p>
                 <p className="small" style={{ margin: 0 }}>{r.shuttle ? t('รถรับส่ง {n} คน · ', { n: r.pax ?? 0 }) : ''}{money(r.total_amount)}{r.rescheduled_at ? t(' · ใช้สิทธิ์เลื่อนแล้ว') : ''}</p>
                 {['confirmed', 'checked_in'].includes(r.status) && !r.shuttle && <BookingQr code={r.code} />}

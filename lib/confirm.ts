@@ -54,14 +54,20 @@ export async function afterConfirmed(bookingId: string) {
   await alertNoVan(bookingId).catch((e) => console.error('alertNoVan', String(e)));
 
   const { data: b } = await db().from('bookings')
-    .select('code, plate, start_date, end_date, days, total_amount, shuttle, pax, customers(line_user_id)')
+    .select('code, plate, start_date, end_date, days, total_amount, shuttle, pax, group_id, customers(line_user_id)')
     .eq('id', bookingId).single();
   if (!b) return;
+  // group booking: one confirmation for the whole group (all plates, total of every car)
+  let plate = b.plate, total = b.total_amount;
+  if (b.group_id) {
+    const { data: cars } = await db().from('bookings').select('plate, total_amount').eq('group_id', b.group_id).order('created_at');
+    if (cars && cars.length > 1) { plate = cars.map((c) => c.plate).join(', '); total = cars.reduce((a, c) => a + c.total_amount, 0); }
+  }
   const lineUserId = (b.customers as unknown as { line_user_id: string } | null)?.line_user_id;
   if (lineUserId) {
     await push(lineUserId, [confirmationFlex({
-      code: b.code, plate: b.plate, start: thDate(b.start_date), end: thDate(b.end_date),
-      days: b.days, total: b.total_amount, shuttle: b.shuttle, pax: b.pax,
+      code: b.code, plate, start: thDate(b.start_date), end: thDate(b.end_date),
+      days: b.days, total, shuttle: b.shuttle, pax: b.pax,
     }, process.env.NEXT_PUBLIC_BASE_URL ?? '')]);
   }
 }

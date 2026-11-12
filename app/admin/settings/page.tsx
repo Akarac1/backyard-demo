@@ -1,6 +1,6 @@
 import { db } from '@/lib/supabase';
 import { ActionForm, Submit } from '@/components/ActionForm';
-import { setContact, setDispatch, setExitMinutes, setLateGraceHour, setMemberDiscount, setMemberDiscountRules, setPointsSettings, updateSettings } from '../actions';
+import { setContact, setDispatch, setExitMinutes, setGroupMax, setLateGraceHour, setMemberDiscount, setMemberDiscountRules, setPointsSettings, updateSettings } from '../actions';
 import { Vehicles } from './Vehicles';
 import { TvLink } from './TvLink';
 import { NotePresets } from './NotePresets';
@@ -47,6 +47,14 @@ export default async function SettingsPage() {
           <label>เที่ยวบินในประเทศ<span className="with-unit"><input name="domestic" type="number" min={0} max={180} defaultValue={s.exit_minutes_domestic ?? 30} required /><em>นาที</em></span><small>ลงเครื่อง + รอกระเป๋า</small></label>
           <label>เที่ยวบินต่างประเทศ<span className="with-unit"><input name="international" type="number" min={0} max={180} defaultValue={s.exit_minutes_international ?? 60} required /><em>นาที</em></span><small>ลงเครื่อง + ผ่าน ตม. + รอกระเป๋า</small></label>
           <div className="form-actions span2"><Submit>บันทึกเวลาออกจากโถง</Submit></div>
+        </ActionForm>
+      </section>
+      <section className="panel" id="group">
+        <h2>จองหลายคัน (Group)</h2>
+        <p className="hint">ลูกค้าจองหลายคันในครั้งเดียว (ทัวร์ ครอบครัวหลายคัน) · ใช้วันเข้า-ออกเดียวกัน จ่ายยอดรวมครั้งเดียว · รถรับส่งไป-กลับ 1 เที่ยวสำหรับทั้งกลุ่ม (คนและกระเป๋ารวมกันต้องพอดีรถ 1 คัน) · ส่วนลดลูกค้าเก่า/เพื่อนแนะนำ ใช้ 1 ครั้งต่อกลุ่ม</p>
+        <ActionForm action={setGroupMax} className="form grid2">
+          <label>จองพร้อมกันได้สูงสุด<span className="with-unit"><input name="max" type="number" min={2} max={20} defaultValue={s.group_max_cars ?? 5} required /><em>คัน</em></span><small>รวมคันแรก (2–20)</small></label>
+          <div className="form-actions span2"><Submit>บันทึก</Submit></div>
         </ActionForm>
       </section>
       <section className="panel">

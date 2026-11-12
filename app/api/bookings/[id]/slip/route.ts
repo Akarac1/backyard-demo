@@ -6,12 +6,19 @@ import { dbErrorToThai } from '@/lib/format';
 import { serverT } from '@/lib/i18nDict';
 
 export async function POST(req: Request, { params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
+  const { id: reqId } = await params;
   const L = serverT(req);
   const uid = await currentUser(req);
   if (!uid) return json({ error: 'unauthorized' }, 401);
-  const booking = await ownBooking(id, uid);
+  let booking = await ownBooking(reqId, uid);
   if (!booking) return json({ error: 'not_found' }, 404);
+  // group booking: the slip always belongs to the lead car (one payment for every car)
+  const gid = (booking as unknown as { group_id: string | null }).group_id;
+  if (gid) {
+    const { data: g } = await db().from('booking_groups').select('lead_booking_id').eq('id', gid).maybeSingle();
+    if (g?.lead_booking_id && g.lead_booking_id !== booking.id) booking = (await ownBooking(g.lead_booking_id, uid)) ?? booking;
+  }
+  const id = booking.id;
   if (booking.status !== 'pending_payment' && booking.status !== 'expired')
     return json({ confirmed: booking.status === 'confirmed', message: L('การจองนี้ชำระแล้ว') });
 
@@ -35,8 +42,9 @@ export async function POST(req: Request, { params }: { params: Promise<{ id: str
   await db().storage.from('slips').upload(path, file, { contentType: kind.type });
   await db().from('payments').update({ slip_path: path }).eq('id', payment.id);
   // Slip received: hold the spot longer so a slow bank check or the admin can still confirm it.
-  await db().from('bookings').update({ hold_expires_at: new Date(Date.now() + 60 * 60_000).toISOString() })
-    .eq('id', id).eq('status', 'pending_payment');
+  const hold = new Date(Date.now() + 60 * 60_000).toISOString();
+  await db().from('bookings').update({ hold_expires_at: hold }).eq('id', id).eq('status', 'pending_payment');
+  if (gid) await db().from('bookings').update({ hold_expires_at: hold }).eq('group_id', gid).eq('status', 'pending_payment');
 
   const result = await verifySlip(file, { amount: payment.amount, notBefore: new Date(payment.created_at), remark: `Backyard ${booking.code}` });
   if (!result.ok) {

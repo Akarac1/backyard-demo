@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation';
 import { authHeaders, useLiff } from '../useLiff';
 import { useT } from '@/components/Lang';
 
-type Prices = { price_per_day: number; shuttle_price: number; hold_minutes: number; reschedule_min_days: number; pickup_meeting_point: string; member_discount?: number; member_discount_min_days?: number; member_discount_needs_shuttle?: boolean };
+type Prices = { price_per_day: number; shuttle_price: number; hold_minutes: number; reschedule_min_days: number; pickup_meeting_point: string; member_discount?: number; member_discount_min_days?: number; member_discount_needs_shuttle?: boolean; group_max_cars?: number };
 const DEFAULT_PRICES: Prices = { price_per_day: 100, shuttle_price: 300, hold_minutes: 15, reschedule_min_days: 7, pickup_meeting_point: 'ชั้น 2 ประตู 4' };
 
 function todayBkk() {
@@ -28,6 +28,9 @@ export default function BookPage() {
     start: today, end: today, name: '', phone: '', plate: '', province: 'กรุงเทพมหานคร',
     shuttle: true, pax: 2, largeBags: 0, outboundTime: '', returnFlight: '', returnLanding: '', flightType: 'international', refPhone: '',
   });
+  // other cars booked together with the first one (group booking: one payment, one shuttle)
+  const [more, setMore] = useState<{ plate: string; province: string }[]>([]);
+  const cars = 1 + more.length;
   const [avail, setAvail] = useState<Avail[] | null>(null);
   const [pr, setPr] = useState<Prices>(DEFAULT_PRICES);
   useEffect(() => { fetch('/api/prices').then((r) => (r.ok ? r.json() : null)).then((p) => p && setPr(p)).catch(() => {}); }, []);
@@ -48,22 +51,27 @@ export default function BookPage() {
   useEffect(() => { if (liff.name && !f.name) setF((x) => ({ ...x, name: liff.name! })); }, [liff.name]); // eslint-disable-line
 
   const days = f.end >= f.start ? daysBetween(f.start, f.end) : 0;
-  const subtotal = days * pr.price_per_day + (f.shuttle ? pr.shuttle_price : 0);
+  const parking = days * pr.price_per_day;
+  const leadGross = parking + (f.shuttle ? pr.shuttle_price : 0);          // the first car carries the shuttle
+  const subtotal = leadGross + (cars - 1) * parking;
   // campaign (e.g. 10 days, 1 day free) and the returning-customer discount; a non-stackable campaign
-  // replaces the member discount when it is bigger (the server applies the same rule)
+  // replaces the member discount when it is bigger (the server applies the same rule).
+  // group: the returning-customer discount and the coupon count once (first car); a campaign applies per car
   const camp = disc?.campaign ?? null;
-  let discount = Math.min(disc?.amount ?? 0, subtotal);
+  let discount = Math.min(disc?.amount ?? 0, leadGross);
   let campAmount = camp?.amount ?? 0;
   if (camp && !camp.stackable && discount > 0) { if (campAmount > discount) discount = 0; else campAmount = 0; }
-  // a parking-discount coupon (the server checks it again)
+  // a parking-discount coupon (the server checks it again); points can't be spent on a group booking
   const coupons = disc?.coupons ?? [];
-  const rewards = disc?.rewards ?? [];
+  const rewards = cars > 1 ? [] : disc?.rewards ?? [];
   const points = disc?.points ?? 0;
   const coupon = pick.startsWith('c:') ? coupons.find((c) => c.id === pick.slice(2)) : undefined;
   const reward = pick.startsWith('r:') ? rewards.find((r) => r.id === pick.slice(2) && r.cost <= points) : undefined;
   const pickValue = coupon?.value ?? reward?.value ?? 0;
-  const couponAmount = Math.max(0, Math.min(pickValue, subtotal - discount));
-  campAmount = Math.max(0, Math.min(campAmount, subtotal - discount - couponAmount));
+  const couponAmount = Math.max(0, Math.min(pickValue, leadGross - discount));
+  const campPer = campAmount;
+  const campLead = Math.max(0, Math.min(campPer, leadGross - discount - couponAmount));
+  campAmount = campLead + (cars - 1) * Math.max(0, Math.min(campPer, parking));
   const total = subtotal - discount - couponAmount - campAmount;
 
   useEffect(() => {
@@ -75,7 +83,7 @@ export default function BookPage() {
     return () => clearTimeout(t);
   }, [f.start, f.end]);
 
-  const full = useMemo(() => avail?.find((a) => !a.available), [avail]);
+  const full = useMemo(() => avail?.find((a) => !a.available || a.cap - a.used < cars), [avail, cars]);
   const minLeft = useMemo(() => (avail?.length ? Math.min(...avail.map((a) => a.cap - a.used)) : null), [avail]);
 
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -85,6 +93,9 @@ export default function BookPage() {
   async function toReview(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (more.some((c) => !c.plate.trim())) { setError(t('กรอกทะเบียนรถให้ครบทุกคัน หรือกดลบคันที่ไม่ใช้')); return; }
+    const norm = [f.plate, ...more.map((c) => c.plate)].map((x) => x.replace(/\s+/g, '').toUpperCase());
+    if (new Set(norm).size !== norm.length) { setError(t('ทะเบียนรถซ้ำกัน')); return; }
     if (f.shuttle && (!f.outboundTime || !f.returnLanding)) { setError(t('กรุณาใส่เวลามาถึงลาน และเวลาเครื่องลงขากลับ')); return; }
     if (!/^0\d{8,9}$/.test(f.phone.replace(/\D/g, ''))) { setError(t('เบอร์โทรไม่ถูกต้อง')); return; }
     if (f.refPhone.trim() && !/^0\d{8,9}$/.test(f.refPhone.replace(/\D/g, '').replace(/^66/, '0'))) { setError(t('เบอร์ลูกค้าที่แนะนำไม่ถูกต้อง')); return; }
@@ -121,7 +132,7 @@ export default function BookPage() {
     const r = await fetch('/api/bookings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...authHeaders(liff.idToken) },
-      body: JSON.stringify({ ...f, couponId: coupon?.id ?? null, rewardId: reward?.id ?? null }),
+      body: JSON.stringify({ ...f, cars: more, couponId: coupon?.id ?? null, rewardId: reward?.id ?? null }),
     });
     const j = await r.json();
     setBusy(false);
@@ -152,7 +163,7 @@ export default function BookPage() {
           </div>
           <div className="card">
             <div className="sum-head"><h2>{t('รถและผู้จอง')}</h2><button type="button" className="link-btn" onClick={() => setReview(false)}>{t('แก้ไข')}</button></div>
-            <Row k={t('ทะเบียนรถ')} v={`${f.plate} ${f.province}`} />
+            {cars > 1 ? [{ plate: f.plate, province: f.province }, ...more].map((c, i) => <Row key={i} k={t('รถคันที่ {n}', { n: i + 1 })} v={`${c.plate} ${c.province}`} />) : <Row k={t('ทะเบียนรถ')} v={`${f.plate} ${f.province}`} />}
             <Row k={t('ชื่อผู้จอง')} v={f.name} />
             <Row k={t('เบอร์โทร')} v={f.phone} />
             {f.refPhone.trim() && <Row k={t('ลูกค้าที่แนะนำ')} v={f.refPhone} />}
@@ -160,6 +171,7 @@ export default function BookPage() {
           <div className="card">
             <div className="sum-head"><h2>{t('รถรับส่ง')}</h2><button type="button" className="link-btn" onClick={() => setReview(false)}>{t('แก้ไข')}</button></div>
             {f.shuttle ? <>
+              {cars > 1 && <p className="small" style={{ margin: '0 0 6px' }}>{t('ทั้งกลุ่มไป-กลับพร้อมกัน ใช้รถรับส่ง 1 คัน')}</p>}
               <Row k={t('ผู้โดยสาร')} v={t('{n} คน', { n: f.pax })} />
               <Row k={t('กระเป๋าใบใหญ่')} v={f.largeBags ? t('{n} ใบ', { n: f.largeBags }) : t('ไม่มี')} />
               <Row k={t('ขาไป: มาถึงลาน')} v={thDayTime(f.outboundTime)} />
@@ -170,11 +182,11 @@ export default function BookPage() {
           </div>
           {warnings.map((w) => <div key={w} className="alert info">{t('โปรดตรวจสอบ:')} {w}</div>)}
           <div className="card">
-            <div className="price"><span>{t('ที่จอด {n} วัน × {p}', { n: days, p: pr.price_per_day })}</span><span>{money(days * pr.price_per_day)}</span></div>
+            <div className="price"><span>{cars > 1 ? t('ที่จอด {n} วัน × {p} × {c} คัน', { n: days, p: pr.price_per_day, c: cars }) : t('ที่จอด {n} วัน × {p}', { n: days, p: pr.price_per_day })}</span><span>{money(parking * cars)}</span></div>
             {f.shuttle && <div className="price"><span>{t('รถรับส่งไป-กลับ')}</span><span>{money(pr.shuttle_price)}</span></div>}
             {discount > 0 && <div className="price discount"><span>{disc?.reason === 'referral' ? t('ส่วนลดเพื่อนแนะนำ') : t('ส่วนลดลูกค้าเก่า')}</span><span>−{money(discount)}</span></div>}
             {campAmount > 0 && <div className="price discount"><span>{t('แคมเปญ')} {camp?.name}</span><span>−{money(campAmount)}</span></div>}
-            {(coupons.length > 0 || rewards.length > 0) && subtotal - discount > 0 && (
+            {(coupons.length > 0 || rewards.length > 0) && leadGross - discount > 0 && (
               <fieldset className="use-points">
                 <legend>{t('ใช้แต้ม / คูปองลดค่าบริการ')} {disc?.points != null && <span className="pts-bal">{t('มี {n} แต้ม', { n: points })}</span>}</legend>
                 <label className={`up-opt${pick === '' ? ' on' : ''}`}>
@@ -185,7 +197,7 @@ export default function BookPage() {
                   <label key={c.id} className={`up-opt${pick === `c:${c.id}` ? ' on' : ''}`}>
                     <input type="radio" name="use" checked={pick === `c:${c.id}`} onChange={() => setPick(`c:${c.id}`)} />
                     <span className="up-main">{t('คูปองที่แลกไว้แล้ว')} · {t(c.title)}<small>{c.code} · {t('ใช้ได้ถึง {d}', { d: thDay(c.expiresAt) })}</small></span>
-                    <b>−{money(Math.min(c.value, subtotal - discount))}</b>
+                    <b>−{money(Math.min(c.value, leadGross - discount))}</b>
                   </label>
                 ))}
                 {rewards.map((r) => {
@@ -195,11 +207,11 @@ export default function BookPage() {
                       <input type="radio" name="use" disabled={!can} checked={pick === `r:${r.id}`} onChange={() => setPick(`r:${r.id}`)} />
                       <span className="up-main">{t('ใช้ {a} แต้ม ลด {b}', { a: r.cost, b: money(r.value) })}
                         <small>{can ? t('เหลือ {n} แต้มหลังจอง', { n: points - r.cost }) : t('ขาดอีก {n} แต้ม', { n: r.cost - points })}</small></span>
-                      {can && <b>−{money(Math.min(r.value, subtotal - discount))}</b>}
+                      {can && <b>−{money(Math.min(r.value, leadGross - discount))}</b>}
                     </label>
                   );
                 })}
-                {reward && r_waste(reward.value, subtotal - discount) && <p className="small up-warn">{t('ส่วนลดมากกว่ายอดที่ต้องจ่าย ส่วนที่เกินจะไม่ได้คืนเป็นแต้ม')}</p>}
+                {reward && r_waste(reward.value, leadGross - discount) && <p className="small up-warn">{t('ส่วนลดมากกว่ายอดที่ต้องจ่าย ส่วนที่เกินจะไม่ได้คืนเป็นแต้ม')}</p>}
               </fieldset>
             )}
             {couponAmount > 0 && <div className="price discount"><span>{coupon ? `${t('คูปอง')} ${coupon.code}` : t('ใช้ {n} แต้ม', { n: reward?.cost ?? 0 })}</span><span>−{money(couponAmount)}</span></div>}
@@ -235,7 +247,7 @@ export default function BookPage() {
             <div><label htmlFor="start">{t('วันเข้าจอด')}</label><input id="start" type="date" min={today} value={f.start} onChange={set('start')} required /></div>
             <div><label htmlFor="end">{t('วันรับรถคืน')}</label><input id="end" type="date" min={f.start} value={f.end} onChange={set('end')} required /></div>
           </div>
-          {full && <div className="alert bad">{t('วันที่ {d} ที่จอดเต็มแล้ว ลองเลือกวันอื่น', { d: thDay(full.day) })}</div>}
+          {full && <div className="alert bad">{cars > 1 && full.available ? t('วันที่ {d} ที่ว่างเหลือไม่พอสำหรับ {n} คัน', { d: thDay(full.day), n: cars }) : t('วันที่ {d} ที่จอดเต็มแล้ว ลองเลือกวันอื่น', { d: thDay(full.day) })}</div>}
           {!full && minLeft != null && <div className="alert ok">{t('ว่าง · เหลืออย่างน้อย {n} ช่องในช่วงนี้', { n: minLeft })}</div>}
         </div>
 
@@ -245,6 +257,18 @@ export default function BookPage() {
             <div><label htmlFor="plate">{t('ทะเบียนรถ')}</label><input id="plate" placeholder="1กข 1234" value={f.plate} onChange={set('plate')} required /></div>
             <div><label htmlFor="province">{t('จังหวัด')}</label><input id="province" value={f.province} onChange={set('province')} required /></div>
           </div>
+          {more.map((c, i) => (
+            <div className="row" key={i} style={{ alignItems: 'end' }}>
+              <div><label htmlFor={`plate${i}`}>{t('ทะเบียนรถคันที่ {n}', { n: i + 2 })}</label><input id={`plate${i}`} placeholder="2ขค 5678" value={c.plate} onChange={(e) => setMore(more.map((x, j) => (j === i ? { ...x, plate: e.target.value } : x)))} required /></div>
+              <div><label htmlFor={`prov${i}`}>{t('จังหวัด')}</label>
+                <div style={{ display: 'flex', gap: 6 }}><input id={`prov${i}`} value={c.province} onChange={(e) => setMore(more.map((x, j) => (j === i ? { ...x, province: e.target.value } : x)))} required />
+                  <button type="button" className="btn" aria-label={t('ลบรถคันนี้')} onClick={() => setMore(more.filter((_, j) => j !== i))}>✕</button></div></div>
+            </div>
+          ))}
+          {cars < (pr.group_max_cars ?? 5) && (
+            <button type="button" className="btn" style={{ width: '100%', marginTop: 8 }} onClick={() => setMore([...more, { plate: '', province: f.province }])}>＋ {t('เพิ่มรถอีกคัน (จองพร้อมกันได้สูงสุด {n} คัน)', { n: pr.group_max_cars ?? 5 })}</button>
+          )}
+          {cars > 1 && <p className="small" style={{ margin: '6px 0 0' }}>{t('จองหลายคัน: วันเข้า-ออกเดียวกัน จ่ายยอดรวมครั้งเดียว · รถรับส่งไป-กลับ 1 เที่ยวสำหรับทั้งกลุ่ม ส่วนลดลูกค้าเก่าใช้ 1 ครั้งต่อกลุ่ม')}</p>}
           <label htmlFor="name">{t('ชื่อผู้จอง')}</label><input id="name" value={f.name} onChange={set('name')} required />
           <label htmlFor="phone">{t('เบอร์โทร')}</label><input id="phone" type="tel" inputMode="tel" value={f.phone} onChange={set('phone')} required />
           <label htmlFor="ref">{t('เบอร์ลูกค้าเก่าที่แนะนำ (ถ้ามี)')}</label><input id="ref" type="tel" inputMode="tel" placeholder={t('ลูกค้าใหม่ที่เพื่อนแนะนำ ใส่เบอร์เพื่อน')} value={f.refPhone} onChange={set('refPhone')} />
@@ -259,7 +283,7 @@ export default function BookPage() {
           </div>
           {f.shuttle && (
             <>
-              <label htmlFor="pax">{t('จำนวนผู้โดยสาร')}</label>
+              <label htmlFor="pax">{cars > 1 ? t('จำนวนผู้โดยสารทั้งกลุ่ม (นั่งรถคันเดียวกัน)') : t('จำนวนผู้โดยสาร')}</label>
               <select id="pax" value={f.pax} onChange={(e) => setF({ ...f, pax: Number(e.target.value) })}>
                 {[1, 2, 3, 4, 5, 6, 7].map((n) => <option key={n} value={n}>{t('{n} คน', { n })}</option>)}
               </select>
@@ -267,6 +291,7 @@ export default function BookPage() {
               <select id="lbag" value={f.largeBags} onChange={(e) => setF({ ...f, largeBags: Number(e.target.value) })}>
                 {[0, 1, 2, 3, 4, 5, 6, 7, 8].map((n) => <option key={n} value={n}>{t('{n} ใบ', { n })}</option>)}
               </select>
+              {cars > 1 && <p className="small" style={{ margin: '6px 0 0' }}>{t('ทั้งกลุ่มต้องนั่งรถรับส่งคันเดียว คนและกระเป๋าใหญ่รวมกันต้องไม่เกินที่รถรับได้ (รถ 7 ที่นั่ง กระเป๋าใหญ่ 5 ใบ)')}</p>}
               <p className="bag-warn" role="note"><span aria-hidden>⚠️</span><span><b>{t('นับเฉพาะใบใหญ่')}</b> {t('ไม่ต้องนับกระเป๋าถือขึ้นเครื่อง เป้ หรือใบเล็ก ระบบใช้จำนวนนี้เลือกรถที่ใส่กระเป๋าได้พอ')}</span></p>
               <label htmlFor="out">{t('ขาไป: เวลาที่จะมาถึงลานจอด')}</label>
               <input id="out" type="datetime-local" value={f.outboundTime} onChange={set('outboundTime')} aria-invalid={!!slotFull} />
@@ -303,7 +328,7 @@ export default function BookPage() {
         </div>
 
         <div className="card">
-          <div className="price"><span>{t('ที่จอด {n} วัน × {p}', { n: days, p: pr.price_per_day })}</span><span>{money(days * pr.price_per_day)}</span></div>
+          <div className="price"><span>{cars > 1 ? t('ที่จอด {n} วัน × {p} × {c} คัน', { n: days, p: pr.price_per_day, c: cars }) : t('ที่จอด {n} วัน × {p}', { n: days, p: pr.price_per_day })}</span><span>{money(parking * cars)}</span></div>
           {f.shuttle && <div className="price"><span>{t('รถรับส่งไป-กลับ')}</span><span>{money(pr.shuttle_price)}</span></div>}
           <div className="price total"><span>{t('รวม')}</span><span>{money(subtotal)}</span></div>
           {error && <div className="alert bad">{error}</div>}

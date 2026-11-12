@@ -46,6 +46,16 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
       if (data) slipLinks[p.id] = data.signedUrl;
     }
   }
+  // group booking (several cars paid and shuttled together)
+  type GCar = { id: string; code: string; plate: string; status: string; total_amount: number };
+  let gcars: GCar[] = []; let gLead: string | null = null;
+  if (b.group_id) {
+    const [{ data: gc }, { data: gg }] = await Promise.all([
+      sb.from('bookings').select('id, code, plate, status, total_amount').eq('group_id', b.group_id).order('created_at'),
+      sb.from('booking_groups').select('lead_booking_id').eq('id', b.group_id).maybeSingle(),
+    ]);
+    gcars = (gc ?? []) as GCar[]; gLead = gg?.lead_booking_id ?? null;
+  }
   const active = b.status === 'confirmed' || b.status === 'checked_in';
 
   return (
@@ -70,6 +80,19 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
             <ActionButton action={setStatus} fields={{ id, status: 'cancelled' }} label="ยกเลิกการจอง" variant="danger" confirm="ยกเลิกการจองนี้?" />}
         </div>
       </header>
+
+      {gcars.length > 1 && (
+        <section className="panel">
+          <h2>จองหลายคัน · {gcars.length} คัน · จ่ายรวม {n(gcars.reduce((a, x) => a + x.total_amount, 0))} บาท</h2>
+          <p className="hint">ชำระครั้งเดียวที่ใบหลัก{gLead && gLead !== id ? <> (<Link href={`/admin/bookings/${gLead}`}>ไปที่ใบหลัก</Link>)</> : ' (ใบนี้)'} · เมื่อรับเงิน ทุกคันยืนยันพร้อมกัน · รถรับส่งของทั้งกลุ่มอยู่ที่ใบหลัก · เช็กอิน/รับรถคืนแยกรายคัน</p>
+          <table className="tbl">
+            <thead><tr><th>รหัส</th><th>ทะเบียน</th><th>สถานะ</th><th className="r">ยอด</th></tr></thead>
+            <tbody>{gcars.map((x) => (
+              <tr key={x.id}><td>{x.id === id ? <b>{x.code}</b> : <Link href={`/admin/bookings/${x.id}`} className="code">{x.code}</Link>}{x.id === gLead && <small>ใบหลัก (รถรับส่ง)</small>}</td><td>{x.plate}</td><td><StatusTag status={x.status} /></td><td className="r">{n(x.total_amount)}</td></tr>
+            ))}</tbody>
+          </table>
+        </section>
+      )}
 
       <section className="facts">
         <div><span>ลูกค้า</span><b>{c?.name}</b><a href={`tel:${c?.phone}`}>{c?.phone}</a></div>

@@ -10,6 +10,7 @@ type Body = {
   shuttle: boolean; pax: number; outboundTime?: string; returnFlight?: string; returnLanding?: string;
   flightType?: 'domestic' | 'international'; refPhone?: string; couponId?: string; rewardId?: string;
   largeBags?: number; smallBags?: number;
+  cars?: { plate: string; province: string }[];   // other cars booked together (group booking)
 };
 
 export async function POST(req: Request) {
@@ -29,9 +30,23 @@ export async function POST(req: Request) {
 
   const isId = (v?: string) => !!v && /^[0-9a-f-]{36}$/.test(v);
   // points used on the review page: redeem + book in one transaction (create_booking_with_reward)
-  const useReward = isId(b.rewardId) && !isId(b.couponId);
+  const useReward = isId(b.rewardId) && !isId(b.couponId) && !(Array.isArray(b.cars) && b.cars.length > 0);
   // one call books it all (create_booking_bags hands the bag counts to the trips and spends points when asked)
-  const { data, error } = await db().rpc('create_booking_bags', {
+  const extra = (Array.isArray(b.cars) ? b.cars : []).slice(0, 20)
+    .map((c) => ({ plate: String(c?.plate ?? '').trim(), province: String(c?.province ?? '').trim() })).filter((c) => c.plate);
+  const group = extra.length > 0;
+  const { data, error } = group
+    // several cars in one go: one payment, one shuttle for the whole group (create_booking_group)
+    ? await db().rpc('create_booking_group', {
+      p_line_user_id: uid, p_name: b.name.trim(), p_phone: b.phone.trim(),
+      p_cars: [{ plate: b.plate, province: b.province.trim() }, ...extra],
+      p_start: b.start, p_end: b.end, p_shuttle: !!b.shuttle, p_pax: b.shuttle ? b.pax : null,
+      p_outbound_flight: null, p_outbound_time: b.shuttle ? bkkLocalToIso(b.outboundTime) : null,
+      p_return_flight: b.shuttle ? b.returnFlight || null : null, p_return_time: returnPickup,
+      p_ref_phone: b.refPhone?.trim() || null, p_coupon: isId(b.couponId) ? b.couponId : null,
+      p_large: b.shuttle ? bagCount(b.largeBags) : 0,
+    })
+    : await db().rpc('create_booking_bags', {
     p_line_user_id: uid,
     p_name: b.name.trim(),
     p_phone: b.phone.trim(),
