@@ -2,7 +2,7 @@ import { db } from '@/lib/supabase';
 import { ActionForm, Submit } from '@/components/ActionForm';
 import { MemberCard } from '@/components/MemberCard';
 import { CampaignForm } from '@/components/CampaignForm';
-import { recordPurchase, saveCampaign, saveTier } from '../actions';
+import { recordPurchase, saveCampaign, saveReward, saveTier } from '../actions';
 import { thDate, bkkDay } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
@@ -10,6 +10,8 @@ export const dynamic = 'force-dynamic';
 type Tier = { code: string; name: string; min_spend: number; multiplier: number; color: string; sort: number };
 type Campaign = { id: string; name: string; description: string | null; business: string; tiers: string[] | null; kind: string; multiplier: number; bonus_points: number; starts_at: string; ends_at: string | null; active: boolean; min_days: number; free_days: number; amount_off: number; stackable: boolean; percent_off: number; stay_from: string | null; stay_to: string | null };
 
+const RBIZ: Record<string, string> = { parking: 'ที่จอดรถ', cafe: 'คาเฟ่', stay: 'ที่พัก' };
+type Reward = { id: string; title: string; description: string | null; business: string; kind: string; value_baht: number; points_cost: number; valid_days: number; stock: number | null; active: boolean; sort: number };
 const BIZ: Record<string, string> = { all: 'ทุกธุรกิจ', parking: 'ที่จอดรถ', cafe: 'คาเฟ่', stay: 'ที่พัก' };
 const KIND: Record<string, string> = { free_days: 'ส่วนลด: จอดครบ ฟรีวัน', amount_off: 'ส่วนลด: จอดครบ ลดเงิน', percent_off: 'ส่วนลด: ลดค่าจอด %', multiplier: 'แต้มคูณ', bonus: 'แต้มโบนัส', announce: 'ประกาศ/โปรโมชัน' };
 const effect = (c: Campaign) => c.kind === 'multiplier' ? `แต้ม x${Number(c.multiplier)}` : c.kind === 'bonus' ? `+${c.bonus_points} แต้ม`
@@ -27,12 +29,14 @@ function campaignState(c: Campaign): [string, string] {
 
 export default async function CampaignsPage() {
   const sb = db();
-  const [{ data: tiers }, { data: camps }, { data: st }, { data: tc }, { data: purchases }] = await Promise.all([
+  const [{ data: tiers }, { data: camps }, { data: st }, { data: tc }, { data: purchases }, { data: rewards }, { count: bdCount }] = await Promise.all([
     sb.from('member_tiers').select('*').order('sort'),
     sb.from('campaigns').select('*').order('starts_at', { ascending: false }).limit(100),
     sb.from('settings').select('points_per_baht, tier_window_months').eq('id', 1).single(),
     sb.rpc('tier_counts'),
     sb.from('member_purchases').select('id, business, amount, note, staff, created_at, customers(name, member_no)').order('created_at', { ascending: false }).limit(15),
+    sb.from('rewards').select('*').order('sort').order('points_cost'),
+    sb.from('black_diamond').select('customer_id', { count: 'exact', head: true }).eq('active', true),
   ]);
   const T = (tiers ?? []) as Tier[];
   // tier per customer (computed in the database)
@@ -41,6 +45,26 @@ export default async function CampaignsPage() {
   const per = st?.points_per_baht ?? 100;
 
   const tierList = T.map((t) => ({ code: t.code, name: t.name }));
+  const rewardForm = (r?: Reward) => (
+    <ActionForm action={saveReward} className="form grid2" resetOnOk={!r}>
+      {r && <input type="hidden" name="id" value={r.id} />}
+      <label className="span2">ชื่อของรางวัล<input name="title" defaultValue={r?.title} placeholder="เช่น ส่วนลดค่าจอด 100 บาท / กาแฟ 1 แก้ว" required /></label>
+      <label className="span2">รายละเอียด<input name="description" defaultValue={r?.description ?? ''} placeholder="แสดงให้ลูกค้าเห็น" /></label>
+      <label>ธุรกิจ
+        <select name="business" defaultValue={r?.business ?? 'parking'}><option value="parking">ที่จอดรถ</option><option value="cafe">คาเฟ่</option><option value="stay">ที่พัก</option></select>
+      </label>
+      <label>ประเภท
+        <select name="kind" defaultValue={r?.kind ?? 'parking_discount'}><option value="parking_discount">ส่วนลดค่าจอด (ใช้ในหน้าจอง)</option><option value="item">ของ/บริการ (พนักงานกดใช้)</option></select>
+      </label>
+      <label>มูลค่าส่วนลด<span className="with-unit"><input name="value" type="number" min={0} defaultValue={r?.value_baht ?? 0} /><em>บาท</em></span><small>เฉพาะส่วนลดค่าจอด</small></label>
+      <label>ใช้แต้ม<span className="with-unit"><input name="cost" type="number" min={1} defaultValue={r?.points_cost ?? 10} required /><em>แต้ม</em></span></label>
+      <label>คูปองใช้ได้<span className="with-unit"><input name="valid_days" type="number" min={1} max={1095} defaultValue={r?.valid_days ?? 90} required /><em>วัน</em></span></label>
+      <label>จำนวนที่แลกได้<input name="stock" type="number" min={0} defaultValue={r?.stock ?? ''} placeholder="เว้นว่าง = ไม่จำกัด" /></label>
+      <label>ลำดับ<input name="sort" type="number" defaultValue={r?.sort ?? 0} /></label>
+      <label className="check"><input type="checkbox" name="active" defaultChecked={r?.active ?? true} /> เปิดให้แลก</label>
+      <div className="form-actions span2"><Submit small>{r ? 'บันทึก' : 'เพิ่มของรางวัล'}</Submit></div>
+    </ActionForm>
+  );
   const campaignForm = (c?: Campaign) => <CampaignForm action={saveCampaign} tiers={tierList} init={c ? { ...c, multiplier: Number(c.multiplier) } : undefined} />;
 
 
@@ -59,6 +83,10 @@ export default async function CampaignsPage() {
               <p className="hint" style={{ marginTop: 8 }}>{t.min_spend === 0 ? 'เริ่มต้นทุกคน' : `ใช้บริการ ${t.min_spend.toLocaleString('th-TH')} บาทขึ้นไป`} · สมาชิก {(counts[t.code] ?? 0).toLocaleString('th-TH')} คน</p>
             </div>
           ))}
+          <div>
+            <MemberCard tier="blackdiamond" tierName="Black Diamond" name="คุณสมชาย ใจดี" memberNo="BY001234" points={0} multiplier={1} />
+            <p className="hint" style={{ marginTop: 8 }}>บัตรพิเศษ มอบโดยแอดมินเท่านั้น · ไม่ขึ้นกับยอดใช้จ่าย · ผู้ถือบัตร {(bdCount ?? 0).toLocaleString('th-TH')} คน · <a href="/admin/members/black-diamond">จัดการ</a></p>
+          </div>
         </div>
       </section>
 
@@ -84,7 +112,7 @@ export default async function CampaignsPage() {
             ))}
           </tbody>
         </table>
-        <p className="hint" style={{ marginTop: 8 }}>ระดับขึ้นทันทีที่ยอดถึง และลดลงเองเมื่อยอด {st?.tier_window_months ?? 12} เดือนล่าสุดต่ำกว่าเกณฑ์ · กำหนดระดับให้ลูกค้าเป็นรายคนได้ที่หน้ารายละเอียดการจอง</p>
+        <p className="hint" style={{ marginTop: 8 }}>ระดับขึ้นทันทีที่ยอดถึง และลดลงเองเมื่อยอด {st?.tier_window_months ?? 12} เดือนล่าสุดต่ำกว่าเกณฑ์ · กำหนดระดับ (และมอบบัตร Black Diamond) ให้ลูกค้าเป็นรายคนได้ที่หน้าสมาชิก หรือหน้ารายละเอียดการจอง</p>
       </section>
 
       <section className="panel">
@@ -112,6 +140,28 @@ export default async function CampaignsPage() {
           </table>
         )}
         <details className="add-reward" style={{ marginTop: 12 }}><summary className="b b-plain b-sm">+ สร้างแคมเปญ</summary><div style={{ marginTop: 10, maxWidth: 760 }}>{campaignForm()}</div></details>
+      </section>
+
+      <section className="panel" id="rewards">
+        <h2>ของรางวัล</h2>
+        <p className="hint">ลูกค้าเห็นเฉพาะรายการที่เปิดให้แลก · ส่วนลดค่าจอดลูกค้าเลือกใช้เองในหน้าจอง · ของหรือบริการ (กาแฟ ห้องพัก) ลูกค้าแสดงรหัสคูปอง แล้วพนักงานกด “ใช้คูปอง” ที่หน้าสมาชิก</p>
+        <table className="tbl">
+          <thead><tr><th>ของรางวัล</th><th>ธุรกิจ</th><th className="r">แต้ม</th><th className="r">อายุคูปอง</th><th className="r">คงเหลือ</th><th>สถานะ</th><th></th></tr></thead>
+          <tbody>
+            {((rewards ?? []) as Reward[]).map((r) => (
+              <tr key={r.id}>
+                <td><b>{r.title}</b>{r.kind === 'parking_discount' && <small className="hint" style={{ display: 'block', margin: 0 }}>ส่วนลดค่าจอด {r.value_baht} บาท</small>}</td>
+                <td>{RBIZ[r.business] ?? r.business}</td>
+                <td className="r">{r.points_cost}</td>
+                <td className="r">{r.valid_days} วัน</td>
+                <td className="r">{r.stock ?? 'ไม่จำกัด'}</td>
+                <td><span className={`st ${r.active ? 'st-ok' : 'st-off'}`}>{r.active ? 'เปิดแลก' : 'ปิด'}</span></td>
+                <td className="r"><details className="inline-edit"><summary className="b b-plain b-sm">แก้ไข</summary><div className="inline-edit-body">{rewardForm(r)}</div></details></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <details className="add-reward" style={{ marginTop: 12 }}><summary className="b b-plain b-sm">+ เพิ่มของรางวัล</summary><div style={{ marginTop: 10 }}>{rewardForm()}</div></details>
       </section>
 
       <div className="cols">

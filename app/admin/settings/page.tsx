@@ -1,6 +1,6 @@
 import { db } from '@/lib/supabase';
 import { ActionForm, Submit } from '@/components/ActionForm';
-import { setContact, setDispatch, setExitMinutes, setLateGraceHour, updateSettings } from '../actions';
+import { setContact, setDispatch, setExitMinutes, setLateGraceHour, setMemberDiscount, setMemberDiscountRules, setPointsSettings, updateSettings } from '../actions';
 import { Vehicles } from './Vehicles';
 import { TvLink } from './TvLink';
 import { NotePresets } from './NotePresets';
@@ -57,6 +57,39 @@ export default async function SettingsPage() {
           <div className="form-actions span2"><Submit>บันทึกเวลาผ่อนผัน</Submit></div>
         </ActionForm>
       </section>
+    <section className="panel" id="points">
+      <h2>กติกาแต้มสะสม</h2>
+      <p className="hint">แต้มได้เมื่อชำระเงินสำเร็จ คิดจากยอดที่จ่ายจริง · ลูกค้าเอาแต้มไปแลกคูปองจากรายการของรางวัล · แต้มเก่าถูกใช้ก่อน</p>
+      <ActionForm action={setPointsSettings} className="form grid2">
+        <label>ทุกกี่บาทได้ 1 แต้ม<span className="with-unit"><input name="per_baht" type="number" min={1} defaultValue={s?.points_per_baht ?? 100} required /><em>บาท</em></span></label>
+        <input type="hidden" name="value" value={s?.point_value ?? 10} />
+        <label>แนะนำเพื่อนได้<span className="with-unit"><input name="referral" type="number" min={0} defaultValue={s?.referral_points ?? 3} required /><em>แต้ม</em></span></label>
+        <label>อายุแต้ม<span className="with-unit"><input name="months" type="number" min={1} max={120} defaultValue={s?.points_expiry_months ?? 36} required /><em>เดือน</em></span></label>
+        <label className="check span2"><input type="checkbox" name="enabled" defaultChecked={s?.points_enabled ?? true} /> เปิดใช้ระบบแต้ม</label>
+        <div className="form-actions span2"><Submit>บันทึกกติกา</Submit></div>
+      </ActionForm>
+      <p className="hint" style={{ marginTop: 8 }}>ตัวอย่าง: จ่าย 600 บาท ได้ {Math.floor(600 / (s?.points_per_baht || 100))} แต้ม</p>
+    </section>
+    <section className="panel" id="discount">
+      <h2>จำนวนส่วนลด</h2>
+      <p className="hint">ลดต่อการจองหนึ่งครั้ง ใส่ 0 เพื่อปิดส่วนลด มีผลกับการจองใหม่ทันที</p>
+      <ActionForm action={setMemberDiscount} className="form">
+        <label>ส่วนลด<span className="with-unit"><input name="amount" type="number" min={0} max={10000} defaultValue={s?.member_discount ?? 100} required /><em>บาท</em></span></label>
+        <div className="form-actions"><Submit>บันทึก</Submit></div>
+      </ActionForm>
+      <h3 style={{ marginTop: 18 }}>เงื่อนไขการจอง</h3>
+      <ActionForm action={setMemberDiscountRules} className="form grid2">
+        <label>จองอย่างน้อย<span className="with-unit"><input name="min_days" type="number" min={1} max={60} defaultValue={s?.member_discount_min_days ?? 3} required /><em>วัน</em></span></label>
+        <label className="check" style={{ alignSelf: 'end' }}><input type="checkbox" name="needs_shuttle" defaultChecked={s?.member_discount_needs_shuttle ?? true} /> ต้องใช้รถรับส่ง</label>
+        <div className="form-actions span2"><Submit small variant="plain">บันทึกเงื่อนไข</Submit></div>
+      </ActionForm>
+      <h3 style={{ marginTop: 18 }}>ใครได้ส่วนลด</h3>
+      <ul className="hint" style={{ paddingLeft: 18, margin: 0 }}>
+        <li>เบอร์ของผู้จองอยู่ในรายชื่อที่นำเข้า (หน้าสมาชิก) หรือเคยจองและจ่ายเงินในระบบแล้ว</li>
+        <li>ลูกค้าใหม่ที่กรอก “เบอร์ลูกค้าเก่าที่แนะนำ” ตรงกับข้อแรก (ใส่เบอร์ตัวเองไม่ได้)</li>
+        <li>ลูกค้าที่มาจากเพื่อนแนะนำ จองครั้งต่อไปจะนับเป็นลูกค้าเก่าเอง</li>
+      </ul>
+    </section>
       <NotePresets initial={(s.driver_note_presets as string[] | null) ?? []} />
       <TvLink token={s.tv_token ?? null} />
       <ActionForm action={updateSettings} className="stack">

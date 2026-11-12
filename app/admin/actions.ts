@@ -260,7 +260,7 @@ export async function removeMember(_: ActionResult, f: FormData): Promise<Action
 }
 
 export async function setMemberDiscount(_: ActionResult, f: FormData): Promise<ActionResult> {
-  return run('admin_set_member_discount', { p_amount: num(f, 'amount') }, 'บันทึกส่วนลดแล้ว', ['/admin/members']);
+  return run('admin_set_member_discount', { p_amount: num(f, 'amount') }, 'บันทึกส่วนลดแล้ว', ['/admin/members', '/admin/settings', '/admin/campaigns']);
 }
 
 // ---------- points ----------
@@ -275,7 +275,7 @@ export async function setPointsSettings(_: ActionResult, f: FormData): Promise<A
   return run('admin_set_points_settings', {
     p_enabled: f.get('enabled') === 'on', p_per_baht: num(f, 'per_baht'), p_value: num(f, 'value'),
     p_referral: num(f, 'referral'), p_months: num(f, 'months'),
-  }, 'บันทึกกติกาแต้มแล้ว', ['/admin/members']);
+  }, 'บันทึกกติกาแต้มแล้ว', ['/admin/members', '/admin/settings', '/admin/campaigns']);
 }
 
 // ---------- rewards & coupons ----------
@@ -286,7 +286,7 @@ export async function saveReward(_: ActionResult, f: FormData): Promise<ActionRe
     p_business: str(f, 'business'), p_kind: str(f, 'kind'), p_value: num(f, 'value') || 0,
     p_cost: num(f, 'cost'), p_valid_days: num(f, 'valid_days'), p_stock: stock === '' ? null : Number(stock),
     p_active: f.get('active') === 'on', p_sort: num(f, 'sort') || 0,
-  }, 'บันทึกของรางวัลแล้ว', ['/admin/members']);
+  }, 'บันทึกของรางวัลแล้ว', ['/admin/members', '/admin/settings', '/admin/campaigns']);
 }
 
 export async function takeCoupon(_: ActionResult, f: FormData): Promise<ActionResult> {
@@ -312,6 +312,10 @@ export async function saveTier(_: ActionResult, f: FormData): Promise<ActionResu
 
 export async function setTierOverride(_: ActionResult, f: FormData): Promise<ActionResult> {
   const bid = str(f, 'booking_id');
+  // Black Diamond is granted from the same dropdown (admin only); plates and cancelling are on the Black Diamond page
+  if (str(f, 'tier') === 'blackdiamond') {
+    return run('admin_bd_grant', { p_customer: str(f, 'customer_id'), p_note: '' }, 'มอบบัตร Black Diamond ให้สมาชิกแล้ว · เพิ่มป้ายทะเบียนได้ที่หน้า Black Diamond', ['/admin/members/black-diamond', '/admin/members', '/admin/campaigns'], ['admin']);
+  }
   return run('admin_set_tier_override', { p_customer: str(f, 'customer_id'), p_tier: str(f, 'tier') },
     str(f, 'tier') ? 'กำหนดระดับให้ลูกค้าแล้ว' : 'กลับไปใช้ระดับตามยอดใช้จ่าย', [...(bid ? [`/admin/bookings/${bid}`] : []), '/admin/campaigns', '/admin/members']);
 }
@@ -349,7 +353,7 @@ export async function recordPurchase(_: ActionResult, f: FormData): Promise<Acti
 
 export async function setMemberDiscountRules(_: ActionResult, f: FormData): Promise<ActionResult> {
   return run('admin_set_member_discount_rules', { p_min_days: num(f, 'min_days'), p_needs_shuttle: f.get('needs_shuttle') === 'on' },
-    'บันทึกเงื่อนไขแล้ว', ['/admin/members']);
+    'บันทึกเงื่อนไขแล้ว', ['/admin/members', '/admin/settings', '/admin/campaigns']);
 }
 
 // ---------- on-site staff (ops) ----------
