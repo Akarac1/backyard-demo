@@ -12,8 +12,8 @@ const fmtPhone = (p: string) => p.length === 10 ? `${p.slice(0, 3)}-${p.slice(3,
 
 type Found = { id: string; name: string; phone: string; member_no: string | null; tier: string; tier_name: string; manual: boolean; spend: number; points: number; bookings: number; last_start: string | null };
 
-export default async function MembersPage({ searchParams }: { searchParams: Promise<{ q?: string; c?: string; v?: string; vs?: string; vp?: string }> }) {
-  const { q, c, v, vs, vp } = await searchParams;
+export default async function MembersPage({ searchParams }: { searchParams: Promise<{ q?: string; c?: string; v?: string; vs?: string; vp?: string; vt?: string }> }) {
+  const { q, c, v, vs, vp, vt } = await searchParams;
   const sb = db();
   const digits = (q ?? '').replace(/\D/g, '');
   let list = sb.from('member_phones').select('phone, name, created_at', { count: 'exact' }).order('created_at', { ascending: false }).limit(50);
@@ -76,18 +76,25 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
   const sortKey = ['visits', 'last', 'gap', 'recent12'].includes(vs ?? '') ? (vs as string) : 'visits';
   const page = Math.max(0, Math.min(500, Math.trunc(Number(vp) || 0)));
   const PER = 25;
-  const [{ data: vsum }, { data: vrows }] = await Promise.all([
+  const tierFilter = /^[a-z]{3,20}$/.test(vt ?? '') ? (vt as string) : '';
+  const [{ data: vsum }, { data: vrows }, { data: tcounts }] = await Promise.all([
     sb.rpc('visit_stats_summary'),
-    sb.rpc('customer_visit_stats', { p_q: vq || null, p_sort: sortKey, p_limit: PER, p_offset: page * PER }),
+    sb.rpc('customer_visit_stats', { p_q: vq || null, p_sort: sortKey, p_limit: PER, p_offset: page * PER, p_tier: tierFilter || null }),
+    sb.rpc('visit_tier_counts'),
   ]);
+  const TIER_ORDER = ['blackdiamond', 'gold', 'silver', 'bronze'];
+  const tierCounts = ((tcounts ?? []) as { tier: string; tier_name: string; n: number }[])
+    .sort((a, b) => (TIER_ORDER.indexOf(a.tier) + 1 || 99) - (TIER_ORDER.indexOf(b.tier) + 1 || 99));
+  const tierTotal = tierCounts.reduce((a, x) => a + Number(x.n), 0);
   const sum0 = ((vsum ?? []) as { customers_with_visit: number; repeat_customers: number; total_visits: number; avg_gap_days: number | null }[])[0];
-  type VRow = { id: string; name: string; phone: string; member_no: string | null; bookings: number; visits: number; repeats: number; first_visit: string | null; last_visit: string | null; avg_gap_days: number | null; visits_12m: number; total_days: number; total_count: number };
+  type VRow = { id: string; name: string; phone: string; member_no: string | null; bookings: number; visits: number; repeats: number; first_visit: string | null; last_visit: string | null; avg_gap_days: number | null; visits_12m: number; total_days: number; tier: string; tier_name: string; total_count: number };
   const visitRows = (vrows ?? []) as VRow[];
-  const { data: bdRows } = await sb.from('black_diamond').select('customer_id').eq('active', true);
-  const bd = new Set((bdRows ?? []).map((x) => x.customer_id));
   const vTotal = visitRows[0]?.total_count ?? 0;
   const freq = (r: VRow) => r.avg_gap_days == null ? (r.visits >= 2 ? '—' : r.visits === 1 ? 'มาครั้งแรก' : 'ยังไม่เคยมาใช้') : r.avg_gap_days <= 10 ? 'บ่อยมาก (ทุก ~' + Math.round(r.avg_gap_days) + ' วัน)' : r.avg_gap_days <= 45 ? 'ทุกเดือน (ทุก ~' + Math.round(r.avg_gap_days) + ' วัน)' : r.avg_gap_days <= 120 ? 'ทุกไตรมาส (ทุก ~' + Math.round(r.avg_gap_days) + ' วัน)' : 'นาน ๆ ครั้ง (ทุก ~' + Math.round(r.avg_gap_days) + ' วัน)';
-  const vlink = (o: { s?: string; p?: number }) => `/admin/members?${new URLSearchParams({ ...(vq ? { v: vq } : {}), vs: o.s ?? sortKey, vp: String(o.p ?? 0) })}#visits`;
+  const vlink = (o: { s?: string; p?: number; t?: string }) => {
+    const t = o.t ?? tierFilter;
+    return `/admin/members?${new URLSearchParams({ ...(vq ? { v: vq } : {}), ...(t ? { vt: t } : {}), vs: o.s ?? sortKey, vp: String(o.p ?? 0) })}#visits`;
+  };
   const referral = rows.filter((r) => r.discount_reason === 'referral');
   const sum = rows.reduce((a, r) => a + r.discount_amount, 0);
 
@@ -107,18 +114,27 @@ export default async function MembersPage({ searchParams }: { searchParams: Prom
       <section className="panel" id="visits">
         <div className="panel-head">
           <h2>ลูกค้าทั้งหมดและความถี่การใช้บริการ ({vTotal.toLocaleString('th-TH')})</h2>
-          <form className="search" action="/admin/members#visits"><input type="hidden" name="vs" value={sortKey} /><input name="v" defaultValue={v ?? ''} placeholder="ชื่อ / เบอร์โทร / เลขสมาชิก" aria-label="ค้นหาลูกค้า" /><button className="b b-primary">ค้นหา</button></form>
+          <form className="search" action="/admin/members#visits"><input type="hidden" name="vs" value={sortKey} />{tierFilter && <input type="hidden" name="vt" value={tierFilter} />}<input name="v" defaultValue={v ?? ''} placeholder="ชื่อ / เบอร์โทร / เลขสมาชิก" aria-label="ค้นหาลูกค้า" /><button className="b b-primary">ค้นหา</button></form>
+        </div>
+        <div className="lot-tabs" role="tablist" aria-label="กรองตามบัตร" style={{ margin: '4px 0 10px' }}>
+          <a role="tab" aria-selected={!tierFilter} className={`chip-btn ${!tierFilter ? 'on' : ''}`} href={vlink({ t: '', p: 0 })}>ทุกบัตร {tierTotal.toLocaleString('th-TH')}</a>
+          {tierCounts.map((x) => (
+            <a key={x.tier} role="tab" aria-selected={tierFilter === x.tier} className={`chip-btn ${tierFilter === x.tier ? 'on' : ''}`} href={vlink({ t: x.tier, p: 0 })}>
+              {x.tier === 'blackdiamond' ? '◆ ' : ''}{x.tier_name} {Number(x.n).toLocaleString('th-TH')}
+            </a>
+          ))}
         </div>
         <p className="hint">ครั้งที่ใช้บริการ = การจองที่รับรถออกแล้ว · กลับมาใช้ = ครั้งที่ใช้ลบ 1 · ความถี่ = ระยะห่างเฉลี่ยระหว่างวันเข้าจอดแต่ละครั้ง · เรียงตาม:{' '}
           {([['visits', 'ใช้บ่อยที่สุด'], ['recent12', '12 เดือนล่าสุด'], ['last', 'มาล่าสุด'], ['gap', 'ห่างน้อยสุด']] as const).map(([k, l], i) => <span key={k}>{i > 0 && ' · '}{sortKey === k ? <b>{l}</b> : <a href={vlink({ s: k })}>{l}</a>}</span>)}</p>
         {!visitRows.length ? <p className="empty">{vq ? `ไม่พบลูกค้าที่ตรงกับ “${vq}”` : 'ยังไม่มีข้อมูลการใช้บริการ'}</p> : (
           <>
             <table className="tbl">
-              <thead><tr><th>ลูกค้า</th><th className="r">ใช้บริการ</th><th className="r">กลับมาใช้</th><th className="r">12 เดือน</th><th className="r">วันจอดรวม</th><th>ความถี่</th><th>ครั้งแรก</th><th>ล่าสุด</th></tr></thead>
+              <thead><tr><th>ลูกค้า</th><th>บัตร</th><th className="r">ใช้บริการ</th><th className="r">กลับมาใช้</th><th className="r">12 เดือน</th><th className="r">วันจอดรวม</th><th>ความถี่</th><th>ครั้งแรก</th><th>ล่าสุด</th></tr></thead>
               <tbody>
                 {visitRows.map((r) => (
                   <tr key={r.id}>
-                    <td><b>{bd.has(r.id) && <span title="Black Diamond">◆ </span>}{r.name}</b><small>{fmtPhone(r.phone)}{r.member_no ? ` · ${r.member_no}` : ''}</small></td>
+                    <td><b>{r.name}</b><small>{fmtPhone(r.phone)}{r.member_no ? ` · ${r.member_no}` : ''}</small></td>
+                    <td><span className={`tier-tag tier-${r.tier}`}>{r.tier === 'blackdiamond' ? '◆ ' : ''}{r.tier_name}</span></td>
                     <td className="r">{r.visits}{r.bookings > r.visits && <small>จองอยู่ {r.bookings - r.visits}</small>}</td>
                     <td className="r">{r.repeats}</td>
                     <td className="r">{r.visits_12m}</td>

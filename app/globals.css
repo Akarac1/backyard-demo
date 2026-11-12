@@ -873,3 +873,44 @@ svg.density { width: 100%; height: auto; display: block; }
 .bd-plates { display: flex; flex-wrap: wrap; gap: 8px; }
 .bd-plate { display: inline-flex; align-items: center; gap: 6px; background: #f3f6f4; border-radius: 999px; padding: 4px 6px 4px 12px; }
 .bd-plate small { color: #6b7a70; }
+
+/* ---------- Black Diamond card: matte black, gold foil, diamond lattice ---------- */
+.mcard-blackdiamond {
+  color: #e9dcc0;
+  background:
+    radial-gradient(120% 90% at 85% 0%, rgba(214,178,94,.20) 0%, rgba(214,178,94,0) 55%),
+    radial-gradient(90% 80% at 0% 100%, rgba(255,255,255,.07) 0%, rgba(255,255,255,0) 60%),
+    linear-gradient(135deg, #050506 0%, #121214 38%, #1b1b1f 52%, #0d0d0f 74%, #040405 100%);
+  box-shadow: 0 14px 38px rgba(0,0,0,.55), 0 0 0 1px rgba(214,178,94,.55), inset 0 0 0 4px #0b0b0c, inset 0 0 0 5px rgba(214,178,94,.35), inset 0 1px 0 6px rgba(255,255,255,.04);
+}
+.mcard-blackdiamond::before {
+  background:
+    repeating-linear-gradient(45deg, rgba(214,178,94,.07) 0 1px, transparent 1px 15px),
+    repeating-linear-gradient(-45deg, rgba(214,178,94,.07) 0 1px, transparent 1px 15px);
+}
+.mcard-blackdiamond::after {
+  right: -48px; bottom: -64px; width: 230px; height: 230px; border-radius: 0; transform: rotate(45deg);
+  border: 1px solid rgba(214,178,94,.38); box-shadow: inset 0 0 0 14px rgba(214,178,94,.04), inset 0 0 0 15px rgba(214,178,94,.22);
+}
+.mcard-blackdiamond .mcard-shine {
+  background: linear-gradient(90deg, transparent, rgba(255,236,190,.20), transparent);
+  animation: bd-shine 5.5s ease-in-out infinite;
+}
+@keyframes bd-shine { 0%, 55% { transform: translateX(-160%) rotate(25deg); } 100% { transform: translateX(260%) rotate(25deg); } }
+@media (prefers-reduced-motion: reduce) { .mcard-blackdiamond .mcard-shine { animation: none; transform: translateX(40%) rotate(25deg); opacity: .5; } }
+.mcard-blackdiamond .mcard-top img { background: #0b0b0c; box-shadow: 0 0 0 1px rgba(214,178,94,.7); }
+.mcard-blackdiamond .mcard-brand b, .mcard-blackdiamond .mcard-tier, .mcard-blackdiamond .mcard-pts b, .mcard-blackdiamond .mcard-name {
+  background: linear-gradient(100deg, #8d6a22 0%, #e8cf86 22%, #fff3cf 40%, #d3ac55 58%, #f4e1a3 78%, #9b7428 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent; -webkit-text-fill-color: transparent;
+}
+.mcard-blackdiamond .mcard-tier { font-size: 12.5px; letter-spacing: 3.5px; text-align: right; line-height: 1.25; }
+.mcard-blackdiamond .mcard-brand span, .mcard-blackdiamond .mcard-no, .mcard-blackdiamond .mcard-pts span { color: #c9b88e; opacity: .9; }
+.mcard-blackdiamond .mcard-chip { background: linear-gradient(135deg, #8d6a22, #f2dc9a 45%, #b98d36 70%, #f6e7b4); }
+.mcard-blackdiamond .mcard-pts em { background: rgba(214,178,94,.16); color: #e8cf86; box-shadow: inset 0 0 0 1px rgba(214,178,94,.4); }
+.mcard-blackdiamond .mcard-foot { color: #c9b88e; opacity: .7; letter-spacing: 3.5px; }
+.mcard-gem { position: absolute; z-index: 1; right: 20px; top: 54px; width: 54px; height: 46px; filter: drop-shadow(0 2px 6px rgba(0,0,0,.6)); }
+.mcard-blackdiamond .back-tier { color: #e8cf86; }
+.bd-preview { max-width: 340px; }
+.tier-blackdiamond { background: linear-gradient(120deg, #0b0b0d, #26262b); color: #e8cf86; box-shadow: inset 0 0 0 1px rgba(214,178,94,.7); }
+a.chip-btn { text-decoration: none; display: inline-block; color: inherit; }
+a.chip-btn.on { color: #fff; }

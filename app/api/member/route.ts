@@ -16,11 +16,14 @@ export async function GET(req: Request) {
   const { data } = await sb.rpc('customer_member', { p_line_user_id: uid });
   const m = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | undefined;
   if (!m) return json({ error: 'unavailable' }, 500);
+  // Black Diamond holders see the black card (their points and multiplier still follow their normal tier)
+  const { data: bd } = await sb.from('black_diamond').select('customer_id, customers!inner(line_user_id)').eq('active', true).eq('customers.line_user_id', uid).limit(1);
+  const diamond = !!bd?.length;
   const { data: camps } = await sb.rpc('active_campaigns', { p_tier: m.tier as string, p_business: null });
   return json({
-    memberNo: m.member_no, name: m.name, tier: m.tier, tierName: m.tier_name, multiplier: Number(m.multiplier),
-    spend: m.spend, windowMonths: m.window_months, nextTierName: m.next_tier_name, nextMin: m.next_min,
-    points: m.points, manual: m.manual,
+    memberNo: m.member_no, name: m.name, tier: diamond ? 'blackdiamond' : m.tier, tierName: diamond ? 'Black Diamond' : m.tier_name, multiplier: Number(m.multiplier),
+    spend: m.spend, windowMonths: m.window_months, nextTierName: diamond ? null : m.next_tier_name, nextMin: diamond ? null : m.next_min,
+    points: m.points, manual: diamond ? true : m.manual,
     campaigns: ((camps ?? []) as { name: string; description: string | null; business: string; kind: string; multiplier: number; bonus_points: number; ends_at: string | null; min_days: number; free_days: number; amount_off: number; percent_off: number; stay_from: string | null; stay_to: string | null }[])
       .map((c) => ({
         name: c.name, description: c.description, business: L(BIZ[c.business] ?? c.business), endsAt: c.ends_at,

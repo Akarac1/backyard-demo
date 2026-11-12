@@ -3,6 +3,7 @@ import { requireStaff } from '@/lib/auth';
 import { ActionButton, ActionForm, Submit } from '@/components/ActionForm';
 import { addVipPlate, grantBlackDiamond, removeVipPlate, revokeBlackDiamond, setBlackDiamondActive } from '../../actions';
 import { thDate, bkkDay } from '@/lib/format';
+import { MemberCard } from '@/components/MemberCard';
 
 export const dynamic = 'force-dynamic';
 
@@ -88,6 +89,7 @@ export default async function BlackDiamondPage({ searchParams }: { searchParams:
                   <ActionButton action={revokeBlackDiamond} fields={{ customer_id: c.customer_id }} label="ยกเลิกบัตร" variant="danger" confirm={`ยกเลิกบัตรของ ${c.customers?.name ?? ''} และลบป้ายทะเบียนทั้งหมดของบัตรนี้?`} />
                 </div>
               </div>
+              <div className="bd-preview"><MemberCard tier="blackdiamond" tierName="Black Diamond" name={c.customers?.name} memberNo={c.customers?.member_no} /></div>
               <div className="bd-plates">
                 {ps.length === 0 && <small>ยังไม่มีป้ายทะเบียน</small>}
                 {ps.map((p) => (

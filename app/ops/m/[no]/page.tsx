@@ -23,7 +23,8 @@ export default async function MemberScan({ params, searchParams }: {
   const { data: c } = await sb.from('customers').select('id, name, phone, member_no').eq('member_no', no).maybeSingle();
   if (!c) notFound();
   const qr = checkMemberQr(no, tier, exp, sig);
-  const [{ data: tr }, { data: spend }, { data: pts }, { data: coupons }, { data: buys }, { data: st }] = await Promise.all([
+  const [{ data: bdRow }, { data: tr }, { data: spend }, { data: pts }, { data: coupons }, { data: buys }, { data: st }] = await Promise.all([
+    sb.from('black_diamond').select('customer_id').eq('customer_id', c.id).eq('active', true).maybeSingle(),
     sb.rpc('customer_tier', { p_customer: c.id }),
     sb.rpc('customer_spend', { p_customer: c.id }),
     sb.rpc('points_balance', { p_customer: c.id }),
@@ -44,7 +45,7 @@ export default async function MemberScan({ params, searchParams }: {
 
       <section className="panel">
         <div className="scan-head">
-          <div style={{ maxWidth: 340, flex: '1 1 300px' }}><MemberCard tier={t?.code ?? 'bronze'} tierName={t?.name ?? 'Bronze'} name={c.name} memberNo={c.member_no} points={Number(pts ?? 0)} multiplier={Number(t?.multiplier ?? 1)} /></div>
+          <div style={{ maxWidth: 340, flex: '1 1 300px' }}><MemberCard tier={bdRow ? 'blackdiamond' : (t?.code ?? 'bronze')} tierName={bdRow ? 'Black Diamond' : (t?.name ?? 'Bronze')} name={c.name} memberNo={c.member_no} points={Number(pts ?? 0)} multiplier={Number(t?.multiplier ?? 1)} /></div>
           <dl className="ops-dl" style={{ flex: '1 1 220px' }}>
             <dt>ชื่อ</dt><dd>{c.name}</dd>
             <dt>เบอร์</dt><dd>{phoneMasked}</dd>
