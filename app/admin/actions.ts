@@ -43,6 +43,11 @@ const ERR: Record<string, string> = {
   invalid_plate: 'ทะเบียนไม่ถูกต้อง (2–12 ตัวอักษร)',
   plate_exists: 'ทะเบียนนี้อยู่ในรายการแล้ว',
   invalid_grace_hour: 'ชั่วโมงต้องอยู่ระหว่าง 18–23',
+  invalid_method: 'วิธีรับเงินไม่ถูกต้อง',
+  invalid_name: 'กรอกชื่อลูกค้า (ลูกค้าใหม่ที่ยังไม่มีในระบบ)',
+  invalid_group_size: 'จำนวนรถเกินที่ตั้งไว้ในหน้าตั้งค่า (จองหลายคัน)',
+  invalid_group_plates: 'ทะเบียนรถต้องไม่ว่างและไม่ซ้ำกัน',
+  shuttle_full: 'รถรับส่งเวลานี้เต็มแล้ว เลือกเวลาอื่น หรือไม่ใช้รถรับส่ง',
   invalid_group_max: 'จำนวนรถต่อกลุ่มต้องอยู่ระหว่าง 2–20',
   not_in_lot: 'รถคันนี้ไม่ได้อยู่ในลานแล้ว',
   invalid_exit_minutes: 'เวลาออกจากโถงต้องอยู่ระหว่าง 0–180 นาที',
@@ -150,6 +155,38 @@ export async function setDispatch(_: ActionResult, f: FormData): Promise<ActionR
 export async function setExitMinutes(_: ActionResult, f: FormData): Promise<ActionResult> {
   return run('admin_set_exit_minutes', { p_domestic: num(f, 'domestic'), p_international: num(f, 'international') },
     'บันทึกเวลาออกจากโถงแล้ว มีผลกับการจองใหม่', ['/admin/settings']);
+}
+
+/** Walk-in: an admin books for a customer at the counter (elderly, no LINE). One car or several, paid at the desk. */
+export async function walkinBooking(_: ActionResult, f: FormData): Promise<ActionResult> {
+  let actor: string;
+  try { actor = (await staffForAction(['admin'])).uid; } catch { return { error: ERR.not_allowed }; }
+  const plates = f.getAll('plate').map((v) => String(v).trim());
+  const provs = f.getAll('province').map((v) => String(v).trim());
+  const cars = plates.map((plate, i) => ({ plate, province: provs[i] || '' })).filter((c) => c.plate);
+  if (!cars.length) return { error: 'กรอกทะเบียนรถอย่างน้อย 1 คัน' };
+  if (!str(f, 'start') || !str(f, 'end')) return { error: 'เลือกวันเข้าจอดและวันรับรถคืน' };
+  const shuttle = str(f, 'shuttle') === '1';
+  if (shuttle && !str(f, 'out')) return { error: 'ใช้รถรับส่ง: ใส่เวลามาถึงลาน' };
+  const landing = shuttle ? bkkInput(str(f, 'land')) : null;
+  let returnPickup: string | null = null;
+  if (landing) {
+    const { data: st } = await db().from('settings').select('exit_minutes_domestic, exit_minutes_international').eq('id', 1).single();
+    const exit = str(f, 'ftype') === 'domestic' ? st?.exit_minutes_domestic ?? 30 : st?.exit_minutes_international ?? 60;
+    returnPickup = new Date(Date.parse(landing) + exit * 60_000).toISOString();
+  }
+  const { data, error } = await db().rpc('admin_walkin_booking', {
+    p_actor: actor, p_name: str(f, 'name'), p_phone: str(f, 'phone'), p_cars: cars, p_start: str(f, 'start'), p_end: str(f, 'end'),
+    p_shuttle: shuttle, p_pax: shuttle ? num(f, 'pax') || 1 : null, p_outbound_time: shuttle ? bkkInput(str(f, 'out')) : null,
+    p_return_flight: shuttle ? str(f, 'flight') || null : null, p_return_time: returnPickup, p_large: shuttle ? Math.max(0, num(f, 'large') || 0) : 0,
+    p_method: str(f, 'method') || 'cash', p_checkin: f.get('checkin') === 'on', p_note: str(f, 'note'),
+  });
+  if (error) { if (!ERR[error.message] && !error.message.startsWith('full')) console.error('walkin', error.message); return { error: thai(error.message) }; }
+  const lead = data as { id: string; status: string };
+  if (shuttle && landing) await db().from('shuttle_trips').update({ landing_at: landing }).eq('booking_id', lead.id).eq('direction', 'from_airport');
+  if (lead.status === 'confirmed' || lead.status === 'checked_in') await afterConfirmed(lead.id).catch((e) => console.error('afterConfirmed', e));
+  ['/admin/bookings', '/admin', '/ops', '/ops/lot'].forEach((p) => revalidatePath(p));
+  redirect(`/admin/bookings/${lead.id}`);
 }
 
 export async function setGroupMax(_: ActionResult, f: FormData): Promise<ActionResult> {
