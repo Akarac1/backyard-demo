@@ -3,6 +3,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/supabase';
 import { staffForAction } from '@/lib/auth';
+import { sendCarSafeCard, type SafeResult } from '@/lib/carSafe';
 import type { Role } from '@/lib/session';
 import { afterConfirmed } from '@/lib/confirm';
 import { bkkLocalToIso } from '@/lib/request';
@@ -39,6 +40,10 @@ const ERR: Record<string, string> = {
   landing_after_pickup: 'เวลาเครื่องลงต้องไม่ช้ากว่าเวลารับ',
   too_many_pax: 'ผู้โดยสารเกินจำนวนที่นั่งของรถคันนี้',
   too_much_luggage: 'กระเป๋าเกินกว่าที่รถคันนี้ใส่ได้ เลือกรถคันที่ใหญ่กว่า',
+  invalid_plate: 'ทะเบียนไม่ถูกต้อง (2–12 ตัวอักษร)',
+  plate_exists: 'ทะเบียนนี้อยู่ในรายการแล้ว',
+  invalid_grace_hour: 'ชั่วโมงต้องอยู่ระหว่าง 18–23',
+  not_in_lot: 'รถคันนี้ไม่ได้อยู่ในลานแล้ว',
   invalid_exit_minutes: 'เวลาออกจากโถงต้องอยู่ระหว่าง 0–180 นาที',
   invalid_presets: 'ข้อความสำเร็จรูปมีได้ไม่เกิน 12 ข้อความ ข้อความละไม่เกิน 200 ตัวอักษร',
   invalid_bags: 'จำนวนกระเป๋าต้องอยู่ระหว่าง 0–20 ใบ',
@@ -143,6 +148,29 @@ export async function setExitMinutes(_: ActionResult, f: FormData): Promise<Acti
 export async function setNotePresets(_: ActionResult, f: FormData): Promise<ActionResult> {
   const presets = f.getAll('preset').map((v) => String(v).trim()).filter(Boolean);
   return run('admin_set_note_presets', { p_presets: presets }, 'บันทึกข้อความสำเร็จรูปแล้ว', ['/admin/settings', '/driver']);
+}
+
+export async function addVipPlate(_: ActionResult, f: FormData): Promise<ActionResult> {
+  return run('admin_vip_add', { p_plate: str(f, 'plate'), p_province: str(f, 'province'), p_holder: str(f, 'holder'), p_note: str(f, 'note') },
+    'เพิ่มป้ายทะเบียนแล้ว', ['/admin/members/black-diamond'], ['admin']);
+}
+export async function setVipActive(_: ActionResult, f: FormData): Promise<ActionResult> {
+  const on = str(f, 'active') === '1';
+  return run('admin_vip_set_active', { p_id: str(f, 'id'), p_active: on }, on ? 'เปิดสิทธิ์แล้ว' : 'พักสิทธิ์แล้ว', ['/admin/members/black-diamond']);
+}
+export async function removeVipPlate(_: ActionResult, f: FormData): Promise<ActionResult> {
+  return run('admin_vip_remove', { p_id: str(f, 'id') }, 'ลบป้ายทะเบียนแล้ว', ['/admin/members/black-diamond']);
+}
+export async function setLateGraceHour(_: ActionResult, f: FormData): Promise<ActionResult> {
+  return run('admin_set_late_grace_hour', { p_hour: num(f, 'hour') }, 'บันทึกเวลาแล้ว', ['/admin/settings', '/ops', '/ops/lot']);
+}
+
+/** Guard marks a car as found in the lot: sends the "your car is safe" card (once per booking per day). */
+export async function markCarFound(bookingId: string): Promise<{ result?: SafeResult; error?: string }> {
+  let actor: string;
+  try { actor = (await staffForAction(['admin', 'ops'])).uid; } catch { return { error: ERR.not_allowed }; }
+  try { return { result: await sendCarSafeCard(actor, bookingId) }; }
+  catch (e) { return { error: thai((e as Error).message) }; }
 }
 
 export async function rotateTvLink(_: ActionResult): Promise<ActionResult> {

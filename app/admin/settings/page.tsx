@@ -1,6 +1,6 @@
 import { db } from '@/lib/supabase';
 import { ActionForm, Submit } from '@/components/ActionForm';
-import { setContact, setDispatch, setExitMinutes, updateSettings } from '../actions';
+import { setContact, setDispatch, setExitMinutes, setLateGraceHour, updateSettings } from '../actions';
 import { Vehicles } from './Vehicles';
 import { TvLink } from './TvLink';
 import { NotePresets } from './NotePresets';
@@ -47,6 +47,14 @@ export default async function SettingsPage() {
           <label>เที่ยวบินในประเทศ<span className="with-unit"><input name="domestic" type="number" min={0} max={180} defaultValue={s.exit_minutes_domestic ?? 30} required /><em>นาที</em></span><small>ลงเครื่อง + รอกระเป๋า</small></label>
           <label>เที่ยวบินต่างประเทศ<span className="with-unit"><input name="international" type="number" min={0} max={180} defaultValue={s.exit_minutes_international ?? 60} required /><em>นาที</em></span><small>ลงเครื่อง + ผ่าน ตม. + รอกระเป๋า</small></label>
           <div className="form-actions span2"><Submit>บันทึกเวลาออกจากโถง</Submit></div>
+        </ActionForm>
+      </section>
+      <section className="panel">
+        <h2>ผ่อนผันรถรอบดึก (ภายใน)</h2>
+        <p className="hint">ลูกค้าที่เครื่องลงขากลับตั้งแต่เวลานี้ของวันสุดท้ายเป็นต้นไป ระบบให้จอดต่อได้อีก 1 วันโดยไม่คิดเพิ่ม และไม่ขึ้นเตือนว่าเกินกำหนด · ไม่แจ้งลูกค้า · ใช้ช่องสำรอง · เห็นเฉพาะพนักงาน</p>
+        <ActionForm action={setLateGraceHour} className="form grid2">
+          <label>เครื่องลงตั้งแต่เวลา<span className="with-unit"><input name="hour" type="number" min={18} max={23} defaultValue={s.late_grace_hour ?? 22} required /><em>น.</em></span><small>เช่น 22 = 22:00 ขึ้นไป (ใส่ได้ 18–23)</small></label>
+          <div className="form-actions span2"><Submit>บันทึกเวลาผ่อนผัน</Submit></div>
         </ActionForm>
       </section>
       <NotePresets initial={(s.driver_note_presets as string[] | null) ?? []} />

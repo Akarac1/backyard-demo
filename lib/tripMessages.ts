@@ -248,6 +248,15 @@ export function noteMessage(c: Ctx, note: string): LineMessage {
   });
 }
 
+/** Sent when the security guard confirms the car is in the lot. */
+export function carSafeMessage(o: { plate: string; name: string; checkedAt: string }): LineMessage {
+  return card({
+    alt: 'รถของคุณจอดอย่างปลอดภัยอยู่ในลาน Backyard', icon: '🛡️', title: 'รถของคุณปลอดภัย', subtitle: 'ตรวจลานโดยเจ้าหน้าที่รักษาความปลอดภัย',
+    message: `${o.name ? `คุณ${o.name} ` : ''}รถของคุณจอดอย่างปลอดภัยอยู่ในลาน Backyard เจ้าหน้าที่ตรวจแล้ว ไม่ต้องกังวลนะครับ`,
+    rows: [['ทะเบียน', o.plate], ['ตรวจเมื่อ', dayTime(o.checkedAt)]],
+  });
+}
+
 /** Push to the customer's LINE. Returns 'sent' | 'no_line' | 'failed'. Push messages count against the OA quota. */
 export async function sendToCustomer(c: Ctx, message: LineMessage | LineMessage[]): Promise<'sent' | 'no_line' | 'failed'> {
   if (!c.lineUserId || c.lineUserId.startsWith('demo-')) return 'no_line';

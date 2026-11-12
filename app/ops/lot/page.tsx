@@ -9,7 +9,7 @@ export const dynamic = 'force-dynamic';
 export default async function LotPage() {
   const today = todayBkk();
   const { data } = await db().from('bookings')
-    .select('id, code, plate, plate_province, start_date, end_date, days, shuttle, pax, checked_in_at, admin_note, customers(name, phone, member_no)')
+    .select('id, code, plate, plate_province, start_date, end_date, days, shuttle, pax, late_grace, checked_in_at, admin_note, customers(name, phone, member_no)')
     .eq('status', 'checked_in').order('plate').limit(1000);
   const cars = ((data ?? []) as unknown as LotCar[])
     .sort((a, b) => a.plate.localeCompare(b.plate, 'th'));
@@ -19,7 +19,7 @@ export default async function LotPage() {
       <header className="page-head">
         <div>
           <h1>รถในลานตอนนี้ · {thDate(today)}</h1>
-          <p>รายการรถที่เช็กอินแล้วยังไม่รับรถ ใช้เดินตรวจลาน: กด “พบ” หรือ “ไม่พบ” ทีละคัน ผลการตรวจเก็บไว้ในเครื่องนี้เฉพาะวันนี้</p>
+          <p>รายการรถที่เช็กอินแล้วยังไม่รับรถ ใช้เดินตรวจลาน: กด “พบ” หรือ “ไม่พบ” ทีละคัน ผลการตรวจเก็บไว้ในเครื่องนี้เฉพาะวันนี้ · กด “พบ” แล้วระบบส่งการ์ด “รถของคุณปลอดภัย” ให้ลูกค้าทาง LINE (วันละครั้งต่อการจอง)</p>
         </div>
         <div className="lot-head-act no-print"><Link href="/ops" className="b b-plain">← หน้างาน</Link></div>
       </header>

@@ -12,7 +12,7 @@ create table if not exists system_events (
   at      timestamptz not null default now(),
   kind    text not null,             -- 'line' | 'slip' | 'cron' | 'monitor' ...
   level   text not null default 'info' check (level in ('info', 'warn', 'error')),
-  message text not null,
+  message text not null,unzip -o ~/Downloads/backyard-tier-admin.zip -d ~/Downloads/backyard
   detail  jsonb
 );
 create index if not exists system_events_at_idx on system_events (at desc);

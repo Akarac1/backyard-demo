@@ -21,13 +21,14 @@ export default async function OpsPage({ searchParams }: { searchParams: Promise<
     sb.from('bookings').select(OPS_SELECT).eq('end_date', today).in('status', ['checked_in', 'checked_out']).order('checked_out_at', { ascending: true, nullsFirst: true }),
     sb.from('bookings').select('id', { count: 'exact', head: true }).eq('status', 'checked_in'),
     sb.from('bookings').select(OPS_SELECT).eq('status', 'confirmed').lt('start_date', today).order('start_date').limit(50),
-    sb.from('bookings').select(OPS_SELECT).eq('status', 'checked_in').lt('end_date', today).order('end_date').limit(50),
+    sb.from('bookings').select(OPS_SELECT).eq('status', 'checked_in').lte('end_date', today).order('end_date').limit(100),
     sb.from('settings').select('ops_points_max, extra_price_per_day').eq('id', 1).single(),
   ]);
   const A = (arr ?? []) as unknown as OpsBooking[];
   const D = (dep ?? []) as unknown as OpsBooking[];
   const L = (late ?? []) as unknown as OpsBooking[];
-  const O = (over ?? []) as unknown as OpsBooking[];
+  // a late-night return (landing at/after the cut-off hour) gets one more day before it counts as overdue
+  const O = ((over ?? []) as unknown as OpsBooking[]).filter((b) => daysBetween(b.end_date, today) > (b.late_grace ? 1 : 0));
 
   let found: OpsBooking[] = [];
   if (q) {
@@ -75,7 +76,7 @@ export default async function OpsPage({ searchParams }: { searchParams: Promise<
           {O.length > 0 && <>
             <h3>เลยวันรับรถแล้ว แต่รถยังอยู่ในลาน</h3>
             <p className="hint">อาจลืมกดรับรถ หรือจอดเกินกำหนด (คิดเพิ่มวันละ {st?.extra_price_per_day ?? 120} บาท · แจ้งแอดมินเพิ่มวันจอด)</p>
-            <ul className="ops-list">{O.map((b) => <OpsRow key={b.id} b={b} note={`ครบกำหนด ${thDate(b.end_date)} · เกินมา ${daysBetween(b.end_date, today)} วัน`} />)}</ul>
+            <ul className="ops-list">{O.map((b) => <OpsRow key={b.id} b={b} note={`ครบกำหนด ${thDate(b.end_date)} · เกินมา ${daysBetween(b.end_date, today) - (b.late_grace ? 1 : 0)} วัน`} />)}</ul>
           </>}
         </section>
       )}
