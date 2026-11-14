@@ -173,6 +173,9 @@ table.report th:first-child, table.report td:first-child { text-align: left; }
 
 .list li { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 0; border-top: 1px solid #EEF2EF; }
 .list li:first-child { border-top: 0; }
+.list li.trip-li { flex-wrap: wrap; }
+.trip-li details { flex-basis: 100%; }
+.trip-li summary { cursor: pointer; font-size: 13px; color: #0E3320; font-weight: 600; padding: 4px 0; }
 .list a { text-decoration: none; }
 .row-act { display: flex; gap: 8px; align-items: center; }
 

@@ -8,6 +8,8 @@ import type { Role } from '@/lib/session';
 import { afterConfirmed } from '@/lib/confirm';
 import { bkkLocalToIso } from '@/lib/request';
 import { thDate } from '@/lib/format';
+import { verifySlip } from '@/lib/slip';
+import { sendExtraPayCard, sendExtraPaidNote } from '@/lib/extraPay';
 
 export type ActionResult = { ok?: string; error?: string } | null;
 
@@ -37,6 +39,7 @@ const ERR: Record<string, string> = {
   coupon_used: 'คูปองนี้ถูกใช้หรือยกเลิกไปแล้ว',
   coupon_expired: 'คูปองนี้หมดอายุแล้ว',
   coupon_parking: 'คูปองส่วนลดค่าจอดใช้ได้ในหน้าจองของลูกค้าเท่านั้น',
+  invalid_time: 'ใส่เวลารับให้ครบ (วันและเวลา)',
   landing_after_pickup: 'เวลาเครื่องลงต้องไม่ช้ากว่าเวลารับ',
   too_many_pax: 'ผู้โดยสารเกินจำนวนที่นั่งของรถคันนี้',
   too_much_luggage: 'กระเป๋าเกินกว่าที่รถคันนี้ใส่ได้ เลือกรถคันที่ใหญ่กว่า',
@@ -116,8 +119,91 @@ export async function markPaid(_: ActionResult, f: FormData): Promise<ActionResu
 
 export async function addExtraDays(_: ActionResult, f: FormData): Promise<ActionResult> {
   const id = str(f, 'id');
-  return run('admin_add_extra_days', { p_booking_id: id, p_days: num(f, 'days'), p_paid: f.get('paid') === 'on' },
-    'เพิ่มวันจอดแล้ว', [`/admin/bookings/${id}`, '/admin', '/exec']);
+  const paid = f.get('paid') === 'on';
+  const r = await run('admin_add_extra_days', { p_booking_id: id, p_days: num(f, 'days'), p_paid: paid, p_shift_return: f.get('shift') === 'on' },
+    'เพิ่มวันจอดแล้ว', [`/admin/bookings/${id}`, '/admin', '/exec', '/admin/trips']);
+  if (r?.ok && !paid && f.get('line') === 'on') {
+    // owe money for the extra days: send the customer the QR card (LINE customers only)
+    const { data: p } = await db().from('payments').select('id').eq('booking_id', id).eq('kind', 'overstay').eq('status', 'pending')
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
+    const sent = p ? await sendExtraPayCard(p.id).catch((e) => { console.error('extra card', e); return false; }) : false;
+    return { ok: sent ? 'เพิ่มวันจอดแล้ว · ส่ง QR ชำระเงินให้ลูกค้าทาง LINE แล้ว' : 'เพิ่มวันจอดแล้ว · ลูกค้าไม่ได้จองผ่าน LINE จึงไม่ได้ส่ง QR (รับเงินที่หน้างานได้)' };
+  }
+  return r;
+}
+
+/** Re-send the QR card of a pending payment to the customer's LINE. */
+export async function resendPayCard(_: ActionResult, f: FormData): Promise<ActionResult> {
+  try { await staffForAction(['admin']); } catch { return { error: ERR.not_allowed }; }
+  const sent = await sendExtraPayCard(str(f, 'payment_id')).catch(() => false);
+  return sent ? { ok: 'ส่ง QR ให้ลูกค้าทาง LINE แล้ว' } : { error: 'ส่งไม่ได้ ลูกค้าไม่ได้จองผ่าน LINE หรือรายการนี้ชำระแล้ว' };
+}
+
+function slipKind(b: Uint8Array): { ext: string; type: string } | null {
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return { ext: 'jpg', type: 'image/jpeg' };
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return { ext: 'png', type: 'image/png' };
+  if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57) return { ext: 'webp', type: 'image/webp' };
+  return null;
+}
+
+/** Record money for any pending payment: cash, or a transfer whose slip the slip service checks. */
+export async function payPayment(_: ActionResult, f: FormData): Promise<ActionResult> {
+  const id = str(f, 'id');
+  const pid = str(f, 'payment_id');
+  const method = str(f, 'method') === 'transfer' ? 'transfer' : 'cash';
+  try { await staffForAction(['admin']); } catch { return { error: ERR.not_allowed }; }
+  const { data: pay } = await db().from('payments').select('id, kind, amount, status, created_at, booking_id').eq('id', pid).eq('booking_id', id).maybeSingle();
+  if (!pay) return { error: ERR.not_found };
+  if (pay.status !== 'pending') return { error: ERR.payment_not_pending };
+
+  let ref: string | null = null;
+  if (method === 'transfer') {
+    const file = f.get('slip');
+    const force = f.get('force') === 'on';
+    if (file instanceof File && file.size > 0) {
+      if (file.size > 4_000_000) return { error: 'รูปสลิปใหญ่เกิน 4 MB' };
+      const kind = slipKind(new Uint8Array(await file.slice(0, 12).arrayBuffer()));
+      if (!kind) return { error: 'รองรับเฉพาะรูป JPG, PNG หรือ WebP' };
+      const path = `${id}/admin-${Date.now()}.${kind.ext}`;
+      await db().storage.from('slips').upload(path, file, { contentType: kind.type });
+      await db().from('payments').update({ slip_path: path }).eq('id', pid);
+      const { data: bk } = await db().from('bookings').select('code').eq('id', id).maybeSingle();
+      const r = await verifySlip(file, { amount: pay.amount, notBefore: new Date(pay.created_at), remark: `Backyard ${bk?.code ?? ''}` });
+      if (r.ok) ref = `${r.provider}-${r.transRef}`;
+      else {
+        const soft = r.reason === 'pending' || r.reason === 'error' || r.reason === 'review';
+        if (!(force && soft)) return { error: `ตรวจสลิปไม่ผ่าน: ${r.message}${soft ? ' (ถ้าตรวจด้วยตาแล้วถูกต้อง ติ๊ก "ยืนยันเอง" แล้วกดอีกครั้ง)' : ''}` };
+        ref = 'manual-check';
+      }
+    } else if (!force) {
+      return { error: 'แนบรูปสลิปเพื่อให้ระบบตรวจ หรือติ๊ก "ยืนยันเอง" ถ้าตรวจด้วยตาแล้ว' };
+    } else ref = 'manual-check';
+  }
+
+  const res = await run('admin_pay_payment', { p_payment_id: pid, p_method: method, p_ref: ref },
+    method === 'transfer' && ref !== 'manual-check' ? 'ตรวจสลิปผ่าน บันทึกรับเงินแล้ว' : 'บันทึกรับเงินแล้ว',
+    [`/admin/bookings/${id}`, '/admin', '/admin/bookings', '/exec']);
+  if (res?.ok) {
+    if (pay.kind === 'booking') {
+      const { data: bk } = await db().from('bookings').select('group_id').eq('id', id).maybeSingle();
+      let leadId = id;
+      if (bk?.group_id) { const { data: g } = await db().from('booking_groups').select('lead_booking_id').eq('id', bk.group_id).maybeSingle(); if (g?.lead_booking_id) leadId = g.lead_booking_id; }
+      await afterConfirmed(leadId).catch((e) => console.error('afterConfirmed', e));
+    } else {
+      await sendExtraPaidNote(pid).catch((e) => console.error('extra paid note', e));
+    }
+  }
+  return res;
+}
+
+/** Change when the van takes the customer back: landing time, pickup time, flight. */
+export async function updateReturnTrip(_: ActionResult, f: FormData): Promise<ActionResult> {
+  const id = str(f, 'id');
+  const land = str(f, 'landing_at'); const pick = str(f, 'pickup_at');
+  return run('admin_update_return_trip', {
+    p_trip_id: str(f, 'trip_id'), p_landing_at: land ? bkkLocalToIso(land) : null, p_pickup_at: pick ? bkkLocalToIso(pick) : null,
+    p_flight: f.has('flight') ? str(f, 'flight') : null,
+  }, 'บันทึกเวลารับกลับแล้ว', [`/admin/bookings/${id}`, '/admin/trips', '/admin']);
 }
 
 export async function confirmSlip(_: ActionResult, f: FormData): Promise<ActionResult> {

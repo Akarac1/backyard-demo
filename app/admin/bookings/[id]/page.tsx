@@ -4,7 +4,8 @@ import { db } from '@/lib/supabase';
 import { bkkDay, thDate, thTime } from '@/lib/format';
 import { DIRECTION, STATUS, StatusTag } from '@/lib/labels';
 import { ActionButton, ActionForm, Submit } from '@/components/ActionForm';
-import { addExtraDays, adjustPoints, markPaid, setStatus, setTierOverride, updateBooking } from '../../actions';
+import { toBkkLocal } from '@/lib/shuttle';
+import { addExtraDays, adjustPoints, payPayment, resendPayCard, setStatus, setTierOverride, updateBooking, updateReturnTrip } from '../../actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +22,7 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
   const [{ data: b }, { data: pays }, { data: trips }, { data: log }, { data: vehicles }, { data: st }] = await Promise.all([
     sb.from('bookings').select('*, customers(name, phone, line_user_id)').eq('id', id).maybeSingle(),
     sb.from('payments').select('id, kind, amount, status, slip_path, verified_by, paid_at, created_at').eq('booking_id', id).order('created_at'),
-    sb.from('shuttle_trips').select('id, direction, pax, pickup_at, flight_number, status, vehicle_id').eq('booking_id', id).order('pickup_at'),
+    sb.from('shuttle_trips').select('id, direction, pax, pickup_at, landing_at, flight_number, status, vehicle_id, called_at').eq('booking_id', id).order('pickup_at'),
     sb.from('admin_audit').select('id, staff_name, action, detail, at').eq('entity', 'booking').eq('entity_id', id).order('at', { ascending: false }).limit(30),
     sb.from('vehicles').select('id, name'),
     sb.from('settings').select('extra_price_per_day').eq('id', 1).single(),
@@ -38,7 +39,7 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
   const tier = (Array.isArray(tierRow) ? tierRow[0] : tierRow) as { code: string; name: string; multiplier: number } | null;
   const vname = (vid: string | null) => vehicles?.find((v) => v.id === vid)?.name;
   const paid = (pays ?? []).filter((p) => p.status === 'verified').reduce((a, p) => a + p.amount, 0);
-  const pendingBooking = (pays ?? []).find((p) => p.kind === 'booking' && p.status === 'pending');
+  const pendingPays = (pays ?? []).filter((p) => p.status === 'pending');
   const slipLinks: Record<string, string> = {};
   for (const p of pays ?? []) {
     if (p.slip_path) {
@@ -122,17 +123,20 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
         </section>
 
         <div className="stack">
-          {pendingBooking && (
-            <section className="panel">
-              <h2>รับเงินเอง</h2>
-              <p className="hint">ยอดค้าง {n(pendingBooking.amount)} บาท ใช้เมื่อรับเงินสด หรือตรวจสลิปด้วยตาแล้ว</p>
-              <ActionForm action={markPaid} className="form" confirm={`ยืนยันว่าได้รับเงิน ${n(pendingBooking.amount)} บาทแล้ว?`}>
+          {pendingPays.map((p) => (
+            <section className="panel" key={p.id}>
+              <h2>รับเงินเอง · {KIND[p.kind]}</h2>
+              <p className="hint">ยอดค้าง {n(p.amount)} บาท ใช้เมื่อรับเงินสด หรือลูกค้าโอนผ่าน QR แล้วให้ระบบตรวจสลิป</p>
+              <ActionForm action={payPayment} className="form" confirm={`ยืนยันว่าได้รับเงิน ${n(p.amount)} บาทแล้ว?`}>
                 <input type="hidden" name="id" value={id} />
-                <label>วิธีรับเงิน<select name="method" defaultValue="cash"><option value="cash">เงินสด</option><option value="transfer">โอน (ตรวจเอง)</option></select></label>
-                <div className="form-actions"><Submit>บันทึกรับเงินและยืนยันการจอง</Submit></div>
+                <input type="hidden" name="payment_id" value={p.id} />
+                <label>วิธีรับเงิน<select name="method" defaultValue="cash"><option value="cash">เงินสด</option><option value="transfer">โอน / QR ธนาคาร (ตรวจสลิป)</option></select></label>
+                <label>รูปสลิป (เมื่อเลือกโอน)<input name="slip" type="file" accept="image/*" /></label>
+                <label className="check"><input name="force" type="checkbox" /> ยืนยันเอง (ตรวจสลิปด้วยตาแล้ว / ระบบตรวจไม่ได้)</label>
+                <div className="form-actions"><Submit>{p.kind === 'booking' ? 'บันทึกรับเงินและยืนยันการจอง' : 'บันทึกรับเงิน'}</Submit></div>
               </ActionForm>
             </section>
-          )}
+          ))}
           {active && (
             <section className="panel">
               <h2>เพิ่มวันจอด</h2>
@@ -141,6 +145,8 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
                 <input type="hidden" name="id" value={id} />
                 <label>จำนวนวันที่เพิ่ม<input name="days" type="number" min={1} max={60} defaultValue={1} required /></label>
                 <label className="check"><input name="paid" type="checkbox" defaultChecked /> ได้รับเงินแล้ว</label>
+                <label className="check"><input name="shift" type="checkbox" defaultChecked /> เลื่อนเวลารถรับกลับตามไปด้วย (เท่ากับจำนวนวันที่เพิ่ม)</label>
+                <label className="check"><input name="line" type="checkbox" defaultChecked /> ถ้ายังไม่รับเงิน ส่ง QR ชำระให้ลูกค้าทาง LINE</label>
                 <div className="form-actions"><Submit>เพิ่มวันจอด</Submit></div>
               </ActionForm>
             </section>
@@ -156,6 +162,7 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
               <li key={p.id}>
                 <div><b>{KIND[p.kind]} · {n(p.amount)} บาท</b><small>{p.paid_at ? `รับเมื่อ ${when(p.paid_at)}` : `สร้างเมื่อ ${when(p.created_at)}`}{p.verified_by ? ` · ${p.verified_by.split(':').slice(0, 2).join(' ')}` : ''}</small></div>
                 <div className="row-act">
+                  {p.status === 'pending' && <ActionButton action={resendPayCard} fields={{ payment_id: p.id }} label="ส่ง QR ทาง LINE" />}
                   {slipLinks[p.id] && <a className="b b-plain b-sm" href={slipLinks[p.id]} target="_blank" rel="noreferrer">ดูสลิป</a>}
                   <span className={`st ${p.status === 'verified' ? 'st-ok' : p.status === 'pending' ? 'st-wait' : 'st-off'}`}>{PAY[p.status]}</span>
                 </div>
@@ -194,9 +201,22 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
           {!trips?.length && <p className="empty">ไม่ได้ใช้รถรับส่ง</p>}
           <ul className="list">
             {(trips ?? []).map((t) => (
-              <li key={t.id}>
+              <li key={t.id} className="trip-li">
                 <div><b>{DIRECTION[t.direction]} · {t.pax} คน</b><small>{t.pickup_at ? `${thDate(bkkDay(t.pickup_at))} ${thTime(t.pickup_at)}` : 'ยังไม่มีเวลา'}{t.flight_number ? ` · ${t.flight_number}` : ''}</small></div>
                 <span className={`st ${t.status === 'cancelled' ? 'st-off' : t.vehicle_id ? 'st-ok' : 'st-wait'}`}>{t.status === 'cancelled' ? 'ยกเลิก' : vname(t.vehicle_id) ?? 'ยังไม่มีรถ'}</span>
+                {t.direction === 'from_airport' && t.status !== 'done' && t.status !== 'cancelled' && (
+                  <details className="span2" style={{ flexBasis: '100%' }}>
+                    <summary>แก้เวลารับกลับ{t.called_at ? ' (ลูกค้าเรียกรถแล้ว)' : ''}</summary>
+                    <ActionForm action={updateReturnTrip} className="form grid2">
+                      <input type="hidden" name="id" value={id} />
+                      <input type="hidden" name="trip_id" value={t.id} />
+                      <label>เวลาเครื่องลง<input name="landing_at" type="datetime-local" defaultValue={t.landing_at ? toBkkLocal(t.landing_at) : ''} /></label>
+                      <label>เวลารับ<input name="pickup_at" type="datetime-local" defaultValue={t.pickup_at ? toBkkLocal(t.pickup_at) : ''} /><small>เว้นว่างไว้ = เลื่อนตามเวลาเครื่องลง</small></label>
+                      <label>เที่ยวบิน<input name="flight" defaultValue={t.flight_number ?? ''} placeholder="เช่น TG123" /></label>
+                      <div className="form-actions span2"><Submit small>บันทึกเวลารับกลับ</Submit></div>
+                    </ActionForm>
+                  </details>
+                )}
               </li>
             ))}
           </ul>
