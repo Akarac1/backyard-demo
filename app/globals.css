@@ -917,3 +917,13 @@ svg.density { width: 100%; height: auto; display: block; }
 .tier-blackdiamond { background: linear-gradient(120deg, #0b0b0d, #26262b); color: #e8cf86; box-shadow: inset 0 0 0 1px rgba(214,178,94,.7); }
 a.chip-btn { text-decoration: none; display: inline-block; color: inherit; }
 a.chip-btn.on { color: #fff; }
+
+.coupon-qr { display: block; margin: 10px auto 4px; border: 1px solid #E3E8DF; border-radius: 12px; padding: 6px; background: #fff; }
+.card.coupon { text-align: center; align-items: center; }
+.promo-box { margin: 0 0 12px; }
+.promo-box label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: #0E3320; }
+.promo-box div { display: flex; gap: 8px; }
+.promo-box .btn { width: auto; flex: none; }
+.promo-box input { flex: 1 1 auto; width: auto; min-width: 0; text-transform: uppercase; letter-spacing: 2px; font-weight: 700; }
+.promo-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.card.coupon.past { text-align: left; align-items: stretch; }

@@ -29,6 +29,8 @@ const ERR: Record<string, string> = {
   invalid_points: 'จำนวนแต้มไม่ถูกต้อง หรือยังไม่ได้ใส่เหตุผล',
   invalid_phone: 'เบอร์โทรไม่ถูกต้อง (ต้องขึ้นต้นด้วย 0 และมี 9–10 หลัก)',
   points_over_limit: 'เกินจำนวนแต้มที่หัวหน้าหน้างานให้ได้ต่อครั้ง ให้แอดมินเป็นคนให้',
+  invalid_promo: 'ข้อมูลโค้ดไม่ถูกต้อง (ต้องมีชื่อ ส่วนลด ≥ 1 บาท รหัสเป็น A-Z 0-9 - _ 3–24 ตัว และวันสิ้นสุดต้องหลังวันเริ่ม)',
+  promo_exists: 'มีรหัสนี้อยู่แล้ว ใช้รหัสอื่น',
   invalid_reward: 'ข้อมูลของรางวัลไม่ครบ (ชื่อ แต้มที่ใช้ อายุคูปอง 1–1095 วัน และคูปองส่วนลดค่าจอดต้องมีมูลค่า)',
   invalid_tier: 'ข้อมูลระดับไม่ถูกต้อง (ระดับแรกต้องเริ่มที่ 0 บาท และตัวคูณ 0.1–10)',
   invalid_tier_order: 'ระดับที่สูงกว่าต้องใช้ยอดมากกว่าระดับก่อนหน้า',
@@ -421,6 +423,17 @@ export async function saveReward(_: ActionResult, f: FormData): Promise<ActionRe
     p_cost: num(f, 'cost'), p_valid_days: num(f, 'valid_days'), p_stock: stock === '' ? null : Number(stock),
     p_active: f.get('active') === 'on', p_sort: num(f, 'sort') || 0,
   }, 'บันทึกของรางวัลแล้ว', ['/admin/members', '/admin/settings', '/admin/campaigns']);
+}
+
+export async function savePromo(_: ActionResult, f: FormData): Promise<ActionResult> {
+  const mu = str(f, 'max_uses');
+  const bkk = (k: string) => (str(f, k) ? new Date(`${str(f, k)}:00+07:00`).toISOString() : null);
+  return run('admin_save_promo', {
+    p_id: str(f, 'id') || null, p_code: str(f, 'code'), p_title: str(f, 'title'), p_value: num(f, 'value'),
+    p_max_uses: mu === '' ? null : Number(mu), p_per_customer: num(f, 'per_customer') || 1,
+    p_valid_from: bkk('valid_from'), p_valid_until: bkk('valid_until'), p_coupon_days: num(f, 'coupon_days') || 30,
+    p_channel: str(f, 'channel'), p_active: f.get('active') === 'on',
+  }, 'บันทึกโค้ดแล้ว', ['/admin/campaigns']);
 }
 
 export async function takeCoupon(_: ActionResult, f: FormData): Promise<ActionResult> {

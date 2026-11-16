@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
+import QRCode from 'qrcode';
 import { authHeaders, useLiff } from '../useLiff';
 import { useT } from '@/components/Lang';
 
@@ -11,6 +12,15 @@ type Data = { points: number; enabled: boolean; rewards: Reward[]; coupons: Coup
 const BUSINESS: Record<string, string> = { parking: 'ที่จอดรถ', cafe: 'คาเฟ่', stay: 'ที่พัก' };
 const COUPON_STATUS: Record<string, string> = { active: 'ใช้ได้', used: 'ใช้แล้ว', expired: 'หมดอายุ', cancelled: 'ยกเลิก' };
 
+function CouponQr({ code }: { code: string }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    QRCode.toDataURL(`${window.location.origin}/ops/c/${code}`, { margin: 1, width: 360, errorCorrectionLevel: 'M', color: { dark: '#0E3320', light: '#FFFFFF' } }).then(setSrc).catch(() => {});
+  }, [code]);
+  // eslint-disable-next-line @next/next/no-img-element
+  return src ? <img className="coupon-qr" src={src} alt={`QR ${code}`} width={180} height={180} /> : null;
+}
+
 export default function Rewards() {
   const liff = useLiff();
   const { t, short: thShort, num } = useT();
@@ -20,6 +30,7 @@ export default function Rewards() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ ok?: string; error?: string } | null>(null);
   const [tab, setTab] = useState<'rewards' | 'coupons'>('rewards');
+  const [promo, setPromo] = useState('');
 
   const load = useCallback(() => {
     fetch('/api/rewards', { headers: authHeaders(liff.idToken) })
@@ -39,6 +50,24 @@ export default function Rewards() {
     setTab('coupons');
     load();
   }
+
+  async function redeemPromo(raw?: string) {
+    const code = (raw ?? promo).trim();
+    if (!code) return;
+    setBusy(true); setMsg(null);
+    const r = await fetch('/api/promo', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders(liff.idToken) }, body: JSON.stringify({ code }) });
+    const j = await r.json().catch(() => ({}));
+    setBusy(false);
+    if (!r.ok) { setMsg({ error: j.error ?? t('โค้ดนี้ไม่ถูกต้อง หมดอายุ หรือปิดใช้งานแล้ว') }); return; }
+    setPromo(''); setMsg({ ok: t('รับโค้ด “{x}” แล้ว · ดูได้ที่ คูปองของฉัน', { x: j.title }) }); setTab('coupons'); load();
+  }
+  // a link from a post (?code=XXXX) redeems once the page is ready
+  useEffect(() => {
+    if (!liff.ready) return;
+    const c = new URLSearchParams(window.location.search).get('code');
+    if (c) { window.history.replaceState(null, '', window.location.pathname); redeemPromo(c); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liff.ready]);
 
   const groups = Object.entries((d?.rewards ?? []).reduce<Record<string, Reward[]>>((a, r) => { (a[r.business] ??= []).push(r); return a; }, {}));
   const active = (d?.coupons ?? []).filter((c) => c.status === 'active');
@@ -63,6 +92,14 @@ export default function Rewards() {
             <button type="button" className={tab === 'rewards' ? 'on' : ''} onClick={() => setTab('rewards')}>{t('ของรางวัล')}</button>
             <button type="button" className={tab === 'coupons' ? 'on' : ''} onClick={() => setTab('coupons')}>{t('คูปองของฉัน')}{active.length ? ` (${active.length})` : ''}</button>
           </div>
+        )}
+
+        {d && (
+          <form className="promo-box" onSubmit={(e) => { e.preventDefault(); redeemPromo(); }}>
+            <label>{t('มีโค้ดโปรโมชัน?')}</label>
+            <div><input value={promo} onChange={(e) => setPromo(e.target.value.toUpperCase())} placeholder={t('กรอกโค้ด')} autoCapitalize="characters" autoComplete="off" maxLength={24} />
+              <button type="submit" className="btn primary btn-sm" disabled={busy || !promo.trim()}>{t('ใช้โค้ด')}</button></div>
+          </form>
         )}
 
         {d && tab === 'rewards' && (
@@ -100,7 +137,8 @@ export default function Rewards() {
                 <div className="coupon-code">{c.code}</div>
                 <b>{c.title}</b>
                 <span className="small">{t('ใช้ได้ถึง {d}', { d: thShort(c.expires_at) })}</span>
-                <span className="small">{c.kind === 'parking_discount' ? t('เลือกใช้ได้ในหน้ายืนยันการจองที่จอดรถ') : t('แสดงรหัสนี้ให้พนักงานเมื่อใช้สิทธิ์')}</span>
+                <CouponQr code={c.code} />
+                <span className="small">{c.kind === 'parking_discount' ? t('เลือกใช้ได้ในหน้ายืนยันการจองที่จอดรถ') : t('ให้พนักงานสแกน QR นี้เมื่อใช้สิทธิ์')}</span>
               </div>
             ))}
             {past.length > 0 && <h2 className="reward-group">{t('ประวัติคูปอง')}</h2>}

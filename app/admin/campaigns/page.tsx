@@ -2,7 +2,7 @@ import { db } from '@/lib/supabase';
 import { ActionForm, Submit } from '@/components/ActionForm';
 import { MemberCard } from '@/components/MemberCard';
 import { CampaignForm } from '@/components/CampaignForm';
-import { recordPurchase, saveCampaign, saveReward, saveTier } from '../actions';
+import { recordPurchase, saveCampaign, savePromo, saveReward, saveTier } from '../actions';
 import { thDate, bkkDay } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
@@ -11,6 +11,17 @@ type Tier = { code: string; name: string; min_spend: number; multiplier: number;
 type Campaign = { id: string; name: string; description: string | null; business: string; tiers: string[] | null; kind: string; multiplier: number; bonus_points: number; starts_at: string; ends_at: string | null; active: boolean; min_days: number; free_days: number; amount_off: number; stackable: boolean; percent_off: number; stay_from: string | null; stay_to: string | null };
 
 const RBIZ: Record<string, string> = { parking: 'ที่จอดรถ', cafe: 'คาเฟ่', stay: 'ที่พัก' };
+type Promo = { id: string; code: string; title: string; value_baht: number; max_uses: number | null; per_customer: number; used_count: number; valid_from: string | null; valid_until: string | null; coupon_days: number; channel: string | null; active: boolean };
+function promoState(p: Promo): [string, string] {
+  const now = Date.now();
+  if (!p.active) return ['ปิด', 'st-off'];
+  if (p.valid_from && Date.parse(p.valid_from) > now) return ['รอเริ่ม', 'st-wait'];
+  if (p.valid_until && Date.parse(p.valid_until) <= now) return ['หมดเวลา', 'st-off'];
+  if (p.max_uses != null && p.used_count >= p.max_uses) return ['ครบสิทธิ์', 'st-off'];
+  return ['เปิดใช้', 'st-ok'];
+}
+const shareLink = (code: string) => (process.env.NEXT_PUBLIC_LIFF_ID ? `https://liff.line.me/${process.env.NEXT_PUBLIC_LIFF_ID}/rewards?code=${code}` : `${process.env.NEXT_PUBLIC_BASE_URL ?? ''}/liff/rewards?code=${code}`);
+
 type Reward = { id: string; title: string; description: string | null; business: string; kind: string; value_baht: number; points_cost: number; valid_days: number; stock: number | null; active: boolean; sort: number };
 const BIZ: Record<string, string> = { all: 'ทุกธุรกิจ', parking: 'ที่จอดรถ', cafe: 'คาเฟ่', stay: 'ที่พัก' };
 const KIND: Record<string, string> = { free_days: 'ส่วนลด: จอดครบ ฟรีวัน', amount_off: 'ส่วนลด: จอดครบ ลดเงิน', percent_off: 'ส่วนลด: ลดค่าจอด %', multiplier: 'แต้มคูณ', bonus: 'แต้มโบนัส', announce: 'ประกาศ/โปรโมชัน' };
@@ -29,7 +40,7 @@ function campaignState(c: Campaign): [string, string] {
 
 export default async function CampaignsPage() {
   const sb = db();
-  const [{ data: tiers }, { data: camps }, { data: st }, { data: tc }, { data: purchases }, { data: rewards }, { count: bdCount }] = await Promise.all([
+  const [{ data: tiers }, { data: camps }, { data: st }, { data: tc }, { data: purchases }, { data: rewards }, { count: bdCount }, { data: promos }] = await Promise.all([
     sb.from('member_tiers').select('*').order('sort'),
     sb.from('campaigns').select('*').order('starts_at', { ascending: false }).limit(100),
     sb.from('settings').select('points_per_baht, tier_window_months').eq('id', 1).single(),
@@ -37,6 +48,7 @@ export default async function CampaignsPage() {
     sb.from('member_purchases').select('id, business, amount, note, staff, created_at, customers(name, member_no)').order('created_at', { ascending: false }).limit(15),
     sb.from('rewards').select('*').order('sort').order('points_cost'),
     sb.from('black_diamond').select('customer_id', { count: 'exact', head: true }).eq('active', true),
+    sb.from('promo_codes').select('*').order('created_at', { ascending: false }).limit(100),
   ]);
   const T = (tiers ?? []) as Tier[];
   // tier per customer (computed in the database)
@@ -45,6 +57,24 @@ export default async function CampaignsPage() {
   const per = st?.points_per_baht ?? 100;
 
   const tierList = T.map((t) => ({ code: t.code, name: t.name }));
+
+  const promoForm = (p?: Promo) => (
+    <ActionForm action={savePromo} className="form grid2" resetOnOk={!p}>
+      {p && <input type="hidden" name="id" value={p.id} />}
+      <label>รหัสโค้ด{p ? '' : ' (เว้นว่าง = สุ่มให้)'}<input name="code" defaultValue={p?.code ?? ''} readOnly={!!p} placeholder="เช่น NEWYEAR100" maxLength={24} style={{ textTransform: 'uppercase' }} /></label>
+      <label>ชื่อโปรโมชัน (ลูกค้าเห็นในคูปอง)<input name="title" defaultValue={p?.title ?? ''} placeholder="เช่น ส่วนลดจอดรถ 100 บาท" required /></label>
+      <label>ส่วนลด<span className="with-unit"><input name="value" type="number" min={1} defaultValue={p?.value_baht ?? 100} required /><em>บาท</em></span></label>
+      <label>จำนวนสิทธิ์รวม (เว้นว่าง = ไม่จำกัดคน)<span className="with-unit"><input name="max_uses" type="number" min={1} defaultValue={p?.max_uses ?? ''} placeholder="ไม่จำกัด" /><em>สิทธิ์</em></span></label>
+      <label>ต่อลูกค้า 1 คน ใช้ได้<span className="with-unit"><input name="per_customer" type="number" min={1} defaultValue={p?.per_customer ?? 1} required /><em>ครั้ง</em></span></label>
+      <label>คูปองหลังรับโค้ด ใช้ได้<span className="with-unit"><input name="coupon_days" type="number" min={1} max={1095} defaultValue={p?.coupon_days ?? 30} required /><em>วัน</em></span></label>
+      <label>เริ่มรับโค้ดได้<input name="valid_from" type="datetime-local" defaultValue={localInput(p?.valid_from ?? null)} /></label>
+      <label>หมดเขตรับโค้ด<input name="valid_until" type="datetime-local" defaultValue={localInput(p?.valid_until ?? null)} /></label>
+      <label className="span2">ช่องทาง / หมายเหตุ (ภายในเท่านั้น)<input name="channel" defaultValue={p?.channel ?? ''} placeholder="เช่น Facebook เพจ Backyard โพสต์ 15 พ.ย." /></label>
+      <label className="check span2"><input type="checkbox" name="active" defaultChecked={p ? p.active : true} /> เปิดใช้งาน</label>
+      <div className="form-actions span2"><Submit>{p ? 'บันทึก' : 'สร้างโค้ด'}</Submit></div>
+    </ActionForm>
+  );
+
   const rewardForm = (r?: Reward) => (
     <ActionForm action={saveReward} className="form grid2" resetOnOk={!r}>
       {r && <input type="hidden" name="id" value={r.id} />}
@@ -140,6 +170,33 @@ export default async function CampaignsPage() {
           </table>
         )}
         <details className="add-reward" style={{ marginTop: 12 }}><summary className="b b-plain b-sm">+ สร้างแคมเปญ</summary><div style={{ marginTop: 10, maxWidth: 760 }}>{campaignForm()}</div></details>
+      </section>
+
+      <section className="panel" id="promos">
+        <h2>โค้ดโปรโมชัน (Gen Code)</h2>
+        <p className="hint">สร้างโค้ดเดียวไปโพสต์ Facebook หรือช่องทางอื่น · ลูกค้ากรอกโค้ดในหน้า “แลกของรางวัล” (หรือกดลิงก์ที่มี ?code=) แล้วได้คูปองส่วนลดค่าจอดเป็นของตัวเอง (มี QR) เลือกใช้ในหน้ายืนยันการจอง · เว้นจำนวนสิทธิ์ว่าง = ใช้ได้ไม่จำกัดคน · ถ้ายกเลิกคูปองของลูกค้า สิทธิ์จะคืนให้โค้ด</p>
+        {!promos?.length ? <p className="empty">ยังไม่มีโค้ด</p> : (
+          <table className="tbl">
+            <thead><tr><th>โค้ด</th><th>โปรโมชัน</th><th className="r">ลด</th><th className="r">ใช้แล้ว</th><th>ช่วงรับโค้ด</th><th>สถานะ</th><th></th></tr></thead>
+            <tbody>
+              {(promos as Promo[]).map((p) => {
+                const [label, cls] = promoState(p);
+                return (
+                  <tr key={p.id}>
+                    <td><b style={{ letterSpacing: 1 }}>{p.code}</b><small className="hint" style={{ display: 'block', margin: 0, wordBreak: 'break-all' }}>{shareLink(p.code)}</small></td>
+                    <td>{p.title}{p.channel && <small className="hint" style={{ display: 'block', margin: 0 }}>{p.channel}</small>}</td>
+                    <td className="r">{p.value_baht.toLocaleString('th-TH')}</td>
+                    <td className="r">{p.used_count}{p.max_uses != null ? ` / ${p.max_uses}` : ' / ไม่จำกัด'}</td>
+                    <td>{p.valid_from ? thDate(bkkDay(p.valid_from)) : 'ทันที'} – {p.valid_until ? thDate(bkkDay(p.valid_until)) : 'ไม่กำหนด'}</td>
+                    <td><span className={`st ${cls}`}>{label}</span></td>
+                    <td className="r"><details className="inline-edit"><summary className="b b-plain b-sm">แก้ไข</summary><div className="inline-edit-body">{promoForm(p)}</div></details></td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
+        <details className="add-reward" style={{ marginTop: 12 }}><summary className="b b-plain b-sm">+ สร้างโค้ดโปรโมชัน</summary><div style={{ marginTop: 10, maxWidth: 760 }}>{promoForm()}</div></details>
       </section>
 
       <section className="panel" id="rewards">
