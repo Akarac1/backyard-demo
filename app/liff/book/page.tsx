@@ -43,6 +43,9 @@ export default function BookPage() {
   const [disc, setDisc] = useState<{ amount: number; reason: string | null; coupons?: Coupon[]; campaign?: { name: string; amount: number; stackable: boolean } | null; points?: number; rewards?: Reward[] } | null>(null);
   // '' = none, 'c:<coupon id>' = a coupon already redeemed, 'r:<reward id>' = spend points now
   const [pick, setPick] = useState<string>('');
+  const [promo, setPromo] = useState('');
+  const [promoBusy, setPromoBusy] = useState(false);
+  const [promoMsg, setPromoMsg] = useState<{ ok?: string; error?: string } | null>(null);
   // the outbound van is full at the chosen time: nearby free times to pick from
   const [slotFull, setSlotFull] = useState<string[] | null>(null);
   const [tooBig, setTooBig] = useState(false);   // no vehicle takes this many people + bags
@@ -117,10 +120,30 @@ export default function BookPage() {
     setReview(true);
     window.scrollTo({ top: 0 });
     // the final price is decided by the server when booking; this only shows it ahead
-    fetch('/api/discount', {
+    loadDisc();
+  }
+
+  function loadDisc(pickCode?: string) {
+    return fetch('/api/discount', {
       method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders(liff.idToken) },
       body: JSON.stringify({ phone: f.phone, refPhone: f.refPhone, days, shuttle: f.shuttle, start: f.start }),
-    }).then((r) => (r.ok ? r.json() : null)).then((j) => { setDisc(j ?? { amount: 0, reason: null }); setPick(j?.coupons?.[0]?.id ? `c:${j.coupons[0].id}` : ''); }).catch(() => setDisc({ amount: 0, reason: null }));
+    }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+      setDisc(j ?? { amount: 0, reason: null });
+      const cs = (j?.coupons ?? []) as Coupon[];
+      const target = pickCode ? cs.find((c) => c.code === pickCode) : cs[0];
+      setPick(target ? `c:${target.id}` : '');
+    }).catch(() => setDisc({ amount: 0, reason: null }));
+  }
+
+  async function redeemPromo() {
+    const code = promo.trim();
+    if (!code) return;
+    setPromoBusy(true); setPromoMsg(null);
+    const r = await fetch('/api/promo', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders(liff.idToken) }, body: JSON.stringify({ code, name: f.name, phone: f.phone }) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { setPromoBusy(false); setPromoMsg({ error: j.error ?? t('โค้ดนี้ไม่ถูกต้อง หมดอายุ หรือปิดใช้งานแล้ว') }); return; }
+    await loadDisc(j.code);
+    setPromoBusy(false); setPromo(''); setPromoMsg({ ok: t('รับโค้ด “{x}” แล้ว', { x: j.title }) });
   }
 
   // dates entered for the shuttle that do not match the parking dates: show as a warning on the summary
@@ -191,6 +214,15 @@ export default function BookPage() {
             {f.shuttle && <div className="price"><span>{t('รถรับส่งไป-กลับ')}</span><span>{money(pr.shuttle_price)}</span></div>}
             {discount > 0 && <div className="price discount"><span>{disc?.reason === 'referral' ? t('ส่วนลดเพื่อนแนะนำ') : t('ส่วนลดลูกค้าเก่า')}</span><span>−{money(discount)}</span></div>}
             {campAmount > 0 && <div className="price discount"><span>{t('แคมเปญ')} {camp?.name}</span><span>−{money(campAmount)}</span></div>}
+            {disc && (
+              <div className="promo-box" style={{ margin: '10px 0' }}>
+                <label>{t('มีโค้ดโปรโมชัน?')}</label>
+                <div><input value={promo} onChange={(e) => setPromo(e.target.value.toUpperCase())} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); redeemPromo(); } }} placeholder={t('กรอกโค้ด')} autoCapitalize="characters" autoComplete="off" maxLength={24} />
+                  <button type="button" className="btn primary btn-sm" disabled={promoBusy || !promo.trim()} onClick={redeemPromo}>{t('ใช้โค้ด')}</button></div>
+                {promoMsg?.ok && <p className="small" style={{ color: '#1F7A4D', margin: '4px 0 0' }}>{promoMsg.ok}</p>}
+                {promoMsg?.error && <p className="small" style={{ color: '#B3261E', margin: '4px 0 0' }}>{promoMsg.error}</p>}
+              </div>
+            )}
             {(coupons.length > 0 || rewards.length > 0) && leadGross - discount > 0 && (
               <fieldset className="use-points">
                 <legend>{t('ใช้แต้ม / คูปองลดค่าบริการ')} {disc?.points != null && <span className="pts-bal">{t('มี {n} แต้ม', { n: points })}</span>}</legend>

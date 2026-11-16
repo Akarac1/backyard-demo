@@ -10,10 +10,10 @@ export async function POST(req: Request) {
   const L = serverT(req);
   const uid = await currentUser(req);
   if (!uid) return json({ error: L('กรุณาเปิดจาก LINE') }, 401);
-  const { code } = (await req.json().catch(() => ({}))) as { code?: string };
+  const { code, name, phone } = (await req.json().catch(() => ({}))) as { code?: string; name?: string; phone?: string };
   const clean = String(code ?? '').replace(/\s/g, '').toUpperCase();
   if (!/^[A-Z0-9_-]{3,24}$/.test(clean)) return json({ error: dbErrorToThai('promo_invalid', L.lang) }, 400);
-  const { data, error } = await db().rpc('redeem_promo_code', { p_line_user_id: uid, p_code: clean });
+  const { data, error } = await db().rpc('redeem_promo_code', { p_line_user_id: uid, p_code: clean, p_name: String(name ?? '').slice(0, 80) || null, p_phone: String(phone ?? '').slice(0, 30) || null });
   if (error) return json({ error: dbErrorToThai(error.message, L.lang) }, 409);
   const c = data as { code: string; title: string; expires_at: string; value_baht: number };
   return json({ ok: true, code: c.code, title: c.title, expires_at: c.expires_at, value: c.value_baht });
