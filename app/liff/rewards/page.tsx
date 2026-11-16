@@ -6,7 +6,7 @@ import { authHeaders, useLiff } from '../useLiff';
 import { useT } from '@/components/Lang';
 
 type Reward = { id: string; title: string; description: string | null; business: string; kind: string; value_baht: number; points_cost: number; valid_days: number; stock: number | null };
-type Coupon = { id: string; code: string; title: string; business: string; kind: string; status: string; expires_at: string; used_at: string | null };
+type Coupon = { promo?: { min_days: number; needs_shuttle: boolean; stackable: boolean } | null; id: string; code: string; title: string; business: string; kind: string; status: string; expires_at: string; used_at: string | null };
 type Data = { points: number; enabled: boolean; rewards: Reward[]; coupons: Coupon[] };
 
 const BUSINESS: Record<string, string> = { parking: 'ที่จอดรถ', cafe: 'คาเฟ่', stay: 'ที่พัก' };
@@ -137,6 +137,9 @@ export default function Rewards() {
                 <div className="coupon-code">{c.code}</div>
                 <b>{c.title}</b>
                 <span className="small">{t('ใช้ได้ถึง {d}', { d: thShort(c.expires_at) })}</span>
+                {c.promo && (c.promo.min_days > 1 || c.promo.needs_shuttle || !c.promo.stackable) && (
+                  <span className="small">{[c.promo.min_days > 1 ? t('เงื่อนไข: จองอย่างน้อย {n} วัน', { n: c.promo.min_days }) : '', c.promo.needs_shuttle ? t('ต้องใช้รถรับ-ส่ง') : '', !c.promo.stackable ? t('ไม่ร่วมกับส่วนลดลูกค้าเก่า') : ''].filter(Boolean).join(' · ')}</span>
+                )}
                 <CouponQr code={c.code} />
                 <span className="small">{c.kind === 'parking_discount' ? t('เลือกใช้ได้ในหน้ายืนยันการจองที่จอดรถ') : t('ให้พนักงานสแกน QR นี้เมื่อใช้สิทธิ์')}</span>
               </div>

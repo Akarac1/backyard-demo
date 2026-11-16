@@ -14,7 +14,7 @@ export async function GET(req: Request) {
     sb.rpc('customer_points', { p_line_user_id: uid }),
     sb.from('rewards').select('id, title, description, business, kind, value_baht, points_cost, valid_days, stock')
       .eq('active', true).order('sort').order('points_cost'),
-    sb.from('coupons').select('id, code, title, business, kind, value_baht, status, expires_at, used_at, created_at, customers!inner(line_user_id)')
+    sb.from('coupons').select('id, code, title, business, kind, value_baht, status, expires_at, used_at, created_at, promo_codes(min_days, needs_shuttle, stackable), customers!inner(line_user_id)')
       .eq('customers.line_user_id', uid).order('created_at', { ascending: false }).limit(30),
   ]);
   const row = (Array.isArray(p) ? p[0] : p) as { points: number; enabled: boolean } | undefined;
@@ -22,8 +22,8 @@ export async function GET(req: Request) {
   return json({
     points: row?.points ?? 0, enabled: row?.enabled ?? false,
     rewards: (rewards ?? []).filter((r) => r.stock == null || r.stock > 0),
-    coupons: (coupons ?? []).map(({ customers: _c, ...c }) => ({
-      ...c, status: c.status === 'active' && Date.parse(c.expires_at) <= now ? 'expired' : c.status,
+    coupons: (coupons ?? []).map(({ customers: _c, promo_codes: pc0, ...c }) => ({
+      ...c, promo: (Array.isArray(pc0) ? pc0[0] : pc0) ?? null, status: c.status === 'active' && Date.parse(c.expires_at) <= now ? 'expired' : c.status,
     })),
   });
 }

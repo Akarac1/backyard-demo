@@ -38,7 +38,7 @@ export default function BookPage() {
   const [error, setError] = useState<string | null>(null);
   const [review, setReview] = useState(false);
   const [agree, setAgree] = useState(false);
-  type Coupon = { id: string; code: string; title: string; value: number; expiresAt: string };
+  type Coupon = { id: string; code: string; title: string; value: number; expiresAt: string; minDays?: number; needsShuttle?: boolean; stackable?: boolean };
   type Reward = { id: string; title: string; value: number; cost: number };
   const [disc, setDisc] = useState<{ amount: number; reason: string | null; coupons?: Coupon[]; campaign?: { name: string; amount: number; stackable: boolean } | null; points?: number; rewards?: Reward[] } | null>(null);
   // '' = none, 'c:<coupon id>' = a coupon already redeemed, 'r:<reward id>' = spend points now
@@ -65,7 +65,12 @@ export default function BookPage() {
   const coupons = disc?.coupons ?? [];
   const rewards = cars > 1 ? [] : disc?.rewards ?? [];
   const points = disc?.points ?? 0;
-  const coupon = pick.startsWith('c:') ? coupons.find((c) => c.id === pick.slice(2)) : undefined;
+  // promo-code coupons carry conditions (min days / shuttle / not combinable with the returning-customer discount)
+  const couponWhy = (c: Coupon): string | null =>
+    (c.minDays ?? 1) > days ? t('ต้องจองอย่างน้อย {n} วัน', { n: c.minDays ?? 1 })
+    : c.needsShuttle && !f.shuttle ? t('ต้องเลือกใช้รถรับ-ส่ง')
+    : c.stackable === false && discount > 0 ? t('ใช้ร่วมกับส่วนลดลูกค้าเก่า/เพื่อนแนะนำไม่ได้') : null;
+  const coupon = pick.startsWith('c:') ? coupons.find((c) => c.id === pick.slice(2) && !couponWhy(c)) : undefined;
   const reward = pick.startsWith('r:') ? rewards.find((r) => r.id === pick.slice(2) && r.cost <= points) : undefined;
   const pickValue = coupon?.value ?? reward?.value ?? 0;
   const couponAmount = Math.max(0, Math.min(pickValue, leadGross - discount));
@@ -194,10 +199,10 @@ export default function BookPage() {
                   <span className="up-main">{t('ไม่ใช้')}</span>
                 </label>
                 {coupons.map((c) => (
-                  <label key={c.id} className={`up-opt${pick === `c:${c.id}` ? ' on' : ''}`}>
-                    <input type="radio" name="use" checked={pick === `c:${c.id}`} onChange={() => setPick(`c:${c.id}`)} />
-                    <span className="up-main">{t('คูปองที่แลกไว้แล้ว')} · {t(c.title)}<small>{c.code} · {t('ใช้ได้ถึง {d}', { d: thDay(c.expiresAt) })}</small></span>
-                    <b>−{money(Math.min(c.value, leadGross - discount))}</b>
+                  <label key={c.id} className={`up-opt${coupon?.id === c.id ? ' on' : ''}${couponWhy(c) ? ' off' : ''}`}>
+                    <input type="radio" name="use" disabled={!!couponWhy(c)} checked={coupon?.id === c.id} onChange={() => setPick(`c:${c.id}`)} />
+                    <span className="up-main">{t('คูปองที่แลกไว้แล้ว')} · {t(c.title)}<small>{c.code} · {t('ใช้ได้ถึง {d}', { d: thDay(c.expiresAt) })}{couponWhy(c) ? ` · ${couponWhy(c)}` : ''}</small></span>
+                    {!couponWhy(c) && <b>−{money(Math.min(c.value, leadGross - discount))}</b>}
                   </label>
                 ))}
                 {rewards.map((r) => {

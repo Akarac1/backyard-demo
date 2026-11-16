@@ -16,7 +16,7 @@ export async function POST(req: Request) {
   const days = Math.max(0, Math.min(400, Number(b.days) || 0));
   const [{ data, error }, { data: cps }, { data: camp }, { data: pts }, { data: rws }] = await Promise.all([
     phone.trim() ? db().rpc('booking_discount', { p_phone: phone, p_ref_phone: ref || null, p_days: Number(b.days) || null, p_shuttle: typeof b.shuttle === 'boolean' ? b.shuttle : null }) : Promise.resolve({ data: null, error: null }),
-    db().from('coupons').select('id, code, title, value_baht, expires_at, customers!inner(line_user_id)')
+    db().from('coupons').select('id, code, title, value_baht, expires_at, promo_codes(min_days, needs_shuttle, stackable), customers!inner(line_user_id)')
       .eq('customers.line_user_id', uid).eq('status', 'active').eq('kind', 'parking_discount')
       .gt('expires_at', new Date().toISOString()).order('value_baht', { ascending: false }),
     days ? db().rpc('booking_campaign_preview', { p_line_user_id: uid, p_days: days, p_start: /^\d{4}-\d{2}-\d{2}$/.test(String(b.start)) ? b.start : null }) : Promise.resolve({ data: null }),
@@ -32,7 +32,11 @@ export async function POST(req: Request) {
   return json({
     amount: row?.amount ?? 0, reason: row?.reason ?? null,
     campaign: cp ? { name: cp.name, amount: cp.amount, stackable: cp.stackable } : null,
-    coupons: (cps ?? []).map((c) => ({ id: c.id, code: c.code, title: c.title, value: c.value_baht, expiresAt: c.expires_at })),
+    coupons: (cps ?? []).map((c) => {
+      const pc = (Array.isArray(c.promo_codes) ? c.promo_codes[0] : c.promo_codes) as { min_days: number; needs_shuttle: boolean; stackable: boolean } | null;
+      return { id: c.id, code: c.code, title: c.title, value: c.value_baht, expiresAt: c.expires_at,
+        ...(pc ? { minDays: pc.min_days, needsShuttle: pc.needs_shuttle, stackable: pc.stackable } : {}) };
+    }),
     points: balance, pointsEnabled: !!p?.enabled,
     rewards: p?.enabled ? (rws ?? []).filter((r) => r.stock == null || r.stock > 0)
       .map((r) => ({ id: r.id, title: r.title, value: r.value_baht, cost: r.points_cost })) : [],

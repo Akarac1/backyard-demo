@@ -433,6 +433,7 @@ export async function savePromo(_: ActionResult, f: FormData): Promise<ActionRes
     p_max_uses: mu === '' ? null : Number(mu), p_per_customer: num(f, 'per_customer') || 1,
     p_valid_from: bkk('valid_from'), p_valid_until: bkk('valid_until'), p_coupon_days: num(f, 'coupon_days') || 30,
     p_channel: str(f, 'channel'), p_active: f.get('active') === 'on',
+    p_min_days: num(f, 'min_days') || 1, p_needs_shuttle: f.get('needs_shuttle') === 'on', p_stackable: f.get('stackable') === 'on',
   }, 'บันทึกโค้ดแล้ว', ['/admin/campaigns']);
 }
 

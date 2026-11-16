@@ -11,7 +11,7 @@ type Tier = { code: string; name: string; min_spend: number; multiplier: number;
 type Campaign = { id: string; name: string; description: string | null; business: string; tiers: string[] | null; kind: string; multiplier: number; bonus_points: number; starts_at: string; ends_at: string | null; active: boolean; min_days: number; free_days: number; amount_off: number; stackable: boolean; percent_off: number; stay_from: string | null; stay_to: string | null };
 
 const RBIZ: Record<string, string> = { parking: 'ที่จอดรถ', cafe: 'คาเฟ่', stay: 'ที่พัก' };
-type Promo = { id: string; code: string; title: string; value_baht: number; max_uses: number | null; per_customer: number; used_count: number; valid_from: string | null; valid_until: string | null; coupon_days: number; channel: string | null; active: boolean };
+type Promo = { id: string; code: string; title: string; value_baht: number; max_uses: number | null; per_customer: number; used_count: number; valid_from: string | null; valid_until: string | null; coupon_days: number; channel: string | null; active: boolean; min_days: number; needs_shuttle: boolean; stackable: boolean };
 function promoState(p: Promo): [string, string] {
   const now = Date.now();
   if (!p.active) return ['ปิด', 'st-off'];
@@ -67,6 +67,9 @@ export default async function CampaignsPage() {
       <label>จำนวนสิทธิ์รวม (เว้นว่าง = ไม่จำกัดคน)<span className="with-unit"><input name="max_uses" type="number" min={1} defaultValue={p?.max_uses ?? ''} placeholder="ไม่จำกัด" /><em>สิทธิ์</em></span></label>
       <label>ต่อลูกค้า 1 คน ใช้ได้<span className="with-unit"><input name="per_customer" type="number" min={1} defaultValue={p?.per_customer ?? 1} required /><em>ครั้ง</em></span></label>
       <label>คูปองหลังรับโค้ด ใช้ได้<span className="with-unit"><input name="coupon_days" type="number" min={1} max={1095} defaultValue={p?.coupon_days ?? 30} required /><em>วัน</em></span></label>
+      <label>จองขั้นต่ำ<span className="with-unit"><input name="min_days" type="number" min={1} max={365} defaultValue={p?.min_days ?? 1} required /><em>วัน</em></span></label>
+      <label className="check"><input type="checkbox" name="needs_shuttle" defaultChecked={p?.needs_shuttle ?? false} /> ต้องเลือกใช้รถรับ-ส่งด้วย</label>
+      <label className="check span2"><input type="checkbox" name="stackable" defaultChecked={p ? p.stackable : true} /> ใช้ร่วมกับส่วนลดลูกค้าเก่า / เพื่อนแนะนำ (100 บาท) ได้ <small className="hint">(ไม่ติ๊ก = ลูกค้าที่ได้ส่วนลดนั้นอยู่แล้วจะใช้โค้ดนี้ไม่ได้)</small></label>
       <label>เริ่มรับโค้ดได้<input name="valid_from" type="datetime-local" defaultValue={localInput(p?.valid_from ?? null)} /></label>
       <label>หมดเขตรับโค้ด<input name="valid_until" type="datetime-local" defaultValue={localInput(p?.valid_until ?? null)} /></label>
       <label className="span2">ช่องทาง / หมายเหตุ (ภายในเท่านั้น)<input name="channel" defaultValue={p?.channel ?? ''} placeholder="เช่น Facebook เพจ Backyard โพสต์ 15 พ.ย." /></label>
@@ -184,7 +187,7 @@ export default async function CampaignsPage() {
                 return (
                   <tr key={p.id}>
                     <td><b style={{ letterSpacing: 1 }}>{p.code}</b><small className="hint" style={{ display: 'block', margin: 0, wordBreak: 'break-all' }}>{shareLink(p.code)}</small></td>
-                    <td>{p.title}{p.channel && <small className="hint" style={{ display: 'block', margin: 0 }}>{p.channel}</small>}</td>
+                    <td>{p.title}<small className="hint" style={{ display: 'block', margin: 0 }}>เงื่อนไข: จอง {p.min_days}+ วัน{p.needs_shuttle ? ' · ต้องใช้รถรับ-ส่ง' : ''}{p.stackable ? ' · ใช้ร่วมกับส่วนลดลูกค้าเก่าได้' : ' · ไม่ร่วมกับส่วนลดลูกค้าเก่า'}</small>{p.channel && <small className="hint" style={{ display: 'block', margin: 0 }}>{p.channel}</small>}</td>
                     <td className="r">{p.value_baht.toLocaleString('th-TH')}</td>
                     <td className="r">{p.used_count}{p.max_uses != null ? ` / ${p.max_uses}` : ' / ไม่จำกัด'}</td>
                     <td>{p.valid_from ? thDate(bkkDay(p.valid_from)) : 'ทันที'} – {p.valid_until ? thDate(bkkDay(p.valid_until)) : 'ไม่กำหนด'}</td>

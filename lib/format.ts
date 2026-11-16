@@ -42,6 +42,8 @@ export function dbErrorToThai(msg: string, lang: Lang = 'th'): string {
     promo_invalid: 'โค้ดนี้ไม่ถูกต้อง หมดอายุ หรือปิดใช้งานแล้ว',
     promo_used_up: 'โค้ดนี้ถูกใช้ครบจำนวนสิทธิ์แล้ว',
     promo_already: 'คุณใช้โค้ดนี้ไปแล้ว',
+    promo_conditions: 'คูปองนี้ใช้กับการจองนี้ไม่ได้ (ตรวจเงื่อนไขจำนวนวัน / รถรับ-ส่ง)',
+    promo_not_stackable: 'คูปองนี้ใช้ร่วมกับส่วนลดลูกค้าเก่า/เพื่อนแนะนำไม่ได้',
     not_enough_points: 'แต้มไม่พอสำหรับของรางวัลนี้',
     reward_closed: 'ของรางวัลนี้ปิดแลกแล้ว',
     out_of_stock: 'ของรางวัลนี้หมดแล้ว',
