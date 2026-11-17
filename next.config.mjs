@@ -17,7 +17,13 @@ const nextConfig = {
   poweredByHeader: false,
   experimental: { serverActions: { bodySizeLimit: '6mb' } },
   async headers() {
-    return [{ source: '/:path*', headers: securityHeaders }];
+    // private areas: never indexed (robots.txt also asks crawlers to stay out)
+    const noindex = [{ key: 'X-Robots-Tag', value: 'noindex, nofollow, noarchive' }];
+    const privateSources = ['/admin/:path*', '/driver/:path*', '/ops/:path*', '/exec/:path*', '/account/:path*', '/login', '/liff/:path*', '/tv/:path*', '/api/:path*'];
+    return [
+      { source: '/:path*', headers: securityHeaders },
+      ...privateSources.map((source) => ({ source, headers: noindex })),
+    ];
   },
 };
 export default nextConfig;

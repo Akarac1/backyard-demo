@@ -2,9 +2,26 @@ import Image from 'next/image';
 import Link from 'next/link';
 import QRCode from 'qrcode';
 import { db } from '@/lib/supabase';
+import type { Metadata } from 'next';
 import s from './home.module.css';
 
 export const dynamic = 'force-dynamic';
+
+const SITE = 'https://www.backyardairport.com';
+const TITLE = 'ที่จอดรถใกล้สนามบินสุวรรณภูมิ พร้อมรถรับส่ง 100 บาท/วัน | Backyard Airport';
+const DESC = 'ที่จอดรถมีหลังคาใกล้สนามบินสุวรรณภูมิ เริ่มต้น 100 บาท/วัน จองเองผ่าน LINE ไม่ต้องรอแอดมิน จอดเอง เก็บกุญแจเอง มีรถรับ-ส่งสนามบินเป็นบริการเสริม และสะสมแต้มแลกส่วนลด';
+
+export const metadata: Metadata = {
+  title: { absolute: TITLE },
+  description: DESC,
+  keywords: ['ที่จอดรถสุวรรณภูมิ', 'ที่จอดรถใกล้สนามบินสุวรรณภูมิ', 'จอดรถสนามบิน', 'ที่จอดรถรายวัน', 'รถรับส่งสนามบิน', 'จองที่จอดรถออนไลน์', 'Backyard Airport'],
+  alternates: { canonical: '/' },
+  openGraph: {
+    type: 'website', locale: 'th_TH', url: SITE, siteName: 'Backyard Airport · The Hangar', title: TITLE, description: DESC,
+    images: [{ url: '/og.jpg', width: 1200, height: 630, alt: 'Backyard Airport · The Hangar ที่จอดรถใกล้สนามบินสุวรรณภูมิ' }],
+  },
+  twitter: { card: 'summary_large_image', title: TITLE, description: DESC, images: ['/og.jpg'] },
+};
 
 const LINE_ID = '@backyardairport';
 const ADD_FRIEND = 'https://line.me/R/ti/p/%40backyardairport';
@@ -84,9 +101,39 @@ export default async function Home() {
   const example = 3 * info.perDay + info.shuttle;
   const showPromo = info.promo || process.env.NODE_ENV !== 'production';
 
+  // structured data: business + FAQ (no street address or opening hours yet: add them once confirmed)
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@graph': [
+      {
+        '@type': ['LocalBusiness', 'ParkingFacility'],
+        '@id': `${SITE}/#business`,
+        name: 'Backyard Airport · The Hangar',
+        description: DESC,
+        url: SITE,
+        logo: `${SITE}/logo.png`,
+        image: `${SITE}/og.jpg`,
+        telephone: `+66${info.phone.replace(/^0/, '')}`,
+        priceRange: `฿${info.perDay}/วัน`,
+        areaServed: 'ท่าอากาศยานสุวรรณภูมิ',
+        sameAs: [ADD_FRIEND],
+        makesOffer: [
+          { '@type': 'Offer', name: 'ที่จอดรถรายวัน', price: info.perDay, priceCurrency: 'THB', priceSpecification: { '@type': 'UnitPriceSpecification', price: info.perDay, priceCurrency: 'THB', unitText: 'DAY' } },
+          { '@type': 'Offer', name: 'บริการรับ-ส่งสนามบิน (บริการเสริม)', price: info.shuttle, priceCurrency: 'THB' },
+        ],
+      },
+      { '@type': 'WebSite', '@id': `${SITE}/#website`, url: SITE, name: 'Backyard Airport · The Hangar', inLanguage: 'th-TH', publisher: { '@id': `${SITE}/#business` } },
+      {
+        '@type': 'FAQPage',
+        mainEntity: FAQ.map((f) => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
+      },
+    ],
+  };
+
   return (
     <main className={s.page}>
       <link rel="stylesheet" href={FONTS} precedence="default" />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd).replace(/</g, '\\u003c') }} />
 
       {/* ================= HERO ================= */}
       <header id="top" className={s.hero}>

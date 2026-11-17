@@ -2,7 +2,12 @@ import './globals.css';
 import type { Metadata, Viewport } from 'next';
 import { headers } from 'next/headers';
 
-export const metadata: Metadata = { title: 'Backyard Airport · The Hangar', description: 'จองที่จอดรถใกล้สุวรรณภูมิ', icons: { icon: '/logo.png' } };
+export const metadata: Metadata = {
+  metadataBase: new URL('https://www.backyardairport.com'),
+  title: 'Backyard Airport · The Hangar',
+  description: 'จองที่จอดรถใกล้สุวรรณภูมิ',
+  icons: { icon: '/logo.png' },
+};
 export const viewport: Viewport = { width: 'device-width', initialScale: 1, themeColor: '#0E3320' };
 
 // Pages are rendered per request so each gets a fresh CSP nonce (see middleware.ts).
