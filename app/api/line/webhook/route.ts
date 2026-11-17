@@ -142,12 +142,8 @@ export async function POST(req: Request) {
   const k = await getContact();
   await Promise.all(events.map(async (e) => {
     if (!e.replyToken) return;
-    if (e.type === 'follow') {
-      return reply(e.replyToken, [
-        { type: 'image', originalContentUrl: `${base()}/welcome.png`, previewImageUrl: `${base()}/welcome.png` },
-        { type: 'text', text: `ยินดีต้อนรับสู่ Backyard Airport · The Hangar\nจองที่จอดและรถรับส่งได้ตลอด 24 ชั่วโมงจากเมนูด้านล่าง\nคุยกับแอดมิน ${k.hours} · โทร ${k.display}` },
-      ]);
-    }
+    // the welcome message on follow is set in LINE OA Manager (Greeting message), not here
+    if (e.type === 'follow') return;
     const text = e.type === 'message' && e.message?.type === 'text' ? e.message.text ?? '' : '';
     // type "myid" in the chat to get your LINE user id (for ALERT_LINE_USER_IDS). Reply messages are free.
     if (/^\s*myid\s*$/i.test(text) && e.source?.userId) return reply(e.replyToken, [{ type: 'text', text: `LINE user ID ของคุณ:\n${e.source.userId}` }]);
