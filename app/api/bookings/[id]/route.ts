@@ -1,6 +1,7 @@
 import { db } from '@/lib/supabase';
 import { currentUser, json, ownBooking } from '@/lib/request';
 import { paymentQr } from '@/lib/qr';
+import { bankInfo } from '@/lib/bank';
 
 export async function GET(req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
@@ -26,5 +27,5 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const payable = group ? group.total : booking.total_amount;
   let qr: string | null = null;
   if (booking.status === 'pending_payment') qr = (await paymentQr(payable))?.image ?? null;
-  return json({ booking, qr, group, payable, promptpayName: process.env.PROMPTPAY_NAME ?? 'Backyard Airport' });
+  return json({ booking, qr, bank: qr ? null : bankInfo(), group, payable, promptpayName: process.env.PROMPTPAY_NAME ?? 'Backyard Airport' });
 }

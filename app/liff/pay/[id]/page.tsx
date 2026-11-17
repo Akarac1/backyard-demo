@@ -4,10 +4,12 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authHeaders, closeLiff, useLiff } from '../../useLiff';
 import { useT } from '@/components/Lang';
+import BankBox, { type Bank } from '@/components/BankBox';
 
 type PayInfo = {
   booking: { code: string; plate: string; start_date: string; end_date: string; days: number; total_amount: number; status: string; hold_expires_at: string | null; shuttle: boolean; pax: number | null };
   qr: string | null;
+  bank?: Bank | null;
   payable: number;
   group: { leadId: string; total: number; cars: { id: string; plate: string; province: string; amount: number }[] } | null;
   promptpayName: string;
@@ -93,11 +95,11 @@ export default function PayPage({ params }: { params: Promise<{ id: string }> })
               </div>
             )}
             <div className="card" style={{ textAlign: 'center' }}>
-              <div className="small">{t('สแกนจ่ายด้วยแอปธนาคาร · ยอดเงินขึ้นให้อัตโนมัติ')}</div>
-              {info.qr ? <img className="qr" src={info.qr} alt={`QR PromptPay ${money(amount)}`} /> : <div className="alert bad">{t('ยังสร้าง QR ไม่ได้ ติดต่อแอดมิน')}</div>}
+              <div className="small">{info.qr || !info.bank ? t('สแกนจ่ายด้วยแอปธนาคาร · ยอดเงินขึ้นให้อัตโนมัติ') : t('โอนเงินผ่านแอปธนาคาร')}</div>
+              {info.qr ? <img className="qr" src={info.qr} alt={`QR PromptPay ${money(amount)}`} /> : info.bank ? <BankBox bank={info.bank} amount={amount} /> : <div className="alert bad">{t('ยังสร้าง QR ไม่ได้ ติดต่อแอดมิน')}</div>}
               <div style={{ fontSize: 26, fontWeight: 700 }}>{money(amount)}</div>
-              <div className="small">PromptPay · {info.promptpayName}</div>
-              <p className="small" style={{ margin: '8px 0 0' }}>{t('บนมือถือ: กดค้างที่ QR เพื่อบันทึกรูป แล้วเปิดในแอปธนาคาร')}</p>
+              {info.qr && <><div className="small">PromptPay · {info.promptpayName}</div>
+              <p className="small" style={{ margin: '8px 0 0' }}>{t('บนมือถือ: กดค้างที่ QR เพื่อบันทึกรูป แล้วเปิดในแอปธนาคาร')}</p></>}
               {left != null && <div className="alert info">{t('กันที่ไว้ให้อีก {t} นาที', { t: `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` })}</div>}
             </div>
             <div className="card">

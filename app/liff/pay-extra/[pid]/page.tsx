@@ -3,11 +3,12 @@ import { use, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { authHeaders, closeLiff, useLiff } from '../../useLiff';
 import { useT } from '@/components/Lang';
+import BankBox, { type Bank } from '@/components/BankBox';
 
 type Info = {
   payment: { id: string; kind: string; amount: number; status: string };
   booking: { code: string; plate: string; start_date: string; end_date: string };
-  qr: string | null; promptpayName: string;
+  qr: string | null; bank?: Bank | null; promptpayName: string;
 };
 
 export default function PayExtraPage({ params }: { params: Promise<{ pid: string }> }) {
@@ -57,10 +58,10 @@ export default function PayExtraPage({ params }: { params: Promise<{ pid: string
           <>
             <div className="card" style={{ textAlign: 'center' }}>
               <div className="small">{t('ค่าจอดเพิ่ม · สแกนจ่ายด้วยแอปธนาคาร')}</div>
-              {info.qr ? <img className="qr" src={info.qr} alt={`QR PromptPay ${money(info.payment.amount)}`} /> : <div className="alert bad">{t('ยังสร้าง QR ไม่ได้ ติดต่อแอดมิน')}</div>}
+              {info.qr ? <img className="qr" src={info.qr} alt={`QR PromptPay ${money(info.payment.amount)}`} /> : info.bank ? <BankBox bank={info.bank} amount={info.payment.amount} /> : <div className="alert bad">{t('ยังสร้าง QR ไม่ได้ ติดต่อแอดมิน')}</div>}
               <div style={{ fontSize: 26, fontWeight: 700 }}>{money(info.payment.amount)}</div>
-              <div className="small">PromptPay · {info.promptpayName}</div>
-              <p className="small" style={{ margin: '8px 0 0' }}>{t('บนมือถือ: กดค้างที่ QR เพื่อบันทึกรูป แล้วเปิดในแอปธนาคาร')}</p>
+              {info.qr && <><div className="small">PromptPay · {info.promptpayName}</div>
+              <p className="small" style={{ margin: '8px 0 0' }}>{t('บนมือถือ: กดค้างที่ QR เพื่อบันทึกรูป แล้วเปิดในแอปธนาคาร')}</p></>}
             </div>
             <div className="card">
               <h2>{t('ส่งสลิป')}</h2>
