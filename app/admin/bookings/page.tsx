@@ -80,7 +80,7 @@ export default async function BookingsPage({ searchParams }: { searchParams: Pro
                 {rows.map((r) => (
                   <tr key={r.id}>
                     <td><Link href={`/admin/bookings/${r.id}`} className="code">{r.code}</Link></td>
-                    <td><b>{r.plate}</b><small>{r.plate_province}{r.group_id ? ' · กลุ่ม' : ''}{r.source === 'walkin' ? ' · walk-in' : ''}</small></td>
+                    <td><b>{r.plate}</b><small>{r.plate_province}{r.group_id ? ' · กลุ่ม' : ''}{r.source === 'walkin' ? ' · walk-in' : r.source === 'import' ? ' · นำเข้าจากชีต' : ''}</small></td>
                     <td>{r.customers?.name}<small>{r.customers?.phone}</small></td>
                     <td>{thDate(r.start_date)} – {thDate(r.end_date)}<small>{r.days} วัน</small></td>
                     <td>{r.shuttle ? `${r.pax} คน` : '–'}</td>
