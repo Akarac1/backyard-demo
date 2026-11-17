@@ -16,7 +16,7 @@ rows.sort((a, b) => a.start.localeCompare(b.start) || a.ref - b.ref); // oldest 
 let n = 0, s = 0, p = 0;
 for (let i = 0; i < rows.length; i += 100) {
   const res = await fetch(`${url}/rest/v1/rpc/admin_import_past_bookings`, {
-    method: 'POST', headers: { apikey: key, Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+    method: 'POST', headers: { apikey: key, ...(key.startsWith('eyJ') ? { Authorization: `Bearer ${key}` } : {}), 'Content-Type': 'application/json' },
     body: JSON.stringify({ p_actor: actor, p_rows: rows.slice(i, i + 100) }),
   });
   if (!res.ok) { console.error(`ล้มเหลวที่แถวชุด ${i}:`, (await res.text()).slice(0, 300), '\nรันซ้ำได้ ระบบข้ามรายการที่นำเข้าแล้ว'); process.exit(1); }
