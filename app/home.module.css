@@ -1,0 +1,81 @@
+.page { background: #F7F5EE; min-height: 100vh; }
+
+/* ---------- hero ---------- */
+.hero {
+  background:
+    radial-gradient(900px 420px at 85% -10%, rgba(224, 176, 74, .28), transparent 60%),
+    radial-gradient(700px 380px at -10% 110%, rgba(46, 94, 64, .65), transparent 60%),
+    linear-gradient(160deg, #0E3320 0%, #174A2E 100%);
+  color: #F5F7FA;
+  padding: 28px 18px 44px;
+}
+.heroInner { max-width: 1000px; margin: 0 auto; display: grid; gap: 28px; align-items: center; }
+.copy h1 { text-wrap: balance; margin: 14px 0 10px; font-size: clamp(28px, 6.4vw, 46px); line-height: 1.2; font-weight: 700; }
+.lead { margin: 0 0 22px; color: #CFE0D4; font-size: clamp(16px, 3.6vw, 19px); line-height: 1.6; }
+.chip { display: inline-block; border: 1.5px solid #E0B04A; color: #E0B04A; border-radius: 999px; padding: 3px 14px; font-size: 14px; }
+.side { display: flex; align-items: center; justify-content: center; gap: 18px; flex-wrap: wrap; }
+.logo { width: min(210px, 52vw); height: auto; filter: drop-shadow(0 10px 24px rgba(0, 0, 0, .35)); }
+.qrCard {
+  display: none; background: #fff; color: #0E3320; border-radius: 18px; padding: 12px; text-align: center;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .28); font-size: 14px; line-height: 1.4;
+}
+.qrCard img { display: block; margin: 0 auto 6px; }
+.qrCard b { color: #06A94D; font-size: 16px; }
+
+.lineBtn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 10px; width: 100%; max-width: 420px;
+  background: #06C755; color: #fff; text-decoration: none; font-weight: 600; font-size: 18px;
+  padding: 15px 24px; border-radius: 999px; box-shadow: 0 8px 22px rgba(6, 199, 85, .38);
+  transition: transform .15s ease, box-shadow .15s ease;
+}
+.lineBtn:hover { transform: translateY(-1px); box-shadow: 0 12px 26px rgba(6, 199, 85, .45); }
+.lineBtn:focus-visible, .ghost:focus-visible { outline: 3px solid #E0B04A; outline-offset: 3px; }
+.hint { margin: 10px 0 0; font-size: 14px; color: #BFD3C4; }
+
+/* ---------- sections ---------- */
+.section { max-width: 1000px; margin: 0 auto; padding: 34px 18px 0; }
+.section h2 { margin: 0 0 16px; font-size: 24px; color: #0E3320; }
+
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 12px; }
+.steps li {
+  display: grid; grid-template-columns: 44px 1fr; column-gap: 14px; background: #fff; border-radius: 18px;
+  padding: 16px; box-shadow: 0 1px 3px rgba(14, 51, 32, .08);
+}
+.steps i {
+  grid-row: span 2; width: 44px; height: 44px; border-radius: 50%; background: #E0B04A; color: #0E3320;
+  font: 700 20px/44px 'Kanit', sans-serif; text-align: center; font-style: normal;
+}
+.steps b { font-size: 18px; color: #0E3320; }
+.steps span { color: #5B6B80; font-size: 15px; line-height: 1.5; }
+
+.perks { display: grid; gap: 12px; }
+.perks div { background: #0E3320; color: #F5F7FA; border-radius: 18px; padding: 16px 18px; }
+.perks b { display: block; color: #E0B04A; font-size: 18px; margin-bottom: 4px; }
+.perks span { color: #CFE0D4; font-size: 15px; line-height: 1.5; }
+
+.pickup { background: #fff; border-radius: 20px; padding: 10px; box-shadow: 0 1px 3px rgba(14, 51, 32, .08); }
+.pickup { overflow: hidden; }
+.pickup img { width: 100%; height: auto; aspect-ratio: 1080 / 668; object-fit: cover; object-position: top; border-radius: 14px; display: block; }
+
+.cta { text-align: center; padding-bottom: 8px; }
+.ghost { display: inline-block; margin-top: 12px; color: #174A2E; font-weight: 500; text-decoration: underline; text-underline-offset: 4px; }
+.small { margin: 16px 0 0; color: #5B6B80; font-size: 15px; }
+.small a { color: #174A2E; font-weight: 600; }
+
+.footer {
+  max-width: 1000px; margin: 40px auto 0; padding: 18px 18px 30px; display: flex; justify-content: space-between;
+  align-items: center; color: #8A9A8F; font-size: 13px; border-top: 1px solid #E3E6DD;
+}
+.staff { color: #B4BDB6; text-decoration: none; font-size: 12px; }
+.staff:hover { color: #5B6B80; }
+
+@media (min-width: 760px) {
+  .hero { padding: 56px 24px 64px; }
+  .heroInner { grid-template-columns: 1.25fr 1fr; gap: 48px; }
+  .qrCard { display: block; }
+  .steps { grid-template-columns: repeat(3, 1fr); }
+  .steps li { grid-template-columns: 1fr; row-gap: 6px; }
+  .steps i { grid-row: auto; margin-bottom: 4px; }
+  .perks { grid-template-columns: repeat(2, 1fr); }
+  .lineBtn { width: auto; }
+}
