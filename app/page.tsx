@@ -101,7 +101,7 @@ export default async function Home() {
   const example = 3 * info.perDay + info.shuttle;
   const showPromo = info.promo || process.env.NODE_ENV !== 'production';
 
-  // structured data: business + FAQ (no street address or opening hours yet: add them once confirmed)
+  // structured data: business + FAQ (street address not added yet: add it once confirmed)
   const jsonLd = {
     '@context': 'https://schema.org',
     '@graph': [
@@ -116,6 +116,14 @@ export default async function Home() {
         telephone: `+66${info.phone.replace(/^0/, '')}`,
         priceRange: `฿${info.perDay}/วัน`,
         areaServed: 'ท่าอากาศยานสุวรรณภูมิ',
+        geo: { '@type': 'GeoCoordinates', latitude: 13.703942, longitude: 100.7354492 },
+        hasMap: 'https://maps.app.goo.gl/9s7ZS7NdW4Uayuz17',
+        openingHoursSpecification: {
+          '@type': 'OpeningHoursSpecification',
+          dayOfWeek: ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'],
+          opens: '00:00',
+          closes: '23:59',
+        },
         sameAs: [ADD_FRIEND],
         makesOffer: [
           { '@type': 'Offer', name: 'ที่จอดรถรายวัน', price: info.perDay, priceCurrency: 'THB', priceSpecification: { '@type': 'UnitPriceSpecification', price: info.perDay, priceCurrency: 'THB', unitText: 'DAY' } },
