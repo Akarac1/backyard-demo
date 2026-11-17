@@ -98,10 +98,22 @@ export default function BookPage() {
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setF({ ...f, [k]: e.target.value });
 
+  // keep return >= start, and carry the arrival / landing dates along unless the customer set their own
+  function changeDates(start: string, end: string) {
+    if (start && end && end < start) end = start;
+    const move = (v: string, from: string, to: string) => (v && from && v.slice(0, 10) === from && to ? `${to}${v.slice(10)}` : v);
+    setF({
+      ...f, start, end,
+      outboundTime: move(f.outboundTime, f.start, start),
+      returnLanding: move(f.returnLanding, f.end, end),
+    });
+  }
+
   // step 1: check the form, then show the summary (nothing is booked yet, the hold starts on confirm)
   async function toReview(e: React.FormEvent) {
     e.preventDefault();
     setError(null);
+    if (!f.start || !f.end || f.end < f.start) { setError(t('วันรับรถคืนต้องไม่ก่อนวันเข้าจอด')); return; }
     if (more.some((c) => !c.plate.trim())) { setError(t('กรอกทะเบียนรถให้ครบทุกคัน หรือกดลบคันที่ไม่ใช้')); return; }
     const norm = [f.plate, ...more.map((c) => c.plate)].map((x) => x.replace(/\s+/g, '').toUpperCase());
     if (new Set(norm).size !== norm.length) { setError(t('ทะเบียนรถซ้ำกัน')); return; }
@@ -282,8 +294,8 @@ export default function BookPage() {
         <div className="card">
           <h2>{t('วันที่จอด')}</h2>
           <div className="row">
-            <div><label htmlFor="start">{t('วันเข้าจอด')}</label><input id="start" type="date" min={today} value={f.start} onChange={set('start')} required /></div>
-            <div><label htmlFor="end">{t('วันรับรถคืน')}</label><input id="end" type="date" min={f.start} value={f.end} onChange={set('end')} required /></div>
+            <div><label htmlFor="start">{t('วันเข้าจอด')}</label><input id="start" type="date" min={today} value={f.start} onChange={(e) => changeDates(e.target.value, f.end)} required /></div>
+            <div><label htmlFor="end">{t('วันรับรถคืน')}</label><input id="end" type="date" min={f.start} value={f.end} onChange={(e) => changeDates(f.start, e.target.value)} required /></div>
           </div>
           {full && <div className="alert bad">{cars > 1 && full.available ? t('วันที่ {d} ที่ว่างเหลือไม่พอสำหรับ {n} คัน', { d: thDay(full.day), n: cars }) : t('วันที่ {d} ที่จอดเต็มแล้ว ลองเลือกวันอื่น', { d: thDay(full.day) })}</div>}
           {!full && minLeft != null && <div className="alert ok">{t('ว่าง · เหลืออย่างน้อย {n} ช่องในช่วงนี้', { n: minLeft })}</div>}

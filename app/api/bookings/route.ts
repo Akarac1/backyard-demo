@@ -20,6 +20,8 @@ export async function POST(req: Request) {
   const b = (await req.json()) as Body;
   if (!b.name?.trim() || !b.phone?.trim() || !b.plate?.trim()) return json({ error: L('กรอกข้อมูลให้ครบ') }, 400);
 
+  if (!b.start || !b.end || b.end < b.start) return json({ error: L('วันรับรถคืนต้องไม่ก่อนวันเข้าจอด') }, 400);
+
   // Pickup time = landing + time to get out of the terminal (settings), customer-entered (no flight API in the lean plan).
   let returnPickup: string | null = null;
   if (b.shuttle && b.returnLanding) {
