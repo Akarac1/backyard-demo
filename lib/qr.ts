@@ -1,6 +1,6 @@
 import 'server-only';
 import QRCode from 'qrcode';
-import { promptPayPayload } from './promptpay';
+import { bankAccountPayload, promptPayPayload } from './promptpay';
 
 /**
  * PromptPay QR with the amount built in: scanning fills in the amount, the customer only confirms.
@@ -9,7 +9,13 @@ import { promptPayPayload } from './promptpay';
  */
 export async function paymentQr(amount: number): Promise<{ image: string; provider: string } | null> {
   const id = (process.env.PROMPTPAY_ID ?? '').replace(/\D/g, '');
-  if (!id) return null;
+  if (!id) {
+    // no PromptPay ID: QR straight to a bank account (needs SHOP_BANK_CODE + SHOP_BANK_ACCOUNT)
+    const bankCode = (process.env.SHOP_BANK_CODE ?? '').replace(/\D/g, '');
+    const acc = (process.env.SHOP_BANK_ACCOUNT ?? '').replace(/\D/g, '');
+    if (!bankCode || !acc) return null;
+    return { image: await QRCode.toDataURL(bankAccountPayload(bankCode, acc, amount), { margin: 1, width: 480 }), provider: 'local-bank' };
+  }
   if (process.env.QR_PROVIDER === 'easyslip' && process.env.EASYSLIP_API_KEY) {
     try {
       const target = id.length === 13 ? { natId: id } : id.length >= 15 ? { eWalletId: id } : { msisdn: id };

@@ -16,6 +16,17 @@ function crc16(data: string): string {
   return crc.toString(16).toUpperCase().padStart(4, '0');
 }
 
+/** PromptPay credit transfer to a bank account (tag 29, sub-tag 04 = 3-digit bank code + account number). */
+export function bankAccountPayload(bankCode: string, account: string, amount?: number): string {
+  const target = tlv('04', bankCode.replace(/\D/g, '').padStart(3, '0') + account.replace(/\D/g, ''));
+  const merchant = tlv('00', 'A000000677010111') + target;
+  let payload =
+    tlv('00', '01') + tlv('01', amount ? '12' : '11') + tlv('29', merchant) + tlv('53', '764') +
+    (amount ? tlv('54', amount.toFixed(2)) : '') + tlv('58', 'TH');
+  payload += '6304';
+  return payload + crc16(payload);
+}
+
 /** id: mobile (0812345678), national/tax ID (13 digits) or e-wallet (15 digits). */
 export function promptPayPayload(id: string, amount?: number): string {
   const digits = id.replace(/\D/g, '');

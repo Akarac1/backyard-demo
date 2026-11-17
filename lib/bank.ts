@@ -1,6 +1,7 @@
 import 'server-only';
 
 /** Bank account shown to customers when there is no PromptPay QR (PROMPTPAY_ID empty). */
+/** (shown only when no QR could be made) */
 export function bankInfo(): { bank: string; account: string; name: string } | null {
   const account = (process.env.SHOP_BANK_ACCOUNT ?? '').trim();
   if (!account) return null;
