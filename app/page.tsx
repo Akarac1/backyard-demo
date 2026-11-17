@@ -101,7 +101,7 @@ export default async function Home() {
   const example = 3 * info.perDay + info.shuttle;
   const showPromo = info.promo || process.env.NODE_ENV !== 'production';
 
-  // structured data: business + FAQ (street address not added yet: add it once confirmed)
+  // structured data: business + FAQ 
   const jsonLd = {
     '@context': 'https://schema.org',
     '@graph': [
@@ -116,6 +116,14 @@ export default async function Home() {
         telephone: `+66${info.phone.replace(/^0/, '')}`,
         priceRange: `฿${info.perDay}/วัน`,
         areaServed: 'ท่าอากาศยานสุวรรณภูมิ',
+        address: {
+          '@type': 'PostalAddress',
+          streetAddress: '242 หมู่ 7 ถนนกิ่งแก้ว',
+          addressLocality: 'ราชาเทวะ',
+          addressRegion: 'สมุทรปราการ',
+          postalCode: '10540',
+          addressCountry: 'TH',
+        },
         geo: { '@type': 'GeoCoordinates', latitude: 13.703942, longitude: 100.7354492 },
         hasMap: 'https://maps.app.goo.gl/9s7ZS7NdW4Uayuz17',
         openingHoursSpecification: {
