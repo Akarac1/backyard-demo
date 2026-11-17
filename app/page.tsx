@@ -11,14 +11,24 @@ const ADD_FRIEND = 'https://line.me/R/ti/p/%40backyardairport';
 const FONTS = 'https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,500;0,600;1,500&family=Kanit:wght@200;300;400;500&display=swap';
 
 async function loadInfo() {
-  const fallback = { perDay: 100, shuttle: 300, phone: '0888101089' };
+  const fallback = { perDay: 100, shuttle: 300, phone: '0888101089', claimBonus: 20, promo: false };
   try {
-    const { data } = await db().from('settings').select('price_per_day, shuttle_price, shop_phone').eq('id', 1).single();
+    const [{ data }, { data: promo }] = await Promise.all([
+      db().from('settings').select('price_per_day, shuttle_price, shop_phone, claim_bonus_points').eq('id', 1).single(),
+      db().from('promo_codes').select('active, valid_from, valid_until, max_uses, used_count').eq('code', 'WELCOME').maybeSingle(),
+    ]);
     if (!data) return fallback;
+    const now = Date.now();
+    const promoOk = !!promo && promo.active
+      && (!promo.valid_from || Date.parse(promo.valid_from) <= now)
+      && (!promo.valid_until || Date.parse(promo.valid_until) >= now)
+      && (promo.max_uses == null || promo.used_count < promo.max_uses);
     return {
       perDay: Number(data.price_per_day) || fallback.perDay,
       shuttle: Number(data.shuttle_price) || fallback.shuttle,
       phone: String(data.shop_phone || process.env.SHOP_PHONE || fallback.phone).replace(/\D/g, ''),
+      claimBonus: Number(data.claim_bonus_points) || 0,
+      promo: promoOk,
     };
   } catch {
     return fallback;
@@ -38,6 +48,33 @@ function LineIcon({ size = 20 }: { size?: number }) {
 
 const ico = { fill: 'none', stroke: 'currentColor', strokeWidth: 1.4, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
 
+const Car = () => (
+  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path {...ico} d="M5 16V11l1.7-4.2A2 2 0 0 1 8.6 5.5h6.8a2 2 0 0 1 1.9 1.3L19 11v5M5 16h14M5 16v2.5M19 16v2.5M7.5 13.5h.01M16.5 13.5h.01" /></svg>
+);
+
+/** a content picture in a framed card (these pictures carry their own headlines, so they are shown whole) */
+function Photo({ src, w, h, alt, priority = false, className = '' }: { src: string; w: number; h: number; alt: string; priority?: boolean; className?: string }) {
+  return (
+    <figure className={`${s.photo} ${className}`}>
+      <Image src={src} alt={alt} width={w} height={h} priority={priority} sizes="(min-width: 900px) 520px, 92vw" />
+    </figure>
+  );
+}
+
+const TIERS = [
+  { key: 'bronze', name: 'Bronze', rule: 'เริ่มต้นสำหรับสมาชิกทุกคน', mult: 'x1' },
+  { key: 'silver', name: 'Silver', rule: 'ยอดใช้บริการสะสมตั้งแต่ 5,000 บาท', mult: 'x1.2' },
+  { key: 'gold', name: 'Gold', rule: 'ยอดใช้บริการสะสมตั้งแต่ 10,000 บาท', mult: 'x1.5' },
+];
+
+const FAQ = [
+  { q: 'ต้องส่งกุญแจรถให้ทางร้านไหม?', a: 'ไม่ต้องครับ คุณนำรถเข้าจอดด้วยตัวเอง และเก็บกุญแจไว้กับตัวตลอดการเดินทาง' },
+  { q: 'ต้องใช้บริการรถรับ-ส่งสนามบินด้วยหรือเปล่า?', a: 'ไม่จำเป็น รถรับ-ส่งเป็นบริการเสริม มีค่าใช้จ่ายแยกต่างหากจากค่าจอดรถ เลือกเพิ่มได้ตอนจองผ่าน LINE' },
+  { q: 'บินกลับมาแล้วเรียกรถอย่างไร?', a: 'เมื่อรับสัมภาระเรียบร้อยและพร้อมออกจากอาคาร กดปุ่ม “เรียกรถมารับ” ผ่าน LINE ระบบจะส่งข้อมูลจุดนัดรับให้ โปรดตรวจสอบจุดนัดรับล่าสุดใน LINE ก่อนเดินไป' },
+  { q: 'เคยจองกับร้านมาก่อน ต้องทำอย่างไร?', a: 'เปิดเมนู “สมาชิก & การจอง” ใน LINE แล้วเชื่อมการจองด้วยเบอร์โทรที่ให้ร้านไว้และทะเบียนรถ ดูขั้นตอนด้านบนได้เลย' },
+  { q: 'ความปลอดภัยของรถที่จอดทิ้งไว้หลายวัน?', a: 'ลานจอดเป็นระเบียบ มีหลังคาคลุม และมีการดูแลความเรียบร้อยของสถานที่ ก่อนจองสามารถสอบถามรายละเอียดมาตรการรักษาความปลอดภัยกับทางร้านผ่าน LINE ได้โดยตรง' },
+];
+
 export default async function Home() {
   const info = await loadInfo();
   const svg = await QRCode.toString(ADD_FRIEND, { type: 'svg', margin: 1, width: 220, color: { dark: '#0B3B26', light: '#FFFFFF' } });
@@ -45,6 +82,7 @@ export default async function Home() {
   const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
   const bookHref = liffId ? `https://liff.line.me/${liffId}` : '/liff/book';
   const example = 3 * info.perDay + info.shuttle;
+  const showPromo = info.promo || process.env.NODE_ENV !== 'production';
 
   return (
     <main className={s.page}>
@@ -69,10 +107,10 @@ export default async function Home() {
             <span>Backyard Airport<small>The Hangar</small></span>
           </a>
           <div className={s.links}>
-            <a href="#why">จุดเด่น</a>
+            <a href="#why">ทำไมต้อง Backyard</a>
             <a href="#steps">ขั้นตอนจอง</a>
-            <a href="#pricing">ราคา</a>
-            <a href="#pickup">จุดรอรถ</a>
+            <a href="#member">สมาชิก</a>
+            <a href="#faq">คำถามที่พบบ่อย</a>
           </div>
           <a className={s.navBtn} href={ADD_FRIEND} target="_blank" rel="noopener noreferrer">เพิ่มเพื่อน LINE</a>
         </nav>
@@ -93,9 +131,7 @@ export default async function Home() {
               </div>
               <hr />
               <div>
-                <span className={s.pIcon}>
-                  <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path {...ico} d="M5 16V11l1.7-4.2A2 2 0 0 1 8.6 5.5h6.8a2 2 0 0 1 1.9 1.3L19 11v5M5 16h14M5 16v2.5M19 16v2.5M7.5 13.5h.01M16.5 13.5h.01" /></svg>
-                </span>
+                <span className={s.pIcon}><Car /></span>
                 <p>บริการรับ-ส่งสนามบิน<b>{baht(info.shuttle)} <small>บาท/เที่ยว</small></b></p>
               </div>
             </div>
@@ -122,50 +158,101 @@ export default async function Home() {
 
       {/* ================= WHY ================= */}
       <section id="why" className={s.section}>
-        <div className={s.head}>
-          <span className={s.eyebrowDark}>Why Backyard</span>
-          <h2>ทุกอย่างเรียบง่าย จบในแชต LINE เดียว</h2>
+        <div className={s.split}>
+          <Photo src="/content/p02-why.jpg" w={1000} h={1094} alt="ทำไมถึงควรจองที่จอดรถกับ Backyard Airport" />
+          <div>
+            <span className={s.eyebrowDark}>Why Backyard</span>
+            <h2 className={s.h2}>ทำไมต้องจองที่จอดรถ<br />กับ Backyard Airport?</h2>
+            <p className={s.sub}>เพราะการเดินทางที่ดี ควรเริ่มต้นด้วยความสะดวกและสบายใจ</p>
+            <ol className={s.reasons}>
+              <li>
+                <span>01</span>
+                <div><b>จองเองได้ง่าย ๆ ไม่ต้องรอแอดมิน</b><p>ระบบจองอัตโนมัติผ่าน LINE เลือกวันจอด ตรวจสอบรายละเอียด และจองได้ด้วยตัวเอง</p></div>
+              </li>
+              <li>
+                <span>02</span>
+                <div><b>แจ้งเตือนทุกขั้นตอน อุ่นใจตลอดการเดินทาง</b><p>ติดตามสถานะการจองและบริการรถรับ–ส่งผ่าน LINE ตั้งแต่เริ่มจอง ไปจนถึงกลับมารับรถ</p></div>
+              </li>
+              <li>
+                <span>03</span>
+                <div><b>จอดยิ่งบ่อย ยิ่งคุ้ม!</b><p>ระบบสมาชิกสะสมคะแนนจากทุกการใช้บริการที่เข้าเงื่อนไข แลกส่วนลดและสิทธิประโยชน์ได้ง่าย ๆ</p></div>
+              </li>
+            </ol>
+          </div>
         </div>
+
         <div className={s.features}>
           <article>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path {...ico} d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11Z" /><circle {...ico} cx="12" cy="10" r="2.6" /></svg>
-            <h3>ใกล้สนามบิน</h3>
-            <p>ที่จอดรถใกล้สุวรรณภูมิ เดินทางไป-กลับสะดวก</p>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path {...ico} d="M3 11 12 4l9 7M5 10v9h14v-9M9 19v-5h6v5" /></svg>
+            <h3>ที่จอดในร่ม</h3>
+            <p>ลานจอดมีหลังคาคลุม จัดพื้นที่เป็นระเบียบ</p>
           </article>
           <article>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path {...ico} d="M12 3 5 6v5.5c0 4.3 2.9 8 7 9.5 4.1-1.5 7-5.2 7-9.5V6l-7-3Z" /><path {...ico} d="m9 12 2.2 2.2L15.5 10" /></svg>
-            <h3>ปลอดภัย</h3>
-            <p>ระบบอ่านป้ายทะเบียนอัตโนมัติ ทราบรถเข้า-ออกทุกคัน</p>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle {...ico} cx="8" cy="12" r="3.5" /><path {...ico} d="M11.5 12H21M17 12v3M20 12v2" /></svg>
+            <h3>จอดเอง เก็บกุญแจเอง</h3>
+            <p>ไม่ต้องส่งกุญแจให้ใคร นำรถเข้าจอดด้วยตัวเอง</p>
           </article>
           <article>
             <svg viewBox="0 0 24 24" aria-hidden="true"><path {...ico} d="M4 16V8.5A1.5 1.5 0 0 1 5.5 7h8A1.5 1.5 0 0 1 15 8.5V16M15 10h3l2 3v3M4 16h16M7.5 18.5a1.5 1.5 0 1 0 0-.01M16.5 18.5a1.5 1.5 0 1 0 0-.01" /></svg>
-            <h3>รถรับส่ง ไป-กลับ</h3>
-            <p>ขาไปจัดรถให้อัตโนมัติ ขากลับกดเรียกผ่าน LINE</p>
+            <h3>รถรับ–ส่งสนามบิน</h3>
+            <p>เป็นบริการเสริม จองพร้อมที่จอดผ่าน LINE ได้เลย</p>
           </article>
           <article>
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path {...ico} d="m12 3.5 2.6 5.3 5.9.9-4.2 4.1 1 5.8L12 16.8 6.7 19.6l1-5.8-4.2-4.1 5.9-.9L12 3.5Z" /></svg>
-            <h3>สะสมแต้ม</h3>
-            <p>ทุกการจองได้แต้ม นำไปเป็นส่วนลดครั้งถัดไป</p>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path {...ico} d="M12 3v18M16 7.5c0-1.7-1.8-3-4-3s-4 1.3-4 3 1.8 2.6 4 3 4 1.3 4 3-1.8 3-4 3-4-1.3-4-3" /></svg>
+            <h3>{baht(info.perDay)} บาท/วัน</h3>
+            <p>วางแผนค่าใช้จ่ายได้ง่าย ตรวจสอบยอดรวมก่อนยืนยันจอง</p>
           </article>
         </div>
       </section>
 
       {/* ================= STEPS ================= */}
-      <section id="steps" className={`${s.section} ${s.stepsSec}`}>
-        <div className={s.stepsGrid}>
-          <div>
-            <span className={s.eyebrowDark}>How it works</span>
-            <h2>จองง่ายใน 3 ขั้นตอน</h2>
-            <ol className={s.steps}>
-              <li><span>01</span><div><b>เพิ่มเพื่อน LINE</b><p>{LINE_ID} แล้วกดเมนู “จองที่จอดรถ”</p></div></li>
-              <li><span>02</span><div><b>เลือกวันและชำระเงิน</b><p>เลือกวันเข้า-ออก ใส่ทะเบียนรถ ชำระผ่าน QR หรือโอนบัญชี</p></div></li>
-              <li><span>03</span><div><b>มาถึงแล้วจอดได้เลย</b><p>ระบบอ่านป้ายทะเบียนอัตโนมัติ พร้อมรถรับส่งไป-กลับสนามบิน</p></div></li>
+      <section id="steps" className={`${s.band}`}>
+        <div className={`${s.section} ${s.bandInner}`}>
+          <div className={`${s.split} ${s.reverse}`}>
+            <div>
+              <span className={s.eyebrowDark}>How it works</span>
+              <h2 className={s.h2}>จองง่ายใน 3 ขั้นตอน</h2>
+              <p className={s.sub}>ระบบจองรูปแบบใหม่ วางแผนจอดรถก่อนบินได้ง่ายขึ้น</p>
+              <ol className={s.steps}>
+                <li><span>01</span><div><b>เพิ่มเพื่อน LINE {LINE_ID}</b><p>เปิดแชต แล้วกดเมนู “จองที่จอดรถ”</p></div></li>
+                <li><span>02</span><div><b>กรอกข้อมูลการเดินทาง</b><p>เลือกวันเข้า-ออก ใส่ทะเบียนรถ และเลือกรถรับ–ส่งสนามบินหากต้องการ</p></div></li>
+                <li><span>03</span><div><b>ยืนยันและชำระเงิน</b><p>ชำระผ่าน QR หรือโอนบัญชี ระบบยืนยันการจองและแจ้งเตือนผ่าน LINE</p></div></li>
+              </ol>
+              <a className={`${s.gold} ${s.stepBtn}`} href={ADD_FRIEND} target="_blank" rel="noopener noreferrer"><LineIcon /> เริ่มจองผ่าน LINE</a>
+            </div>
+            <Photo src="/content/p01-steps.jpg" w={1000} h={1250} alt="จองที่จอดรถง่าย ๆ ใน 3 ขั้นตอนผ่าน LINE" />
+          </div>
+        </div>
+      </section>
+
+      {/* ================= JOURNEY ================= */}
+      <section id="journey" className={s.section}>
+        <div className={s.head}>
+          <span className={s.eyebrowDark}>Your journey</span>
+          <h2 className={s.h2}>จากลานจอดสู่สนามบิน และกลับมารับรถ</h2>
+        </div>
+        <div className={s.journey}>
+          <article>
+            <Photo src="/content/p06-outbound.jpg" w={1000} h={1250} alt="จอดรถแล้วไปสนามบินอย่างไร" />
+            <h3>ขาไป: จอดรถแล้วไปสนามบินยังไง?</h3>
+            <ol>
+              <li><i>1</i>ขับรถเข้าลานและจอดด้วยตัวเอง</li>
+              <li><i>2</i>นำสัมภาระไปขึ้นรถรับ–ส่งตามจุดบริการ</li>
+              <li><i>3</i>เดินทางต่อไปสนามบินสุวรรณภูมิ</li>
             </ol>
-          </div>
-          <div id="pickup" className={s.pickup}>
-            <Image src="/pickup-point-hero.jpg" alt="แผนที่จุดรอรถรับส่ง Backyard อาคารผู้โดยสารชั้น 2 ขาเข้า ประตู 7" width={1080} height={787} />
-            <p><b>จุดรอรถรับส่ง Backyard</b><span>อาคารผู้โดยสารชั้น 2 (ขาเข้า) · ประตู 7</span></p>
-          </div>
+            <p>ไม่ต้องหาที่จอดในสนามบินเอง และเก็บกุญแจรถไว้กับตัวได้</p>
+          </article>
+          <article>
+            <Photo src="/content/p07-return.jpg" w={1000} h={1250} alt="บินกลับมาแล้วเรียกรถอย่างไร" />
+            <h3>ขากลับ: บินกลับมาแล้วเรียกรถยังไง?</h3>
+            <ol>
+              <li><i>1</i>รับสัมภาระให้เรียบร้อย</li>
+              <li><i>2</i>เมื่อพร้อมออกจากอาคาร กดปุ่ม “เรียกรถมารับ” ผ่าน LINE</li>
+              <li><i>3</i>รับข้อมูลจุดนัดรับและเดินตามแผนที่ที่ระบบส่งให้</li>
+              <li><i>4</i>รอรถรับ–ส่งตามรายละเอียดที่แจ้ง</li>
+            </ol>
+            <p>โปรดตรวจสอบจุดนัดรับล่าสุดใน LINE ก่อนเดินไป</p>
+          </article>
         </div>
       </section>
 
@@ -173,7 +260,8 @@ export default async function Home() {
       <section id="pricing" className={`${s.section} ${s.pricing}`}>
         <div className={s.head}>
           <span className={s.eyebrow}>Pricing</span>
-          <h2>ราคาชัดเจน ไม่มีค่าใช้จ่ายแอบแฝง</h2>
+          <h2 className={s.h2}>จอดรถวันละ {baht(info.perDay)} บาท</h2>
+          <p className={s.sub}>วางแผนค่าใช้จ่ายได้ง่าย พร้อมพื้นที่จอดในร่มและตัวเลือกบริการรถรับ–ส่งสนามบิน</p>
         </div>
         <div className={s.priceCards}>
           <article>
@@ -183,32 +271,172 @@ export default async function Home() {
             <p>จองล่วงหน้า ยืนยันทันทีเมื่อชำระเงิน</p>
           </article>
           <article>
-            <span className={s.pIcon}>
-              <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path {...ico} d="M5 16V11l1.7-4.2A2 2 0 0 1 8.6 5.5h6.8a2 2 0 0 1 1.9 1.3L19 11v5M5 16h14M5 16v2.5M19 16v2.5M7.5 13.5h.01M16.5 13.5h.01" /></svg>
-            </span>
+            <span className={s.pIcon}><Car /></span>
             <h3>บริการรับ-ส่งสนามบิน</h3>
             <b>{baht(info.shuttle)}<small> บาท/เที่ยว</small></b>
-            <p>ไป-กลับต่อการจอง ขากลับกดเรียกเมื่อพร้อม</p>
+            <p>บริการเสริม มีค่าใช้จ่ายแยกต่างหาก</p>
           </article>
         </div>
-        <p className={s.example}>ตัวอย่าง จอด 3 วัน พร้อมรถรับส่งไป-กลับ รวม <b>{baht(example)} บาท</b></p>
+        <p className={s.example}>ตัวอย่าง จอด 3 วัน พร้อมรถรับส่งไป-กลับ รวม <b>{baht(example)} บาท</b> · ตรวจสอบยอดรวมและเงื่อนไขก่อนยืนยันการจองได้ในระบบ</p>
+      </section>
+
+      {/* ================= PROMO ================= */}
+      {showPromo && (
+        <section id="promo" className={s.band}>
+          <div className={`${s.section} ${s.bandInner}`}>
+            <div className={s.split}>
+              <Photo src="/content/p03-welcome.jpg" w={1000} h={1000} alt="โปรโมชันเปิดระบบใหม่ กรอกโค้ด WELCOME รับส่วนลดทันที 100 บาท" />
+              <div>
+                <span className={s.eyebrowDark}>Welcome promotion</span>
+                <h2 className={s.h2}>ฉลองเปิดตัวระบบจองใหม่<br />รับส่วนลดทันที 100 บาท</h2>
+                <p className={s.sub}>จองที่จอดรถพร้อมบริการรับ–ส่งสนามบิน เพียงกรอกโค้ดในขั้นตอนการจองผ่าน LINE</p>
+                <div className={s.code}><span>PROMO CODE</span><b>WELCOME</b></div>
+                <h3 className={s.h3}>เงื่อนไขโปรโมชัน</h3>
+                <ul className={s.checks}>
+                  <li>จองที่จอดรถตั้งแต่ 1 วันขึ้นไป</li>
+                  <li>ต้องเลือกใช้บริการรถรับ–ส่งสนามบิน</li>
+                  <li>ไม่สามารถใช้ร่วมกับส่วนลดสำหรับลูกค้าเก่าได้</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ================= MEMBER ================= */}
+      <section id="member" className={s.section}>
+        <div className={s.head}>
+          <span className={s.eyebrowDark}>Backyard Member</span>
+          <h2 className={s.h2}>เป็นสมาชิก Backyard Airport ดียังไง?</h2>
+          <p className={s.sub}>ยิ่งจอด ยิ่งคุ้ม สะสมแต้ม แลกรับส่วนลด พร้อมสิทธิพิเศษอีกมากมาย</p>
+        </div>
+        <div className={s.split}>
+          <Photo src="/content/p04-member.jpg" w={1000} h={1000} alt="ระบบสมาชิก Backyard Airport สะสมแต้มและสิทธิประโยชน์ 3 ระดับ" />
+          <ul className={s.benefits}>
+            <li>
+              <b>ทุกการใช้จ่าย มีแต้มสะสม</b>
+              <p>ทุกยอดใช้จ่าย 100 บาท รับ 1 Backyard Point<br />10 Points แลกส่วนลด 50 บาท · 20 Points แลกส่วนลด 100 บาท</p>
+            </li>
+            <li>
+              <b>ลูกค้าเก่า รับส่วนลดทันที 100 บาท</b>
+              <p>เคยใช้บริการมาก่อน รับสิทธิ์ในการจองครั้งถัดไป เมื่อจองตั้งแต่ 3 วันขึ้นไปและใช้บริการรถรับ–ส่งสนามบิน</p>
+            </li>
+            <li>
+              <b>แนะนำเพื่อน รับฟรี 3 Backyard Points</b>
+              <p>เมื่อเพื่อนที่คุณแนะนำทำรายการสำเร็จ รับแต้มเข้าบัญชีสมาชิกทันที</p>
+            </li>
+            <li>
+              <b>ยิ่งใช้มาก ยิ่งได้แต้มมากขึ้น</b>
+              <p>ระบบสมาชิก 3 ระดับ ตามยอดใช้บริการสะสม</p>
+            </li>
+          </ul>
+        </div>
+        <div className={s.tiers}>
+          {TIERS.map((t) => (
+            <article key={t.key} className={s[`tier_${t.key}` as keyof typeof s]}>
+              <span>{t.name} Member</span>
+              <b>{t.mult}</b>
+              <p>{t.rule}</p>
+            </article>
+          ))}
+        </div>
+        <p className={s.note}>คะแนนสะสมใช้ร่วมกับโปรโมชันลูกค้าเก่าได้</p>
+      </section>
+
+      {/* ================= OLD CUSTOMERS ================= */}
+      <section id="old" className={s.old}>
+        <div className={s.oldInner}>
+          <div>
+            <span className={s.eyebrow}>Returning customers</span>
+            <h2>เคยจองกับร้านมาก่อน?<br />เชื่อมการจองเก่าเข้า LINE</h2>
+            <p>ทางร้านบันทึกการจองของคุณไว้ให้แล้ว เพียงเชื่อมกับ LINE เพื่อดูการจองและเรียกรถรับ–ส่งสนามบินได้ผ่าน LINE{info.claimBonus > 0 ? ` เชื่อมสำเร็จรับโบนัส ${info.claimBonus} แต้มทันที (ใช้เป็นส่วนลดค่าจอดครั้งถัดไป)` : ''}</p>
+          </div>
+          <ol>
+            <li><i>1</i><span>เพิ่มเพื่อน LINE {LINE_ID}</span></li>
+            <li><i>2</i><span>เปิดเมนู “สมาชิก &amp; การจอง”</span></li>
+            <li><i>3</i><span>กด “ร้านบันทึกการจองให้คุณไว้แล้ว? เชื่อมการจองที่นี่”</span></li>
+            <li><i>4</i><span>กรอกเบอร์โทรที่ให้ร้านไว้ และทะเบียนรถ แล้วกด “เชื่อมการจอง”</span></li>
+          </ol>
+        </div>
+      </section>
+
+      {/* ================= GALLERY ================= */}
+      <section className={s.section}>
+        <div className={s.head}>
+          <span className={s.eyebrowDark}>Peace of mind</span>
+          <h2 className={s.h2}>เที่ยวให้เต็มที่ เรื่องที่จอดรถให้เราดูแล</h2>
+        </div>
+        <div className={s.gallery}>
+          <article>
+            <Photo src="/content/p09-keys.jpg" w={1000} h={1250} alt="จอดเอง เก็บกุญแจเอง สบายใจกว่า" />
+            <h3>จอดเอง เก็บกุญแจเอง</h3>
+            <p>นำรถเข้าจอดด้วยตัวเอง และเก็บกุญแจรถไว้กับตัวตลอดการเดินทาง</p>
+          </article>
+          <article>
+            <Photo src="/content/p08-secure.jpg" w={1000} h={1250} alt="จอดรถทิ้งไว้หลายวัน มั่นใจได้แค่ไหน" />
+            <h3>จอดทิ้งไว้หลายวัน มั่นใจได้แค่ไหน?</h3>
+            <p>พื้นที่จอดเป็นระเบียบ มีหลังคาคลุม ก่อนจองสอบถามมาตรการรักษาความปลอดภัยกับทางร้านได้โดยตรง</p>
+          </article>
+          <article>
+            <Photo src="/content/p05-trip.jpg" w={1000} h={1250} alt="ไปเที่ยวให้สบายใจ เรื่องที่จอดรถให้เราดูแล" />
+            <h3>ไปเที่ยวหลายวัน ก็สบายใจ</h3>
+            <p>ไม่ว่าจะเดินทางสั้นหรือหลายวัน เริ่มต้นง่าย ๆ ด้วยการจองล่วงหน้าผ่าน LINE</p>
+          </article>
+        </div>
+      </section>
+
+      {/* ================= TIPS ================= */}
+      <section id="tips" className={s.band}>
+        <div className={`${s.section} ${s.bandInner}`}>
+          <div className={`${s.split} ${s.reverse}`}>
+            <div>
+              <span className={s.eyebrowDark}>Travel tips</span>
+              <h2 className={s.h2}>เช็กลิสต์ก่อนบิน<br />อย่าลืม 5 สิ่งนี้!</h2>
+              <ul className={s.todo}>
+                <li><b>พาสปอร์ตหรือเอกสารประจำตัว</b></li>
+                <li><b>เที่ยวบิน วันและเวลาเดินทาง</b></li>
+                <li><b>สัมภาระ น้ำหนัก และของต้องห้าม</b></li>
+                <li><b>เวลาเดินทาง</b><span>เผื่อการจราจรและขั้นตอนสนามบิน</span></li>
+                <li><b>ที่จอดรถและบริการรับ–ส่ง</b><span>ถ้าขับรถมาเอง จองล่วงหน้าผ่าน LINE</span></li>
+              </ul>
+            </div>
+            <Photo src="/content/p11-checklist.jpg" w={1000} h={1250} alt="Checklist ก่อนบิน 5 สิ่งที่ไม่ควรลืม" />
+          </div>
+        </div>
+      </section>
+
+      {/* ================= FAQ ================= */}
+      <section id="faq" className={s.section}>
+        <div className={s.head}>
+          <span className={s.eyebrowDark}>FAQ</span>
+          <h2 className={s.h2}>คำถามที่พบบ่อย</h2>
+        </div>
+        <div className={s.faq}>
+          {FAQ.map((f) => (
+            <details key={f.q}>
+              <summary>{f.q}</summary>
+              <p>{f.a}</p>
+            </details>
+          ))}
+        </div>
       </section>
 
       {/* ================= CTA ================= */}
       <section className={s.cta}>
         <div className={s.ctaInner}>
-          <div>
+          <div className={s.ctaCopy}>
             <span className={s.eyebrow}>Ready to book</span>
-            <h2>พร้อมจองแล้วหรือยัง</h2>
-            <p>เพิ่มเพื่อน LINE {LINE_ID} แล้วจองได้ทันที</p>
+            <h2>เที่ยวให้เต็มที่<br />เรื่องที่จอดรถให้เราดูแล</h2>
+            <p>จองที่จอดรถและรถรับ–ส่งสนามบินง่าย ๆ ผ่าน LINE</p>
             <a className={s.gold} href={ADD_FRIEND} target="_blank" rel="noopener noreferrer"><LineIcon /> เพิ่มเพื่อน LINE {LINE_ID}</a>
             <Link className={s.textLink} href={bookHref}>เป็นเพื่อนแล้ว? เปิดหน้าจอง →</Link>
+            <div className={s.ctaQr}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={qr} alt={`QR Code เพิ่มเพื่อน LINE ${LINE_ID}`} width={120} height={120} />
+              <span>สแกนด้วย LINE<b>{LINE_ID}</b></span>
+            </div>
           </div>
-          <div className={s.ctaQr}>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={qr} alt={`QR Code เพิ่มเพื่อน LINE ${LINE_ID}`} width={150} height={150} />
-            <span>สแกนด้วย LINE</span>
-          </div>
+          <Photo className={s.ctaPhoto} src="/content/p12-line.jpg" w={1000} h={1250} alt="เที่ยวให้เต็มที่ เรื่องที่จอดรถให้เราดูแล จองผ่าน LINE @backyardairport" />
         </div>
       </section>
 
