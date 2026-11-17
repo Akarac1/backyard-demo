@@ -98,6 +98,21 @@ export default function MyBookings() {
   const [pts, setPts] = useState<Points | null>(null);
   const [showMoves, setShowMoves] = useState(false);
   const [showPast, setShowPast] = useState(false);
+  const [claimOpen, setClaimOpen] = useState(false);
+  const [claim, setClaim] = useState({ phone: '', plate: '' });
+  const [claimBusy, setClaimBusy] = useState(false);
+  const [claimMsg, setClaimMsg] = useState<{ ok?: string; error?: string } | null>(null);
+  async function submitClaim() {
+    setClaimBusy(true); setClaimMsg(null);
+    const r = await fetch('/api/claim', { method: 'POST', headers: { 'Content-Type': 'application/json', ...authHeaders(liff.idToken) }, body: JSON.stringify(claim) });
+    const j = await r.json().catch(() => ({}));
+    setClaimBusy(false);
+    if (!r.ok) { setClaimMsg({ error: j.error ?? t('ไม่พบการจองที่ตรงกับเบอร์โทรและทะเบียนนี้ ตรวจสอบอีกครั้งหรือติดต่อร้าน') }); return; }
+    setClaimMsg({ ok: t('เชื่อมการจองแล้ว {n} รายการ', { n: j.bookings }) });
+    setClaim({ phone: '', plate: '' });
+    fetch('/api/my', { headers: authHeaders(liff.idToken) }).then((x) => (x.ok ? x.json() : [])).then(setRows).catch(() => {});
+    fetch('/api/member', { headers: authHeaders(liff.idToken) }).then((x) => (x.ok ? x.json() : null)).then((m) => m && setMem(m)).catch(() => {});
+  }
   const [mem, setMem] = useState<Member | null>(null);
   const [shop, setShop] = useState<{ shop_phone?: string; admin_hours?: string; reschedule_min_days?: number } | null>(null);
   useEffect(() => { fetch('/api/prices').then((r) => (r.ok ? r.json() : null)).then((j) => j && setShop(j)).catch(() => {}); }, []);
@@ -149,6 +164,20 @@ export default function MyBookings() {
               <ul className="moves">
                 {pts.moves.map((m, i) => <li key={i}><span>{thShort(m.at)} · {m.label}</span><b className={m.points < 0 ? 'neg' : 'pos'}>{m.points > 0 ? '+' : ''}{m.points}</b></li>)}
               </ul>
+            )}
+          </div>
+        )}
+        {!denied && (
+          <div className="card claim-box">
+            <button type="button" className="link-btn" onClick={() => setClaimOpen(!claimOpen)}>{t('ร้านบันทึกการจองให้คุณไว้แล้ว? เชื่อมการจองที่นี่')}</button>
+            {claimOpen && (
+              <form onSubmit={(e) => { e.preventDefault(); submitClaim(); }} style={{ marginTop: 8 }}>
+                <label>{t('เบอร์โทรที่ให้ร้านไว้')}<input type="tel" inputMode="tel" value={claim.phone} onChange={(e) => setClaim({ ...claim, phone: e.target.value })} placeholder="0812345678" autoComplete="tel" /></label>
+                <label>{t('ทะเบียนรถในการจอง')}<input value={claim.plate} onChange={(e) => setClaim({ ...claim, plate: e.target.value })} placeholder="1กข1234" autoComplete="off" /></label>
+                <button type="submit" className="btn primary" disabled={claimBusy || !claim.phone.trim() || !claim.plate.trim()}>{t('เชื่อมการจอง')}</button>
+                {claimMsg?.ok && <p className="small" style={{ color: '#1F7A4D' }}>{claimMsg.ok}</p>}
+                {claimMsg?.error && <p className="small" style={{ color: '#B3261E' }}>{claimMsg.error}</p>}
+              </form>
             )}
           </div>
         )}
