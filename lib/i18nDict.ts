@@ -362,6 +362,7 @@ const D: Record<string, [string, string]> = {
   'งานรับส่งนี้เสร็จหรือถูกยกเลิกแล้ว': ['This shuttle trip is finished or cancelled', '此接驳行程已完成或已取消'],
   'หมดเวลากันที่ และวันที่ {d} เต็มแล้ว แอดมินจะติดต่อกลับ': ['Your hold ran out and {d} is now full. We’ll contact you.', '车位保留已超时且 {d} 已满，客服会联系您。'],
   'วันเข้าจอดต้องไม่ใช่วันที่ผ่านมาแล้ว': ['Check-in can’t be in the past', '入场日期不能早于今天'],
+  'ทะเบียนที่เคยใช้ แตะเพื่อเลือก': ['Plates you used before: tap to choose', '您用过的车牌，点击选择'],
   'วันรับรถคืนต้องไม่ก่อนวันเข้าจอด': ['Pick-up can’t be before check-in', '取车日期不能早于入场日期'],
   'รถรับส่งนั่งได้ 1–7 คน': ['The shuttle seats 1–7 people', '接驳车可乘 1–7 人'],
   'การจองนี้ใช้สิทธิ์เลื่อนไปแล้ว': ['This booking’s date change has been used', '此预订已使用过改期'],
