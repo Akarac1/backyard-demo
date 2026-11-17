@@ -53,7 +53,6 @@ export default function BookPage() {
   useEffect(() => { setSlotFull(null); setTooBig(false); }, [f.outboundTime, f.pax, f.shuttle, f.largeBags]);
 
   // saved details of a returning customer: name, phone and the plates used before (once LIFF has signed in)
-  const [saved, setSaved] = useState<{ plate: string; province: string }[]>([]);
   useEffect(() => { if (liff.name && !f.name) setF((x) => ({ ...x, name: liff.name! })); }, [liff.name]); // eslint-disable-line
   useEffect(() => {
     if (!liff.ready) return;
@@ -62,7 +61,6 @@ export default function BookPage() {
       .then((r) => (r.ok ? r.json() : null))
       .then((p) => {
         if (off || !p) return;
-        setSaved(p.plates ?? []);
         // only fill what is still empty: the customer may already have started typing
         setF((x) => ({
           ...x,
@@ -324,23 +322,6 @@ export default function BookPage() {
 
         <div className="card">
           <h2>{t('ข้อมูลรถและผู้จอง')}</h2>
-          {saved.length > 0 && (
-            <div style={{ marginBottom: 10 }}>
-              <span className="small">{t('ทะเบียนที่เคยใช้ แตะเพื่อเลือก')}</span>
-              <div className="slot-pick" style={{ marginTop: 6 }}>
-                {saved.map((c) => {
-                  const on = f.plate.replace(/\s+/g, '').toUpperCase() === c.plate.replace(/\s+/g, '').toUpperCase();
-                  return (
-                    <button key={c.plate} type="button" className="slot-b" aria-pressed={on}
-                      style={on ? { background: 'var(--navy)', color: '#fff' } : undefined}
-                      onClick={() => setF({ ...f, plate: c.plate, province: c.province || f.province })}>
-                      {c.plate}{c.province ? ` · ${c.province}` : ''}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
           <div className="row">
             <div><label htmlFor="plate">{t('ทะเบียนรถ')}</label><input id="plate" placeholder="1กข 1234" value={f.plate} onChange={set('plate')} required /></div>
             <div><label htmlFor="province">{t('จังหวัด')}</label><input id="province" value={f.province} onChange={set('province')} required /></div>
