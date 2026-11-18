@@ -5,7 +5,7 @@ import { useT } from '@/components/Lang';
 export type Bank = { bank: string; account: string; name: string };
 
 /** Transfer details with a copy button, used when no QR can be made. */
-export default function BankBox({ bank, amount }: { bank: Bank; amount: number }) {
+export default function BankBox({ bank, amount, alongsideQr = false }: { bank: Bank; amount: number; alongsideQr?: boolean }) {
   const { t } = useT();
   const [copied, setCopied] = useState(false);
   const copy = async () => {
@@ -13,12 +13,12 @@ export default function BankBox({ bank, amount }: { bank: Bank; amount: number }
   };
   return (
     <div style={{ margin: '10px 0' }}>
-      <div className="small">{t('โอนเงินเข้าบัญชี')}</div>
+      <div className="small">{alongsideQr ? t('สแกนไม่ได้? โอนเข้าบัญชีโดยตรง') : t('โอนเงินเข้าบัญชี')}</div>
       {bank.bank && <div style={{ fontWeight: 600 }}>{bank.bank}</div>}
       <div style={{ fontSize: 24, fontWeight: 700, letterSpacing: 1 }}>{bank.account}</div>
       <div className="small">{t('ชื่อบัญชี')} {bank.name}</div>
       <button type="button" className="btn" style={{ marginTop: 8 }} onClick={copy}>{copied ? t('คัดลอกแล้ว') : t('คัดลอกเลขบัญชี')}</button>
-      <div className="alert info" style={{ marginTop: 8 }}>{t('กรุณาโอนยอด {a} บาท ให้ตรงตามนี้ แล้วส่งสลิปด้านล่าง', { a: amount.toLocaleString('th-TH') })}</div>
+      <div className="alert info" style={{ marginTop: 8 }}>{alongsideQr ? t('โอนยอด {a} บาท ให้ตรงตามนี้เท่านั้น', { a: amount.toLocaleString('th-TH') }) : t('กรุณาโอนยอด {a} บาท ให้ตรงตามนี้ แล้วส่งสลิปด้านล่าง', { a: amount.toLocaleString('th-TH') })}</div>
     </div>
   );
 }

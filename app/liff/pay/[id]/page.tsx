@@ -100,6 +100,7 @@ export default function PayPage({ params }: { params: Promise<{ id: string }> })
               <div style={{ fontSize: 26, fontWeight: 700 }}>{money(amount)}</div>
               {info.qr && <><div className="small">PromptPay · {info.promptpayName}</div>
               <p className="small" style={{ margin: '8px 0 0' }}>{t('บนมือถือ: กดค้างที่ QR เพื่อบันทึกรูป แล้วเปิดในแอปธนาคาร')}</p></>}
+              {info.qr && info.bank && <BankBox bank={info.bank} amount={amount} alongsideQr />}
               {left != null && <div className="alert info">{t('กันที่ไว้ให้อีก {t} นาที', { t: `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` })}</div>}
             </div>
             <div className="card">

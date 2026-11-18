@@ -363,6 +363,8 @@ const D: Record<string, [string, string]> = {
   'หมดเวลากันที่ และวันที่ {d} เต็มแล้ว แอดมินจะติดต่อกลับ': ['Your hold ran out and {d} is now full. We’ll contact you.', '车位保留已超时且 {d} 已满，客服会联系您。'],
   'วันเข้าจอดต้องไม่ใช่วันที่ผ่านมาแล้ว': ['Check-in can’t be in the past', '入场日期不能早于今天'],
   'ทะเบียนที่เคยใช้ แตะเพื่อเลือก': ['Plates you used before: tap to choose', '您用过的车牌，点击选择'],
+  'สแกนไม่ได้? โอนเข้าบัญชีโดยตรง': ['Can’t scan? Transfer to the account directly', '无法扫码？直接转账到账户'],
+  'โอนยอด {a} บาท ให้ตรงตามนี้เท่านั้น': ['Transfer exactly {a} baht', '请转账准确金额 {a} 泰铢'],
   'วันรับรถคืนต้องไม่ก่อนวันเข้าจอด': ['Pick-up can’t be before check-in', '取车日期不能早于入场日期'],
   'รถรับส่งนั่งได้ 1–7 คน': ['The shuttle seats 1–7 people', '接驳车可乘 1–7 人'],
   'การจองนี้ใช้สิทธิ์เลื่อนไปแล้ว': ['This booking’s date change has been used', '此预订已使用过改期'],

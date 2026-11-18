@@ -27,5 +27,5 @@ export async function GET(req: Request, { params }: { params: Promise<{ id: stri
   const payable = group ? group.total : booking.total_amount;
   let qr: string | null = null;
   if (booking.status === 'pending_payment') qr = (await paymentQr(payable))?.image ?? null;
-  return json({ booking, qr, bank: qr ? null : bankInfo(), group, payable, promptpayName: process.env.PROMPTPAY_NAME ?? 'Backyard Airport' });
+  return json({ booking, qr, bank: bankInfo(), group, payable, promptpayName: process.env.PROMPTPAY_NAME ?? 'Backyard Airport' });
 }

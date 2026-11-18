@@ -62,6 +62,7 @@ export default function PayExtraPage({ params }: { params: Promise<{ pid: string
               <div style={{ fontSize: 26, fontWeight: 700 }}>{money(info.payment.amount)}</div>
               {info.qr && <><div className="small">PromptPay · {info.promptpayName}</div>
               <p className="small" style={{ margin: '8px 0 0' }}>{t('บนมือถือ: กดค้างที่ QR เพื่อบันทึกรูป แล้วเปิดในแอปธนาคาร')}</p></>}
+              {info.qr && info.bank && <BankBox bank={info.bank} amount={info.payment.amount} alongsideQr />}
             </div>
             <div className="card">
               <h2>{t('ส่งสลิป')}</h2>
