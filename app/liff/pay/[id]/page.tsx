@@ -80,6 +80,21 @@ export default function PayPage({ params }: { params: Promise<{ id: string }> })
             <div className="alert ok">{t('ยืนยันการจองแล้ว ส่งรายละเอียดไปในแชท LINE ของคุณแล้ว')}</div>
             {info.group && <p>{t('รถทุกคัน: {p}', { p: plates })}</p>}
             {b.shuttle && <p>{t('รถรับส่งไป-กลับ {n} คน · คนขับจะทักแชทก่อนออกรถ', { n: b.pax ?? 0 })}</p>}
+            <p style={{ fontWeight: 700 }}>{t('ขอบคุณที่ไว้วางใจใช้บริการ Backyard Airport')}</p>
+            <div style={{ background: '#FFF4D6', borderRadius: 10, padding: 12, margin: '10px 0' }}>
+              <div style={{ fontWeight: 700 }}>🚧 {t('เมื่อถึงไม้กั้นที่หน้าลาน')}</div>
+              <div style={{ fontWeight: 700, fontSize: 18, color: '#B42318', marginTop: 4 }}>{t('กรุณาลดกระจกลง เพื่อให้ไม้กั้นทำงาน')}</div>
+            </div>
+            <div style={{ margin: '10px 0' }}>
+              <div style={{ fontWeight: 700 }}>✈️ {t('ก่อนออกเดินทาง เช็ก 5 เรื่องนี้ให้พร้อม!')}</div>
+              <ul style={{ listStyle: 'none', padding: 0, margin: '6px 0' }}>
+                {[
+                  'พาสปอร์ตหรือเอกสารประจำตัว', 'เที่ยวบิน วันและเวลาเดินทาง', 'สัมภาระ น้ำหนัก และของต้องห้าม',
+                  'เวลาเดินทาง เผื่อการจราจรและขั้นตอนสนามบิน', 'ที่จอดรถและบริการรับ–ส่ง (ถ้าขับรถมาเอง)',
+                ].map((x) => <li key={x}>☑️ {t(x)}</li>)}
+              </ul>
+              <div>{t('เตรียมครบแล้วก็เดินทางได้อย่างมั่นใจ')} 💚</div>
+            </div>
             <button className="primary" onClick={closeLiff}>{t('กลับไปที่แชท')}</button>
             <Link className="btn" style={{ width: '100%', marginTop: 10 }} href="/liff/my">{t('สมาชิก & การจอง')}</Link>
           </div>
