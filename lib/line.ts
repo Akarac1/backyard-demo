@@ -120,13 +120,12 @@ export function confirmationFlex(b: {
           {
             type: 'box', layout: 'vertical', margin: 'lg', spacing: 'sm',
             contents: [
-              { type: 'text', text: '✈️ ก่อนออกเดินทาง เช็ก 5 เรื่องนี้ให้พร้อม!', weight: 'bold', size: 'md', color: '#0E3320', wrap: true },
+              { type: 'text', text: '✈️ ก่อนออกเดินทาง เช็ก 4 เรื่องนี้ให้พร้อม!', weight: 'bold', size: 'md', color: '#0E3320', wrap: true },
               ...[
                 'พาสปอร์ตหรือเอกสารประจำตัว',
                 'เที่ยวบิน วันและเวลาเดินทาง',
                 'สัมภาระ น้ำหนัก และของต้องห้าม',
                 'เวลาเดินทาง เผื่อการจราจรและขั้นตอนสนามบิน',
-                'ที่จอดรถและบริการรับ–ส่ง (ถ้าขับรถมาเอง)',
               ].map((t) => ({ type: 'text', text: `☑️ ${t}`, size: 'sm', color: '#1F2A37', wrap: true })),
               { type: 'text', text: 'เตรียมครบแล้วก็เดินทางได้อย่างมั่นใจ 💚', size: 'sm', color: '#0E3320', wrap: true, margin: 'sm' },
             ],
