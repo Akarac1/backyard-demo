@@ -13,7 +13,7 @@ export async function paymentQr(amount: number): Promise<{ image: string; provid
     // no PromptPay ID: QR straight to a bank account (needs SHOP_BANK_CODE + SHOP_BANK_ACCOUNT)
     const bankCode = (process.env.SHOP_BANK_CODE ?? '').replace(/\D/g, '');
     const acc = (process.env.SHOP_BANK_ACCOUNT ?? '').replace(/\D/g, '');
-    if (!bankCode || !acc) return null;
+    if (!bankCode || !acc) { console.error('paymentQr: PROMPTPAY_ID is empty at runtime and no SHOP_BANK_CODE/SHOP_BANK_ACCOUNT: no QR can be made'); return null; }
     return { image: await QRCode.toDataURL(bankAccountPayload(bankCode, acc, amount), { margin: 1, width: 480 }), provider: 'local-bank' };
   }
   if (process.env.QR_PROVIDER === 'easyslip' && process.env.EASYSLIP_API_KEY) {
