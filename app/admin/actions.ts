@@ -49,7 +49,8 @@ const ERR: Record<string, string> = {
   plate_exists: 'ทะเบียนนี้อยู่ในรายการแล้ว',
   invalid_grace_hour: 'ชั่วโมงต้องอยู่ระหว่าง 18–23',
   invalid_late_night_rule: 'ตั้งค่ากฎรอบดึกไม่ถูกต้อง (เวลารูปแบบ 22:00 และเปอร์เซ็นต์ 0–100)',
-  invalid_method: 'วิธีรับเงินไม่ถูกต้อง',
+  invalid_line_replies: 'ข้อมูลคำตอบไม่ถูกต้อง: ต้องมีหัวข้อ (≤40 ตัว) คำตอบ (≤1,000 ตัว) และคำที่จับ 1–10 คำ (คำละ 2–40 ตัว) · ปุ่มต้องใส่ทั้งชื่อและลิงก์ (ลิงก์ขึ้นต้น https:// หรือ tel:) · สูงสุด 30 ข้อ',
+  invalid_method:'วิธีรับเงินไม่ถูกต้อง',
   invalid_name: 'กรอกชื่อลูกค้า (ลูกค้าใหม่ที่ยังไม่มีในระบบ)',
   invalid_group_size: 'จำนวนรถเกินที่ตั้งไว้ในหน้าตั้งค่า (จองหลายคัน)',
   invalid_group_plates: 'ทะเบียนรถต้องไม่ว่างและไม่ซ้ำกัน',
@@ -302,6 +303,12 @@ export async function addVipPlate(_: ActionResult, f: FormData): Promise<ActionR
 }
 export async function removeVipPlate(_: ActionResult, f: FormData): Promise<ActionResult> {
   return run('admin_vip_remove', { p_id: str(f, 'id') }, 'ลบป้ายทะเบียนแล้ว', ['/admin/members/black-diamond']);
+}
+/** Custom LINE bot answers (keywords + answer), edited on the settings page. */
+export async function setLineReplies(_: ActionResult, f: FormData): Promise<ActionResult> {
+  let replies: unknown;
+  try { replies = JSON.parse(String(f.get('replies') ?? '[]')); } catch { return { error: ERR.invalid_line_replies }; }
+  return run('admin_set_line_replies', { p_replies: replies }, 'บันทึกคำตอบอัตโนมัติแล้ว มีผลกับแชทใหม่ทันที', ['/admin/settings']);
 }
 export async function setLateGraceHour(_: ActionResult, f: FormData): Promise<ActionResult> {
   return run('admin_set_late_grace_hour', { p_hour: num(f, 'hour') }, 'บันทึกเวลาแล้ว', ['/admin/settings', '/ops', '/ops/lot']);

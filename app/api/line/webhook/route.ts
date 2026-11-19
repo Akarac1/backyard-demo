@@ -23,6 +23,15 @@ async function extra() {
   };
 }
 
+// answers the admin added in Settings > LINE auto-replies; any failure (e.g. migration 0055 not run yet) means none
+type Custom = { title: string; answer: string; keywords: string[]; enabled?: boolean; button_label?: string; button_url?: string };
+async function customReplies(): Promise<Custom[]> {
+  const { data } = await db().from('settings').select('line_replies').eq('id', 1).maybeSingle();
+  const v = (data as { line_replies?: unknown } | null)?.line_replies;
+  return Array.isArray(v) ? (v as Custom[]) : [];
+}
+const squash = (t: string) => t.toLowerCase().replace(/\s+/g, '');
+
 const SHOP_NAME = 'Backyard Airport · The Hangar';
 const ADDRESS = '242 หมู่ 7 ถนนกิ่งแก้ว ตำบลราชาเทวะ อำเภอบางพลี สมุทรปราการ 10540';
 const MAP_URL = process.env.NEXT_PUBLIC_MAP_URL ?? 'https://maps.app.goo.gl/9s7ZS7NdW4Uayuz17';
@@ -117,8 +126,8 @@ const adminFlex = (k: Contact): LineMessage => ({
     body: {
       type: 'box', layout: 'vertical', spacing: 'md', paddingAll: '18px',
       contents: [
-        { type: 'text', text: 'พิมพ์ข้อความทิ้งไว้ในแชทนี้ได้เลย แอดมินจะตอบกลับโดยเร็วที่สุด', size: 'sm', color: '#3A4A40', wrap: true },
-        { type: 'text', text: 'จองที่จอดและส่งสลิปได้ตลอด 24 ชั่วโมง ไม่ต้องรอแอดมิน', size: 'sm', color: MUTED, wrap: true },
+        { type: 'text', text: 'พิมพ์ข้อความทิ้งไว้ในแชทนี้ได้เลยนะคะ แอดมินจะตอบกลับโดยเร็วที่สุดค่ะ', size: 'sm', color: '#3A4A40', wrap: true },
+        { type: 'text', text: 'จองที่จอดและส่งสลิปได้ตลอด 24 ชั่วโมง ไม่ต้องรอแอดมินค่ะ', size: 'sm', color: MUTED, wrap: true },
         {
           type: 'box', layout: 'horizontal', margin: 'md',
           contents: [
@@ -132,7 +141,6 @@ const adminFlex = (k: Contact): LineMessage => ({
       type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
       contents: [
         callButton('primary', k),
-        { type: 'button', style: 'secondary', height: 'sm', action: { type: 'uri', label: 'จองที่จอดรถ', uri: liffUrl('/book') } },
       ],
     },
   },
@@ -190,62 +198,75 @@ export async function POST(req: Request) {
     const text = e.type === 'message' && e.message?.type === 'text' ? e.message.text ?? '' : '';
     // type "myid" in the chat to get your LINE user id (for ALERT_LINE_USER_IDS). Reply messages are free.
     if (/^\s*myid\s*$/i.test(text) && e.source?.userId) return reply(e.replyToken, [{ type: 'text', text: `LINE user ID ของคุณ:\n${e.source.userId}` }]);
+    // ---- answers added by the admin: checked first (top to bottom), so they can also override the built-in ones ----
+    if (text) {
+      const t = squash(text);
+      const hit = (await customReplies()).find((c) => c.enabled !== false && Array.isArray(c.keywords) && c.keywords.some((w) => squash(String(w)).length >= 2 && t.includes(squash(String(w)))));
+      if (hit) {
+        const okUrl = hit.button_label && /^(https:\/\/|tel:)/.test(hit.button_url ?? '');
+        return reply(e.replyToken, [infoFlex(hit.title, SHOP_NAME, hit.answer.split(/\n\s*\n/).map((x) => x.trim()).filter(Boolean),
+          okUrl ? [{ label: hit.button_label as string, uri: hit.button_url as string, primary: true }] : [])]);
+      }
+    }
     // ---- common questions (specific ones first, the generic "จอง" last) ----
     if (/เชื่อม|ลูกค้าเก่า|เคยจอง|จองเก่า|การจองเดิม|ย้ายมา/.test(text)) {
       const x = await extra();
-      return reply(e.replyToken, [infoFlex('เชื่อมการจองเก่าเข้า LINE', SHOP_NAME, [
-        'ถ้าเคยจองกับร้านมาก่อน ร้านบันทึกการจองไว้ให้แล้ว เชื่อมกับ LINE นี้เพื่อดูการจองและเรียกรถรับ–ส่งได้',
-        '1) เปิดเมนู “สมาชิก & การจอง” (หรือกดปุ่มด้านล่าง)\n2) กด “ร้านบันทึกการจองให้คุณไว้แล้ว? เชื่อมการจองที่นี่”\n3) กรอกเบอร์โทรที่ให้ร้านไว้ และทะเบียนรถในการจอง\n4) กด “เชื่อมการจอง”',
-        ...(x.pointsOn && x.claimBonus > 0 ? [`เชื่อมสำเร็จครั้งแรกรับโบนัส ${x.claimBonus} แต้ม (ได้ครั้งเดียวต่อคน)`] : []),
-        `ถ้าระบบหาการจองไม่เจอ ติดต่อเจ้าหน้าที่ที่ ${k.display}`,
+      return reply(e.replyToken, [infoFlex('เชื่อมการจองเก่าเข้า LINE 🔗', SHOP_NAME, [
+        'ขอบคุณที่เคยไว้วางใจใช้บริการกับเรานะคะ 🙏 การจองเดิมเราบันทึกไว้ให้แล้วค่ะ แค่เชื่อมกับ LINE นี้ ก็จะดูการจองและเรียกรถรับ–ส่งได้เหมือนลูกค้าที่จองผ่าน LINE ค่ะ',
+        'วิธีเชื่อม ใช้เวลาไม่นานค่ะ 👇\n1) เปิดเมนู “สมาชิก & การจอง” (หรือกดปุ่มด้านล่าง)\n2) กด “ร้านบันทึกการจองให้คุณไว้แล้ว? เชื่อมการจองที่นี่”\n3) กรอกเบอร์โทรที่เคยให้ร้านไว้ และทะเบียนรถในการจอง\n4) กด “เชื่อมการจอง”',
+        ...(x.pointsOn && x.claimBonus > 0 ? [`เป็นการขอบคุณค่ะ เชื่อมสำเร็จครั้งแรกรับโบนัส ${x.claimBonus} แต้ม 🎁 (ได้ครั้งเดียวต่อคนนะคะ)`] : []),
+        `ถ้าลองแล้วระบบหาการจองไม่เจอ ไม่เป็นไรค่ะ โทรบอกเราที่ ${k.display} ได้เลยนะคะ เดี๋ยวช่วยตรวจให้ค่ะ`,
       ], [{ label: 'เปิดสมาชิก & การจอง', uri: liffUrl('/my'), primary: true }, { label: `โทร ${k.display}`, uri: `tel:${k.phone}` }])]);
     }
     if (/รอกระเป๋า|รับกระเป๋า|เผื่อเวลา|เวลาเครื่องลง|เครื่องลง/.test(text)) {
-      return reply(e.replyToken, [infoFlex('เวลาที่ต้องกรอกตอนจอง', SHOP_NAME, [
-        'ให้กรอกเวลาเครื่องลงตามตั๋วได้เลย ไม่ต้องเผื่อเวลารับกระเป๋า',
-        'เมื่อลงเครื่องและรับกระเป๋าเรียบร้อยแล้ว ให้กดเรียกรถในแชทนี้ คนขับจะไปถึงจุดนัดภายในประมาณ 15 นาที',
-      ], [{ label: 'เปิดหน้าจอง', uri: liffUrl('/book'), primary: true }])]);
+      return reply(e.replyToken, [infoFlex('เรื่องเวลาที่กรอกตอนจอง ✈️', SHOP_NAME, [
+        'ไม่ต้องกังวลเรื่องเวลารอกระเป๋านะ 😊 กรอกเวลาเครื่องลงตามที่ระบุในตั๋วได้เลย ไม่ต้องบวกเวลาเผื่อเอง',
+        'เพราะรถจะออกไปรับตอนที่คุณกดเรียกรถในแชทนี้ค่ะ',
+        'ยังมีข้อสงสัยตรงไหน พิมพ์ถามไว้ในแชทนี้ได้เลยนะคะ',
+      ])]);
     }
     if (/เข้าดึก|ดึก|เช้ามืด|ตี\s*2|4\s*ทุ่ม|ลดค่าจอด/.test(text)) {
       const { rule } = await extra();
       const on = rule.enabled && rule.percent < 100;
-      return reply(e.replyToken, [infoFlex('เข้าดึก / กลับเช้ามืด', SHOP_NAME, on ? [
-        `ลูกค้าที่ใช้รถรับ–ส่ง และเข้าลานตั้งแต่ ${rule.arrivalFrom} น. ค่าจอดวันเข้าคิด ${pct(rule.percent)}`,
-        `ถ้าเครื่องลงขากลับภายใน ${rule.returnBy} น. ค่าจอดวันรับรถคิด ${pct(rule.percent)}`,
-        'ระบบคำนวณให้ในหน้าจองอัตโนมัติจากเวลาที่คุณกรอก',
+      return reply(e.replyToken, [infoFlex('เข้าดึก / กลับเช้ามืด 🌙', SHOP_NAME, on ? [
+        'ถ้าคุณมาถึงดึกหรือกลับเช้ามืด เราปรับค่าจอดให้ค่ะ เพราะใช้ลานจอดไม่เต็มวัน (สำหรับลูกค้าที่ใช้รถรับ–ส่ง)',
+        `• เข้าลานตั้งแต่ ${rule.arrivalFrom} น. ค่าจอดวันที่เข้าคิด ${pct(rule.percent)}\n• เครื่องลงขากลับภายใน ${rule.returnBy} น. ค่าจอดวันที่รับรถคิด ${pct(rule.percent)}`,
+        'ไม่ต้องคำนวณเอง แค่กรอกเวลาในหน้าจอง ระบบจะคิดให้อัตโนมัติค่ะ',
       ] : [
-        'ตอนนี้ค่าจอดนับตามวันปฏิทิน รวมวันเข้าและวันออก ดูราคาโดยพิมพ์ "ราคา"',
-      ], [{ label: 'เปิดหน้าจอง', uri: liffUrl('/book'), primary: true }])]);
+        'ตอนนี้ค่าจอดนับตามวันปฏิทิน รวมวันเข้าและวันออก ดูราคาได้โดยพิมพ์ "ราคา" นะคะ',
+      ])]);
     }
     if (/เปิด(กี่โมง|กี่ชม|ทำการ|24|ตลอด|ไหม)|ปิดกี่โมง|24\s*(ชม|ชั่วโมง)|เวลาทำการ|เปิดให้บริการ/.test(text)) {
-      return reply(e.replyToken, [infoFlex('เวลาเปิดให้บริการ', SHOP_NAME, [
-        'ลานจอดเปิดให้บริการ 24 ชั่วโมง',
-        `แอดมินตอบแชททุกวัน ${k.hours} นอกเวลาจองและชำระเงินเองได้ตลอด 24 ชั่วโมง`,
-      ], [{ label: 'เปิดหน้าจอง', uri: liffUrl('/book'), primary: true }])]);
+      return reply(e.replyToken, [infoFlex('เวลาเปิดให้บริการ 🕐', SHOP_NAME, [
+        'ลานจอดเปิดให้บริการ 24 ชั่วโมงค่ะ ✅',
+        `แอดมินตอบแชททุกวัน ${k.hours} ส่วนการจองและชำระเงิน ทำเองได้ตลอด 24 ชั่วโมง ไม่ต้องรอแอดมินค่ะ`,
+      ])]);
     }
     if (/ที่อยู่|แผนที่|พิกัด|ไปยังไง|ไปอย่างไร|เดินทางมา|นำทาง/.test(text)) {
-      return reply(e.replyToken, [infoFlex('ที่อยู่และแผนที่', SHOP_NAME, [ADDRESS, 'ใกล้สนามบินสุวรรณภูมิ ขับประมาณ 15 นาที'],
+      return reply(e.replyToken, [infoFlex('ที่อยู่และแผนที่ 📍', SHOP_NAME, [ADDRESS, 'ใกล้สนามบินสุวรรณภูมิ ขับประมาณ 15 นาทีค่ะ'],
         [{ label: 'เปิดแผนที่', uri: MAP_URL, primary: true }, { label: `โทร ${k.display}`, uri: `tel:${k.phone}` }])]);
     }
     if (/รถรับ|รถส่ง|รับส่ง|รับ-ส่ง|รถตู้|shuttle/i.test(text)) {
       const p = await prices();
-      return reply(e.replyToken, [infoFlex('รถรับ–ส่งสนามบิน', SHOP_NAME, [
-        `เป็นบริการเสริม ไป–กลับ ${p.shuttle_price} บาทต่อการจอง ไปสนามบินสุวรรณภูมิ ไม่เกิน 7 คน`,
-        'ต้องจองที่จอดพร้อมกัน เลือกได้ในหน้าจอง หรือจะจอดอย่างเดียวก็ได้',
-      ], [{ label: 'จองเลย', uri: liffUrl('/book'), primary: true }])]);
+      return reply(e.replyToken, [infoFlex('รถรับ–ส่งสนามบิน 🚐', SHOP_NAME, [
+        'เป็นบริการเสริมสำหรับคนที่ไม่อยากขับไปจอดที่สนามบินเอง เราไปส่งและไปรับกลับให้ค่ะ',
+        `ค่าบริการไป–กลับ ${p.shuttle_price} บาทต่อการจอง (ไม่ได้คิดต่อคน) ไปสนามบินสุวรรณภูมิ นั่งได้ไม่เกิน 7 คนค่ะ`,
+        'ต้องจองที่จอดพร้อมกัน แต่ถ้าอยากจอดอย่างเดียวโดยไม่ใช้รถรับ–ส่งก็ได้เหมือนกันค่ะ',
+      ])]);
     }
     if (/จองยังไง|จองอย่างไร|วิธีจอง|ขั้นตอนจอง|จ่ายยังไง|จ่ายอย่างไร|ชำระ|โอนเงิน/.test(text)) {
-      return reply(e.replyToken, [infoFlex('วิธีจองและชำระเงิน', SHOP_NAME, [
+      return reply(e.replyToken, [infoFlex('จองและชำระเงินยังไง 📝', SHOP_NAME, [
+        'ทำเองได้ในมือถือ ตลอด 24 ชั่วโมงค่ะ ตามนี้เลย 👇',
         '1) เปิดหน้าจอง เลือกวันเข้า–ออก\n2) เลือกรถรับ–ส่งถ้าต้องการ แล้วใส่เวลา\n3) ชำระผ่าน QR PromptPay ในแอปธนาคาร\n4) ระบบส่งการ์ดยืนยันการจองให้ใน LINE ทันที',
-        'จองและชำระเงินได้ตลอด 24 ชั่วโมง',
-      ], [{ label: 'เปิดหน้าจอง', uri: liffUrl('/book'), primary: true }])]);
+        `ถ้าติดตรงไหน พิมพ์ถามในแชทนี้ หรือโทร ${k.display} ได้เลยนะคะ`,
+      ], [{ label: `โทร ${k.display}`, uri: `tel:${k.phone}` }])]);
     }
     if (/แต้ม|สมาชิก|คะแนน/.test(text)) {
       const x = await extra();
-      return reply(e.replyToken, [infoFlex('สมาชิกและแต้มสะสม', SHOP_NAME, x.pointsOn ? [
-        'ยิ่งจอด ยิ่งคุ้ม สะสมแต้มจากการจอง แลกเป็นส่วนลดได้ ดูแต้มและสิทธิพิเศษที่เมนู “สมาชิก & การจอง”',
-        ...(x.claimBonus > 0 ? [`ลูกค้าเก่าที่เชื่อมการจองกับ LINE รับโบนัส ${x.claimBonus} แต้ม พิมพ์ "เชื่อม" เพื่อดูวิธี`] : []),
-      ] : ['สอบถามสิทธิสมาชิกกับเจ้าหน้าที่ได้ที่แชทนี้'],
+      return reply(e.replyToken, [infoFlex('สมาชิกและแต้มสะสม ⭐', SHOP_NAME, x.pointsOn ? [
+        'ทุกครั้งที่จองที่จอด คุณจะได้แต้มสะสม และนำไปแลกเป็นส่วนลดได้ค่ะ ดูแต้มของคุณได้ที่เมนู “สมาชิก & การจอง” นะคะ',
+        ...(x.claimBonus > 0 ? [`ถ้าเคยจองกับเรามาก่อน เชื่อมการจองกับ LINE แล้วรับโบนัส ${x.claimBonus} แต้ม พิมพ์ "เชื่อม" เพื่อดูวิธีค่ะ`] : []),
+      ] : ['สอบถามสิทธิสมาชิกกับเจ้าหน้าที่ได้ที่แชทนี้นะคะ'],
       [{ label: 'เปิดสมาชิก & การจอง', uri: liffUrl('/my'), primary: true }])]);
     }
     if (/ราคา|เงื่อนไข/.test(text)) return reply(e.replyToken, [priceFlex(await prices(), k)]);

@@ -4,6 +4,7 @@ import { setContact, setDispatch, setExitMinutes, setGroupMax, setLateGraceHour,
 import { Vehicles } from './Vehicles';
 import { TvLink } from './TvLink';
 import { NotePresets } from './NotePresets';
+import { LineReplies, type LineReply } from './LineReplies';
 
 export const dynamic = 'force-dynamic';
 
@@ -99,6 +100,7 @@ export default async function SettingsPage() {
       </ul>
     </section>
       <NotePresets initial={(s.driver_note_presets as string[] | null) ?? []} />
+      <LineReplies initial={(s.line_replies as LineReply[] | null) ?? []} />
       <TvLink token={s.tv_token ?? null} />
       <ActionForm action={updateSettings} className="stack">
         <section className="panel">
