@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { authHeaders, closeLiff, useLiff } from '../../useLiff';
 import { useT } from '@/components/Lang';
+import { SaveQr } from '@/components/SaveQr';
 import { type Bank } from '@/components/BankBox';
 
 type PayInfo = {
@@ -114,7 +115,8 @@ export default function PayPage({ params }: { params: Promise<{ id: string }> })
               {info.qr ? <img className="qr" src={info.qr} alt={`QR PromptPay ${money(amount)}`} /> : <div className="alert bad">{t('ยังสร้าง QR ไม่ได้ ติดต่อแอดมิน')}</div>}
               <div style={{ fontSize: 26, fontWeight: 700 }}>{money(amount)}</div>
               {info.qr && <><div className="small">PromptPay · {info.promptpayName}</div>
-              <p className="small" style={{ margin: '8px 0 0' }}>{t('บนมือถือ: กดค้างที่ QR เพื่อบันทึกรูป แล้วเปิดในแอปธนาคาร')}</p></>}
+              <SaveQr qr={info.qr} amount={money(amount)} payee={info.promptpayName} name="backyard-qr" />
+              <p className="small" style={{ margin: '8px 0 0' }}>{t('บันทึกรูป QR แล้วเปิดแอปธนาคาร เลือกสแกนจากรูปในอัลบั้ม')}</p></>}
               {left != null && <div className="alert info">{t('กันที่ไว้ให้อีก {t} นาที', { t: `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` })}</div>}
             </div>
             <div className="card">

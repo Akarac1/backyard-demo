@@ -3,6 +3,7 @@ import { use, useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
 import { authHeaders, closeLiff, useLiff } from '../../useLiff';
 import { useT } from '@/components/Lang';
+import { SaveQr } from '@/components/SaveQr';
 import { type Bank } from '@/components/BankBox';
 
 type Info = {
@@ -61,7 +62,8 @@ export default function PayExtraPage({ params }: { params: Promise<{ pid: string
               {info.qr ? <img className="qr" src={info.qr} alt={`QR PromptPay ${money(info.payment.amount)}`} /> : <div className="alert bad">{t('ยังสร้าง QR ไม่ได้ ติดต่อแอดมิน')}</div>}
               <div style={{ fontSize: 26, fontWeight: 700 }}>{money(info.payment.amount)}</div>
               {info.qr && <><div className="small">PromptPay · {info.promptpayName}</div>
-              <p className="small" style={{ margin: '8px 0 0' }}>{t('บนมือถือ: กดค้างที่ QR เพื่อบันทึกรูป แล้วเปิดในแอปธนาคาร')}</p></>}
+              <SaveQr qr={info.qr} amount={money(info.payment.amount)} payee={info.promptpayName} name="backyard-qr" />
+              <p className="small" style={{ margin: '8px 0 0' }}>{t('บันทึกรูป QR แล้วเปิดแอปธนาคาร เลือกสแกนจากรูปในอัลบั้ม')}</p></>}
             </div>
             <div className="card">
               <h2>{t('ส่งสลิป')}</h2>
