@@ -310,7 +310,7 @@ export default function BookPage() {
   return (
     <main>
       <div className="hero">
-        <div style={{ display: "flex", alignItems: "center", gap: 12 }}><img src="/logo.png" alt="Backyard Airport The Hangar" width={56} height={54} /><span className="chip">{t('ใกล้สุวรรณภูมิ · ขับ 15 นาที')}</span></div>
+        <div style={{ display: "flex", alignItems: "center", gap: 12 }}><img src="/logo.png" alt="Backyard Airport The Hangar" width={56} height={54} /><span className="chip">{t('ใกล้สุวรรณภูมิ · เพียง 15 นาที')}</span></div>
         <h1>{t('จองที่จอดรถ')}</h1>
         <p>{t('จอดวันละ {p} บาท · รถรับส่งไป-กลับ {s} บาท', { p: pr.price_per_day, s: pr.shuttle_price })}</p>
       </div>

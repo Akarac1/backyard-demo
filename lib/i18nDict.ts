@@ -131,7 +131,7 @@ const D: Record<string, [string, string]> = {
   'ยืนยันและไปชำระเงิน': ['Confirm and pay', '确认并付款'],
   'กลับไปแก้ไขข้อมูล': ['Back to edit', '返回修改'],
   'กดยืนยันแล้ว ระบบกันที่ให้ {n} นาทีระหว่างชำระเงิน': ['After you confirm, your space is held for {n} minutes while you pay', '确认后，我们将为您保留车位 {n} 分钟以完成付款'],
-  'ใกล้สุวรรณภูมิ · ขับ 15 นาที': ['Near Suvarnabhumi · 15 min drive', '近素万那普机场 · 车程 15 分钟'],
+  'ใกล้สุวรรณภูมิ · เพียง 15 นาที': ['Near Suvarnabhumi · just 15 min', '近素万那普机场 · 仅需 15 分钟'],
   'จองที่จอดรถ': ['Book parking', '预订停车位'],
   'จอดวันละ {p} บาท · รถรับส่งไป-กลับ {s} บาท': ['{p} THB per day · round-trip shuttle {s} THB', '每天 {p} 泰铢 · 往返接驳 {s} 泰铢'],
   'วันที่ {d} ที่จอดเต็มแล้ว ลองเลือกวันอื่น': ['{d} is fully booked. Please choose other dates.', '{d} 车位已满，请选择其他日期'],
