@@ -136,6 +136,8 @@ const D: Record<string, [string, string]> = {
   'จอดวันละ {p} บาท · รถรับส่งไป-กลับ {s} บาท': ['{p} THB per day · round-trip shuttle {s} THB', '每天 {p} 泰铢 · 往返接驳 {s} 泰铢'],
   'วันที่ {d} ที่จอดเต็มแล้ว ลองเลือกวันอื่น': ['{d} is fully booked. Please choose other dates.', '{d} 车位已满，请选择其他日期'],
   'ว่าง · เหลืออย่างน้อย {n} ช่องในช่วงนี้': ['Available · at least {n} spaces left for these dates', '有空位 · 此期间至少剩余 {n} 个车位'],
+  'เหลือ {n} ช่อง สำหรับช่วงวันที่เลือก': ['{n} spaces left for your selected dates', '所选日期剩余 {n} 个车位'],
+  'เหลือที่ว่างน้อยกว่า 10 ช่อง สำหรับช่วงวันที่เลือก': ['Fewer than 10 spaces left for your selected dates', '所选日期剩余车位不足 10 个'],
   'ข้อมูลรถและผู้จอง': ['Car and booker details', '车辆与预订人信息'],
   'จังหวัด': ['Province', '府（省）'],
   'เบอร์ลูกค้าเก่าที่แนะนำ (ถ้ามี)': ['Referrer’s phone number (optional)', '推荐人（老客户）电话（选填）'],

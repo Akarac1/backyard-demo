@@ -30,6 +30,7 @@ button:disabled { opacity: .5; cursor: default; }
 .alert.bad { background: #FBEAEA; color: var(--bad); }
 .alert.ok { background: #E6F6EF; color: var(--ok); }
 .alert.info { background: #FFF5E3; color: #7A5200; }
+.alert.warn { background: #FFEFD9; color: #9A4A00; }
 .qr { display: block; margin: 8px auto; width: 240px; height: 240px; }
 table { width: 100%; border-collapse: collapse; font-size: 14px; }
 th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid #E6EBF2; vertical-align: top; }

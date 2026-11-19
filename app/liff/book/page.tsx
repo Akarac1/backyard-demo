@@ -322,7 +322,9 @@ export default function BookPage() {
             <div><label htmlFor="end">{t('วันรับรถคืน')}</label><input id="end" type="date" min={f.start} value={f.end} onChange={(e) => changeDates(f.start, e.target.value)} required /></div>
           </div>
           {full && <div className="alert bad">{cars > 1 && full.available ? t('วันที่ {d} ที่ว่างเหลือไม่พอสำหรับ {n} คัน', { d: thDay(full.day), n: cars }) : t('วันที่ {d} ที่จอดเต็มแล้ว ลองเลือกวันอื่น', { d: thDay(full.day) })}</div>}
-          {!full && minLeft != null && <div className="alert ok">{t('ว่าง · เหลืออย่างน้อย {n} ช่องในช่วงนี้', { n: minLeft })}</div>}
+          {!full && minLeft != null && (minLeft < 10
+            ? <div className="alert warn">{t('เหลือที่ว่างน้อยกว่า 10 ช่อง สำหรับช่วงวันที่เลือก')}</div>
+            : <div className="alert ok">{t('เหลือ {n} ช่อง สำหรับช่วงวันที่เลือก', { n: minLeft })}</div>)}
         </div>
 
         <div className="card">
