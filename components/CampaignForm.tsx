@@ -67,6 +67,11 @@ export function CampaignForm({ action, tiers, init }: { action: Action; tiers: T
       {v.active && <input type="hidden" name="active" value="on" />}
       {(v.tiers ?? []).map((t) => <input key={t} type="hidden" name="tiers" value={t} />)}
 
+      <label className={`cform-active${v.active ? ' on' : ''}`}>
+        <input type="checkbox" checked={!!v.active} onChange={(e) => set('active', e.target.checked)} />
+        <b>{v.active ? 'เปิดใช้งานแคมเปญนี้' : 'ปิดอยู่ (ลูกค้าไม่เห็นและไม่ได้สิทธิ์)'}</b>
+      </label>
+
       {!init?.id && (
         <div className="cform-presets"><span>เริ่มจากตัวอย่าง:</span>
           {PRESETS.map((p) => <button key={p.label} type="button" className="chip-btn" onClick={() => setV((x) => ({ ...x, stackable: true, stay_from: '', stay_to: '', ...p.v }))}>{p.label}</button>)}
@@ -130,7 +135,6 @@ export function CampaignForm({ action, tiers, init }: { action: Action; tiers: T
           <label>เปิดให้จองตั้งแต่<input type="date" name="starts" defaultValue={day(v.starts_at)} /></label>
           <label>ปิดรับจอง<input type="date" name="ends" value={day(v.ends_at) || (v.ends_at ?? '')} onChange={(e) => set('ends_at', e.target.value)} /><small>ไม่ใส่ = ไม่มีวันปิด</small></label>
           {isDisc && <label className="check cf-wide"><input type="checkbox" checked={!!v.stackable} onChange={(e) => set('stackable', e.target.checked)} /> ใช้ร่วมกับส่วนลดลูกค้าเก่า 100 บาทได้</label>}
-          <label className="check cf-wide"><input type="checkbox" checked={!!v.active} onChange={(e) => set('active', e.target.checked)} /> เปิดใช้แคมเปญ</label>
         </div>
       )}
 

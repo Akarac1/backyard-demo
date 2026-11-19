@@ -2,6 +2,7 @@ import { db } from '@/lib/supabase';
 import { ActionForm, Submit } from '@/components/ActionForm';
 import { MemberCard } from '@/components/MemberCard';
 import { CampaignForm } from '@/components/CampaignForm';
+import { Drawer } from '@/components/Drawer';
 import { recordPurchase, saveCampaign, savePromo, saveReward, saveTier } from '../actions';
 import { thDate, bkkDay } from '@/lib/format';
 
@@ -165,14 +166,14 @@ export default async function CampaignsPage() {
                     <td>{effect(c)}{['free_days', 'amount_off', 'percent_off'].includes(c.kind) && !c.stackable && <small className="hint" style={{ display: 'block', margin: 0 }}>ไม่ใช้ร่วมกับส่วนลดลูกค้าเก่า</small>}</td>
                     <td>จอง {thDate(bkkDay(c.starts_at))} – {c.ends_at ? thDate(bkkDay(c.ends_at)) : 'ไม่กำหนด'}{(c.stay_from || c.stay_to) && <small className="hint" style={{ display: 'block', margin: 0 }}>เข้าจอด {c.stay_from ? thDate(c.stay_from) : '…'} – {c.stay_to ? thDate(c.stay_to) : '…'}</small>}</td>
                     <td><span className={`st ${cls}`}>{label}</span></td>
-                    <td className="r"><details className="inline-edit"><summary className="b b-plain b-sm">แก้ไข</summary><div className="inline-edit-body">{campaignForm(c)}</div></details></td>
+                    <td className="r"><Drawer label="✏️ แก้ไข" title={`แก้ไขแคมเปญ · ${c.name}`}>{campaignForm(c)}</Drawer></td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         )}
-        <details className="add-reward" style={{ marginTop: 12 }}><summary className="b b-plain b-sm">+ สร้างแคมเปญ</summary><div style={{ marginTop: 10, maxWidth: 760 }}>{campaignForm()}</div></details>
+        <div style={{ marginTop: 12 }}><Drawer variant="primary" label="+ สร้างแคมเปญ" title="สร้างแคมเปญใหม่">{campaignForm()}</Drawer></div>
       </section>
 
       <section className="panel" id="promos">
@@ -192,14 +193,14 @@ export default async function CampaignsPage() {
                     <td className="r">{p.used_count}{p.max_uses != null ? ` / ${p.max_uses}` : ' / ไม่จำกัด'}</td>
                     <td>{p.valid_from ? thDate(bkkDay(p.valid_from)) : 'ทันที'} – {p.valid_until ? thDate(bkkDay(p.valid_until)) : 'ไม่กำหนด'}</td>
                     <td><span className={`st ${cls}`}>{label}</span></td>
-                    <td className="r"><details className="inline-edit"><summary className="b b-plain b-sm">แก้ไข</summary><div className="inline-edit-body">{promoForm(p)}</div></details></td>
+                    <td className="r"><Drawer label="✏️ แก้ไข" title={`แก้ไขโค้ด · ${p.code}`}>{promoForm(p)}</Drawer></td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
         )}
-        <details className="add-reward" style={{ marginTop: 12 }}><summary className="b b-plain b-sm">+ สร้างโค้ดโปรโมชัน</summary><div style={{ marginTop: 10, maxWidth: 760 }}>{promoForm()}</div></details>
+        <div style={{ marginTop: 12 }}><Drawer variant="primary" label="+ สร้างโค้ดโปรโมชัน" title="สร้างโค้ดโปรโมชัน">{promoForm()}</Drawer></div>
       </section>
 
       <section className="panel" id="rewards">
@@ -216,12 +217,12 @@ export default async function CampaignsPage() {
                 <td className="r">{r.valid_days} วัน</td>
                 <td className="r">{r.stock ?? 'ไม่จำกัด'}</td>
                 <td><span className={`st ${r.active ? 'st-ok' : 'st-off'}`}>{r.active ? 'เปิดแลก' : 'ปิด'}</span></td>
-                <td className="r"><details className="inline-edit"><summary className="b b-plain b-sm">แก้ไข</summary><div className="inline-edit-body">{rewardForm(r)}</div></details></td>
+                <td className="r"><Drawer label="✏️ แก้ไข" title={`แก้ไขของรางวัล · ${r.title}`}>{rewardForm(r)}</Drawer></td>
               </tr>
             ))}
           </tbody>
         </table>
-        <details className="add-reward" style={{ marginTop: 12 }}><summary className="b b-plain b-sm">+ เพิ่มของรางวัล</summary><div style={{ marginTop: 10 }}>{rewardForm()}</div></details>
+        <div style={{ marginTop: 12 }}><Drawer variant="primary" label="+ เพิ่มของรางวัล" title="เพิ่มของรางวัล">{rewardForm()}</Drawer></div>
       </section>
 
       <div className="cols">

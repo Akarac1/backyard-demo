@@ -1,7 +1,8 @@
 'use client';
-import { useActionState, useEffect, useRef } from 'react';
+import { useActionState, useContext, useEffect, useRef } from 'react';
 import { useFormStatus } from 'react-dom';
 import type { ActionResult } from '@/app/admin/actions';
+import { DrawerContext } from './Drawer';
 
 type Action = (prev: ActionResult, f: FormData) => Promise<ActionResult>;
 
@@ -12,6 +13,14 @@ export function ActionForm({ action, children, className, confirm, resetOnOk }: 
   const [state, formAction] = useActionState(action, null);
   const ref = useRef<HTMLFormElement>(null);
   useEffect(() => { if (state?.ok && resetOnOk) ref.current?.reset(); }, [state, resetOnOk]);
+  // inside a Drawer: a saved form closes the panel (with a toast); an error is also shown as a toast so it is never off-screen
+  const drawer = useContext(DrawerContext);
+  const drawerRef = useRef(drawer);
+  drawerRef.current = drawer;
+  useEffect(() => {
+    if (state?.ok) drawerRef.current?.close(state.ok);
+    else if (state?.error) drawerRef.current?.notify(state.error, 'bad');
+  }, [state]);
   return (
     <form ref={ref} action={formAction} className={className}
       onSubmit={(e) => { if (confirm && !window.confirm(confirm)) e.preventDefault(); }}>
