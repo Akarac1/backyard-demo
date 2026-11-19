@@ -1,4 +1,4 @@
-import { halfPriceDays } from '@/lib/freeDays';
+import { halfPriceDays, lateNightRule } from '@/lib/freeDays';
 import { db } from '@/lib/supabase';
 import { bkkLocalToIso, currentUser, json } from '@/lib/request';
 import { dbErrorToThai } from '@/lib/format';
@@ -31,8 +31,9 @@ export async function POST(req: Request) {
     returnPickup = new Date(Date.parse(bkkLocalToIso(b.returnLanding)!) + exit * 60_000).toISOString();
   }
 
-  // late arrival (after 22:00) / early return (by 02:00): those days are half price for shuttle customers
-  const freeDays = halfPriceDays({ shuttle: !!b.shuttle, start: b.start, end: b.end, outboundTime: b.outboundTime, returnLanding: b.returnLanding }).count;
+  // late arrival / early return (times and percent set in Settings > Price): those days are charged at a reduced price for shuttle customers
+  const { data: ln } = await db().from('settings').select('late_night_enabled, late_arrival_from, early_return_by, late_night_percent').eq('id', 1).single();
+  const freeDays = halfPriceDays({ shuttle: !!b.shuttle, start: b.start, end: b.end, outboundTime: b.outboundTime, returnLanding: b.returnLanding, rule: lateNightRule(ln) }).count;
 
   const isId = (v?: string) => !!v && /^[0-9a-f-]{36}$/.test(v);
   // points used on the review page: redeem + book in one transaction (create_booking_with_reward)

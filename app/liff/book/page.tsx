@@ -1,12 +1,12 @@
 'use client';
 import DateTimeSlots from '@/components/DateTimeSlots';
-import { halfPriceDays, parkingAmount, LATE_ARRIVAL_FROM, EARLY_RETURN_BY } from '@/lib/freeDays';
+import { halfPriceDays, parkingAmount, lateNightRule } from '@/lib/freeDays';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { authHeaders, useLiff } from '../useLiff';
 import { useT } from '@/components/Lang';
 
-type Prices = { price_per_day: number; shuttle_price: number; hold_minutes: number; reschedule_min_days: number; pickup_meeting_point: string; member_discount?: number; member_discount_min_days?: number; member_discount_needs_shuttle?: boolean; group_max_cars?: number };
+type Prices = { price_per_day: number; shuttle_price: number; hold_minutes: number; reschedule_min_days: number; pickup_meeting_point: string; member_discount?: number; member_discount_min_days?: number; member_discount_needs_shuttle?: boolean; group_max_cars?: number; late_night_enabled?: boolean; late_arrival_from?: string; early_return_by?: string; late_night_percent?: number };
 const DEFAULT_PRICES: Prices = { price_per_day: 100, shuttle_price: 300, hold_minutes: 15, reschedule_min_days: 7, pickup_meeting_point: 'ชั้น 2 ประตู 4' };
 
 function todayBkk() {
@@ -76,8 +76,9 @@ export default function BookPage() {
 
   const days = f.end >= f.start ? daysBetween(f.start, f.end) : 0;
   // late-night arrival / early return: those parking days are half price (shuttle customers)
-  const free = halfPriceDays({ shuttle: f.shuttle, start: f.start, end: f.end, outboundTime: f.outboundTime, returnLanding: f.returnLanding });
-  const parking = parkingAmount(days, free.count, pr.price_per_day);
+  const rule = lateNightRule(pr);
+  const free = halfPriceDays({ shuttle: f.shuttle, start: f.start, end: f.end, outboundTime: f.outboundTime, returnLanding: f.returnLanding, rule });
+  const parking = parkingAmount(days, free.count, pr.price_per_day, rule.percent);
   const leadGross = parking + (f.shuttle ? pr.shuttle_price : 0);          // the first car carries the shuttle
   const subtotal = leadGross + (cars - 1) * parking;
   // campaign (e.g. 10 days, 1 day free) and the returning-customer discount; a non-stackable campaign
@@ -246,7 +247,7 @@ export default function BookPage() {
           {warnings.map((w) => <div key={w} className="alert info">{t('โปรดตรวจสอบ:')} {w}</div>)}
           <div className="card">
             <div className="price"><span>{cars > 1 ? t('ที่จอด {n} วัน × {p} × {c} คัน', { n: days, p: pr.price_per_day, c: cars }) : t('ที่จอด {n} วัน × {p}', { n: days, p: pr.price_per_day })}</span><span>{money(parking * cars)}</span></div>
-          {free.count > 0 && <div className="small" style={{ margin: '2px 0 6px' }}>{t('ลดค่าจอดครึ่งราคา {n} วัน', { n: free.count })}: {free.arrival ? t('เข้าลานตั้งแต่ {t} น.', { t: LATE_ARRIVAL_FROM }) : ''}{free.arrival && free.ret ? ' · ' : ''}{free.ret ? t('รับรถคืนภายใน {t} น.', { t: EARLY_RETURN_BY }) : ''}</div>}
+          {free.count > 0 && <div className="small" style={{ margin: '2px 0 6px' }}>{t('ค่าจอด {n} วัน คิด {p}% ของราคาปกติ', { n: free.count, p: rule.percent })}: {free.arrival ? t('เข้าลานตั้งแต่ {t} น.', { t: rule.arrivalFrom }) : ''}{free.arrival && free.ret ? ' · ' : ''}{free.ret ? t('รับรถคืนภายใน {t} น.', { t: rule.returnBy }) : ''}</div>}
             {f.shuttle && <div className="price"><span>{t('รถรับส่งไป-กลับ')}</span><span>{money(pr.shuttle_price)}</span></div>}
             {discount > 0 && <div className="price discount"><span>{disc?.reason === 'referral' ? t('ส่วนลดเพื่อนแนะนำ') : t('ส่วนลดลูกค้าเก่า')}</span><span>−{money(discount)}</span></div>}
             {campAmount > 0 && <div className="price discount"><span>{t('แคมเปญ')} {camp?.name}</span><span>−{money(campAmount)}</span></div>}
@@ -388,7 +389,7 @@ export default function BookPage() {
               )}
               <label htmlFor="land">{t('ขากลับ: เวลาเครื่องลง')}</label>
               <DateTimeSlots id="land" value={f.returnLanding} onChange={(v) => setF({ ...f, returnLanding: v })} defaultDate={f.end} placeholder={t('เลือกเวลา')} />
-              <p className="small" style={{ margin: '4px 0 0' }}>{t('เข้าลานตั้งแต่ {a} น. ค่าจอดวันเข้าลดครึ่งราคา · เครื่องลงขากลับภายใน {b} น. ค่าจอดวันรับรถลดครึ่งราคา', { a: LATE_ARRIVAL_FROM, b: EARLY_RETURN_BY })}</p>
+              {rule.enabled && rule.percent < 100 && <p className="small" style={{ margin: '4px 0 0' }}>{t('เข้าลานตั้งแต่ {a} น. ค่าจอดวันเข้าคิด {p}% · เครื่องลงขากลับภายใน {b} น. ค่าจอดวันรับรถคิด {p}%', { a: rule.arrivalFrom, b: rule.returnBy, p: rule.percent })}</p>}
               <div className="row">
                 <div><label htmlFor="flight">{t('เลขไฟลต์ขากลับ (ถ้ามี)')}</label><input id="flight" placeholder="TG 629" value={f.returnFlight} onChange={set('returnFlight')} /></div>
                 <div><label htmlFor="ftype">{t('เที่ยวบิน')}</label>
@@ -403,7 +404,7 @@ export default function BookPage() {
 
         <div className="card">
           <div className="price"><span>{cars > 1 ? t('ที่จอด {n} วัน × {p} × {c} คัน', { n: days, p: pr.price_per_day, c: cars }) : t('ที่จอด {n} วัน × {p}', { n: days, p: pr.price_per_day })}</span><span>{money(parking * cars)}</span></div>
-          {free.count > 0 && <div className="small" style={{ margin: '2px 0 6px' }}>{t('ลดค่าจอดครึ่งราคา {n} วัน', { n: free.count })}: {free.arrival ? t('เข้าลานตั้งแต่ {t} น.', { t: LATE_ARRIVAL_FROM }) : ''}{free.arrival && free.ret ? ' · ' : ''}{free.ret ? t('รับรถคืนภายใน {t} น.', { t: EARLY_RETURN_BY }) : ''}</div>}
+          {free.count > 0 && <div className="small" style={{ margin: '2px 0 6px' }}>{t('ค่าจอด {n} วัน คิด {p}% ของราคาปกติ', { n: free.count, p: rule.percent })}: {free.arrival ? t('เข้าลานตั้งแต่ {t} น.', { t: rule.arrivalFrom }) : ''}{free.arrival && free.ret ? ' · ' : ''}{free.ret ? t('รับรถคืนภายใน {t} น.', { t: rule.returnBy }) : ''}</div>}
           {f.shuttle && <div className="price"><span>{t('รถรับส่งไป-กลับ')}</span><span>{money(pr.shuttle_price)}</span></div>}
           <div className="price total"><span>{t('รวม')}</span><span>{money(subtotal)}</span></div>
           {error && <div className="alert bad">{error}</div>}

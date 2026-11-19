@@ -115,6 +115,14 @@ export default async function SettingsPage() {
             {field('extra_price_per_day', 'ค่าจอดเพิ่ม/เกินวัน', 'ต่อวัน', 'บาท')}
             {field('shuttle_price', 'รถรับส่งไป-กลับ', 'ต่อการจอง', 'บาท')}
           </div>
+          <h3 style={{ marginTop: 18 }}>ราคารอบดึก (ลูกค้าใช้รถรับ-ส่ง)</h3>
+          <p className="hint">ลูกค้าที่เข้าลานดึกในวันแรก หรือเครื่องลงขากลับเช้ามืดในวันรับรถ จะคิดค่าจอดของวันนั้นเป็นเปอร์เซ็นต์ของราคาปกติ (50 = ครึ่งราคา, 0 = ฟรี) · ดูเวลาจากที่ลูกค้ากรอกตอนจอง · มีผลกับการจองใหม่เท่านั้น</p>
+          <div className="form grid2">
+            <label className="check span2"><input type="checkbox" name="late_night_enabled" defaultChecked={s.late_night_enabled ?? true} /> เปิดใช้ราคารอบดึก</label>
+            <label>เข้าลานตั้งแต่เวลา<span className="with-unit"><input name="late_arrival_from" type="time" defaultValue={s.late_arrival_from ?? '22:00'} required /><em>น.</em></span><small>วันเข้าจอด คิดเมื่อเวลาเข้าตรงหรือหลังเวลานี้</small></label>
+            <label>เครื่องลงขากลับภายในเวลา<span className="with-unit"><input name="early_return_by" type="time" defaultValue={s.early_return_by ?? '02:00'} required /><em>น.</em></span><small>วันรับรถคืน คิดเมื่อเครื่องลงตรงหรือก่อนเวลานี้</small></label>
+            <label>คิดค่าจอดวันนั้น<span className="with-unit"><input name="late_night_percent" type="number" min={0} max={100} defaultValue={s.late_night_percent ?? 50} required /><em>% ของราคาปกติ</em></span><small>เช่น 50 = ครึ่งราคา · {Math.round(((s.price_per_day ?? 0) * (s.late_night_percent ?? 50)) / 100)} บาท/วัน</small></label>
+          </div>
         </section>
         <section className="panel">
           <h2>กติกาและรถรับส่ง</h2>

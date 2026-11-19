@@ -48,6 +48,7 @@ const ERR: Record<string, string> = {
   invalid_plate: 'ทะเบียนไม่ถูกต้อง (2–12 ตัวอักษร)',
   plate_exists: 'ทะเบียนนี้อยู่ในรายการแล้ว',
   invalid_grace_hour: 'ชั่วโมงต้องอยู่ระหว่าง 18–23',
+  invalid_late_night_rule: 'ตั้งค่ากฎรอบดึกไม่ถูกต้อง (เวลารูปแบบ 22:00 และเปอร์เซ็นต์ 0–100)',
   invalid_method: 'วิธีรับเงินไม่ถูกต้อง',
   invalid_name: 'กรอกชื่อลูกค้า (ลูกค้าใหม่ที่ยังไม่มีในระบบ)',
   invalid_group_size: 'จำนวนรถเกินที่ตั้งไว้ในหน้าตั้งค่า (จองหลายคัน)',
@@ -333,10 +334,16 @@ export async function autoAssign(_: ActionResult, f: FormData): Promise<ActionRe
 
 // ---------- settings ----------
 export async function updateSettings(_: ActionResult, f: FormData): Promise<ActionResult> {
-  return run('admin_update_settings', {
+  const saved = await run('admin_update_settings', {
     p_total: num(f, 'total_spots'), p_reserve: num(f, 'reserve_spots'), p_price: num(f, 'price_per_day'),
     p_extra: num(f, 'extra_price_per_day'), p_shuttle: num(f, 'shuttle_price'), p_hold: num(f, 'hold_minutes'),
     p_reschedule_days: num(f, 'reschedule_min_days'), p_meeting: str(f, 'pickup_meeting_point'),
+  }, 'บันทึกการตั้งค่าแล้ว', ['/admin/settings', '/admin']);
+  if (saved?.error) return saved;
+  // the late-night rule is part of the price section of the same form
+  return run('admin_set_late_night_rule', {
+    p_enabled: f.get('late_night_enabled') === 'on', p_arrival: str(f, 'late_arrival_from'), p_return: str(f, 'early_return_by'),
+    p_percent: num(f, 'late_night_percent'),
   }, 'บันทึกการตั้งค่าแล้ว', ['/admin/settings', '/admin']);
 }
 
