@@ -1,3 +1,4 @@
+import { halfPriceDays } from '@/lib/freeDays';
 import { db } from '@/lib/supabase';
 import { bkkLocalToIso, currentUser, json } from '@/lib/request';
 import { dbErrorToThai } from '@/lib/format';
@@ -30,6 +31,9 @@ export async function POST(req: Request) {
     returnPickup = new Date(Date.parse(bkkLocalToIso(b.returnLanding)!) + exit * 60_000).toISOString();
   }
 
+  // late arrival (after 22:00) / early return (by 02:00): those days are half price for shuttle customers
+  const freeDays = halfPriceDays({ shuttle: !!b.shuttle, start: b.start, end: b.end, outboundTime: b.outboundTime, returnLanding: b.returnLanding }).count;
+
   const isId = (v?: string) => !!v && /^[0-9a-f-]{36}$/.test(v);
   // points used on the review page: redeem + book in one transaction (create_booking_with_reward)
   const useReward = isId(b.rewardId) && !isId(b.couponId) && !(Array.isArray(b.cars) && b.cars.length > 0);
@@ -46,7 +50,7 @@ export async function POST(req: Request) {
       p_outbound_flight: null, p_outbound_time: b.shuttle ? bkkLocalToIso(b.outboundTime) : null,
       p_return_flight: b.shuttle ? b.returnFlight || null : null, p_return_time: returnPickup,
       p_ref_phone: b.refPhone?.trim() || null, p_coupon: isId(b.couponId) ? b.couponId : null,
-      p_large: b.shuttle ? bagCount(b.largeBags) : 0,
+      p_large: b.shuttle ? bagCount(b.largeBags) : 0, p_free_days: freeDays,
     })
     : await db().rpc('create_booking_bags', {
     p_line_user_id: uid,
@@ -66,6 +70,7 @@ export async function POST(req: Request) {
     ...(useReward ? { p_reward: b.rewardId } : { p_coupon: isId(b.couponId) ? b.couponId : null }),
     p_large: b.shuttle ? bagCount(b.largeBags) : 0,
     p_small: 0,   // only large bags are counted
+    p_free_days: freeDays,
   });
   if (error) {
     // the van filled up between the check on the form and this booking: send nearby free times back
