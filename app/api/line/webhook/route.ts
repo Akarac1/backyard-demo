@@ -51,24 +51,31 @@ const header = (title: string, subtitle: string) => ({
   type: 'box', layout: 'vertical', backgroundColor: GREEN, paddingAll: '18px', spacing: 'xs',
   contents: [
     { type: 'text', text: title, color: GOLD, weight: 'bold', size: 'xl' },
-    { type: 'text', text: subtitle, color: '#DCE7DF', size: 'xs' },
+    { type: 'text', text: subtitle, color: '#DCE7DF', size: 'xs', wrap: true },
   ],
 });
 
 const priceRow = (label: string, price: string, unit: string, note?: string) => ({
-  type: 'box', layout: 'vertical', spacing: 'none',
+  type: 'box', layout: 'vertical', spacing: 'xs',
   contents: [
     {
-      type: 'box', layout: 'horizontal', alignItems: 'flex-end',
+      type: 'box', layout: 'horizontal', spacing: 'md', alignItems: 'center',
       contents: [
         { type: 'text', text: label, size: 'md', color: GREEN, weight: 'bold', flex: 5, wrap: true },
-        { type: 'text', text: price, size: 'xl', color: GREEN, weight: 'bold', align: 'end', flex: 3 },
-        { type: 'text', text: unit, size: 'xs', color: MUTED, align: 'end', flex: 3, gravity: 'bottom' },
+        {
+          type: 'text', flex: 4, align: 'end', wrap: true,
+          contents: [
+            { type: 'span', text: price, size: 'xl', weight: 'bold', color: GREEN },
+            { type: 'span', text: ` ${unit}`, size: 'xs', color: MUTED },
+          ],
+        },
       ],
     },
     ...(note ? [{ type: 'text', text: note, size: 'xs', color: MUTED, wrap: true }] : []),
   ],
 });
+
+const sectionTitle = (text: string) => ({ type: 'text', text, size: 'sm', weight: 'bold', color: GREEN, margin: 'sm' });
 
 const bullet = (text: string) => ({
   type: 'box', layout: 'baseline', spacing: 'sm',
@@ -83,39 +90,79 @@ const callButton = (style: 'primary' | 'secondary', k: Contact) => ({
   action: { type: 'uri', label: `โทร ${k.display}`, uri: `tel:${k.phone}` },
 });
 
-const priceFlex = (p: P, k: Contact): LineMessage => ({
-  type: 'flex',
-  altText: `ราคา: ที่จอด ${p.price_per_day} บาท/วัน · รถรับส่งไป-กลับ ${p.shuttle_price} บาท`,
-  contents: {
-    type: 'bubble',
-    header: header('ราคาและเงื่อนไข', 'Backyard Airport · The Hangar · ใกล้สุวรรณภูมิ 15 นาที'),
-    body: {
-      type: 'box', layout: 'vertical', spacing: 'lg', paddingAll: '18px',
-      contents: [
-        priceRow('ที่จอดรถ', String(p.price_per_day), 'บาท / วัน'),
-        priceRow('รถรับส่งไป-กลับ', String(p.shuttle_price), 'บาท / การจอง', 'สนามบินสุวรรณภูมิ · ไม่เกิน 7 คน · ต้องจองที่จอดด้วย'),
-        priceRow('จอดเกินหรือเพิ่มวัน', String(p.extra_price_per_day), 'บาท / วัน'),
-        { type: 'separator', color: '#E4E9E5' },
-        { type: 'text', text: 'เงื่อนไข', size: 'sm', weight: 'bold', color: GREEN },
-        {
-          type: 'box', layout: 'vertical', spacing: 'xs',
-          contents: [
-            bullet('นับวันตามปฏิทิน รวมวันเข้าและวันออก'),
-            bullet('จ่ายเต็มจำนวนตอนจองผ่าน PromptPay'),
-            bullet(`ไม่คืนเงิน เลื่อนวันได้ 1 ครั้ง ล่วงหน้าอย่างน้อย ${p.reschedule_min_days} วัน ภายใน 1 ปีนับจากวันจอง`),
-          ],
-        },
-      ],
+type Terms = { rule: ReturnType<typeof lateNightRule>; hold: number; meeting: string; discount: number; discountDays: number; discountShuttle: boolean };
+/** everything the price card needs besides the three prices; any failure (e.g. migration not run) falls back to defaults */
+async function terms(): Promise<Terms> {
+  const { rule } = await extra();
+  const { data } = await db().from('settings')
+    .select('hold_minutes, pickup_meeting_point, member_discount, member_discount_min_days, member_discount_needs_shuttle').eq('id', 1).maybeSingle();
+  const d = data as { hold_minutes?: number; pickup_meeting_point?: string; member_discount?: number; member_discount_min_days?: number; member_discount_needs_shuttle?: boolean } | null;
+  return {
+    rule, hold: d?.hold_minutes ?? 15, meeting: d?.pickup_meeting_point ?? '',
+    discount: d?.member_discount ?? 0, discountDays: d?.member_discount_min_days ?? 1, discountShuttle: d?.member_discount_needs_shuttle ?? false,
+  };
+}
+
+const priceFlex = (p: P, k: Contact, t: Terms): LineMessage => {
+  const lateOn = t.rule.enabled && t.rule.percent < 100;
+  return {
+    type: 'flex',
+    altText: `ราคา: ที่จอด ${p.price_per_day} บาท/วัน · รถรับส่งไป-กลับ ${p.shuttle_price} บาท/การจอง · จอดเกิน ${p.extra_price_per_day} บาท/วัน`,
+    contents: {
+      type: 'bubble',
+      header: header('ราคาและเงื่อนไข 💰', 'Backyard Airport · The Hangar\nใกล้สนามบินสุวรรณภูมิ ขับประมาณ 15 นาที'),
+      body: {
+        type: 'box', layout: 'vertical', spacing: 'lg', paddingAll: '18px',
+        contents: [
+          priceRow('ที่จอดรถ', String(p.price_per_day), 'บาท/วัน', 'นับตามวันปฏิทิน รวมวันที่เข้าและวันที่ออก'),
+          priceRow('รถรับส่งไป–กลับ', String(p.shuttle_price), 'บาท/การจอง', 'ไปสนามบินสุวรรณภูมิ นั่งได้ไม่เกิน 7 คน ต้องจองที่จอดพร้อมกัน'),
+          priceRow('จอดเกินหรือเพิ่มวัน', String(p.extra_price_per_day), 'บาท/วัน', 'กรณีจอดเลยวันที่จองไว้ หรือขอเพิ่มวัน'),
+          { type: 'separator', color: '#E4E9E5' },
+          ...(lateOn || t.discount > 0 ? [
+            sectionTitle('ส่วนลด'),
+            {
+              type: 'box', layout: 'vertical', spacing: 'sm',
+              contents: [
+                ...(lateOn ? [bullet(`🌙 ใช้รถรับ–ส่ง และเข้าลานตั้งแต่ ${t.rule.arrivalFrom} น. ค่าจอดวันเข้าคิด ${pct(t.rule.percent)}`),
+                  bullet(`🌙 เครื่องลงขากลับภายใน ${t.rule.returnBy} น. ค่าจอดวันรับรถคิด ${pct(t.rule.percent)}`)] : []),
+                ...(t.discount > 0 ? [bullet(`ลูกค้าเก่า หรือมีเพื่อนแนะนำ ลด ${t.discount} บาท เมื่อจองอย่างน้อย ${t.discountDays} วัน${t.discountShuttle ? ' และใช้รถรับ–ส่ง' : ''}`)] : []),
+              ],
+            },
+            { type: 'separator', color: '#E4E9E5' },
+          ] : []),
+          sectionTitle('การจองและชำระเงิน 📋'),
+          {
+            type: 'box', layout: 'vertical', spacing: 'sm',
+            contents: [
+              bullet('ชำระเต็มจำนวนตอนจอง ผ่าน QR PromptPay'),
+              bullet(`หลังกดยืนยัน ระบบกันที่ให้ ${t.hold} นาที ถ้าไม่ชำระภายในเวลานี้ ที่จะถูกคืนให้ลูกค้าท่านอื่น`),
+              bullet('เรื่องการคืนเงิน ติดต่อแอดมินในแชทนี้ได้เลยนะคะ'),
+              bullet(`เลื่อนวันได้ 1 ครั้ง แจ้งล่วงหน้าอย่างน้อย ${p.reschedule_min_days} วัน และเลื่อนภายใน 1 ปีนับจากวันจอง (ทักแอดมินในแชท)`),
+            ],
+          },
+          ...(t.meeting ? [
+            { type: 'separator', color: '#E4E9E5' },
+            sectionTitle('รถรับ–ส่ง 🚐'),
+            {
+              type: 'box', layout: 'vertical', spacing: 'sm',
+              contents: [
+                bullet(`จุดนัดรับที่สนามบิน: ${t.meeting}`),
+                bullet('ลงเครื่องและรับกระเป๋าเสร็จแล้ว กดเรียกรถในแชทนี้ คนขับจะไปถึงจุดนัดภายในประมาณ 15 นาที'),
+              ],
+            },
+          ] : []),
+        ],
+      },
+      footer: {
+        type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
+        contents: [
+          { type: 'button', style: 'primary', color: GOLD, height: 'sm', action: { type: 'uri', label: 'จองเลย', uri: liffUrl('/book') } },
+          callButton('secondary', k),
+        ],
+      },
     },
-    footer: {
-      type: 'box', layout: 'vertical', spacing: 'sm', paddingAll: '14px',
-      contents: [
-        { type: 'button', style: 'primary', color: GOLD, height: 'sm', action: { type: 'uri', label: 'จองเลย', uri: liffUrl('/book') } },
-        callButton('secondary', k),
-      ],
-    },
-  },
-});
+  };
+};
 
 const adminFlex = (k: Contact): LineMessage => ({
   type: 'flex',
@@ -269,7 +316,7 @@ export async function POST(req: Request) {
       ] : ['สอบถามสิทธิสมาชิกกับเจ้าหน้าที่ได้ที่แชทนี้นะคะ'],
       [{ label: 'เปิดสมาชิก & การจอง', uri: liffUrl('/my'), primary: true }])]);
     }
-    if (/ราคา|เงื่อนไข/.test(text)) return reply(e.replyToken, [priceFlex(await prices(), k)]);
+    if (/ราคา|เงื่อนไข/.test(text)) { const [p, t] = await Promise.all([prices(), terms()]); return reply(e.replyToken, [priceFlex(p, k, t)]); }
     if (/แอดมิน|ติดต่อ|โทร/.test(text)) return reply(e.replyToken, [adminFlex(k)]);
     if (/จอง/.test(text)) return reply(e.replyToken, [bookFlex(await prices())]);
   }));
