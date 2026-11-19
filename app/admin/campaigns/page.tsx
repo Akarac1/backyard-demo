@@ -3,7 +3,8 @@ import { ActionForm, Submit } from '@/components/ActionForm';
 import { MemberCard } from '@/components/MemberCard';
 import { CampaignForm } from '@/components/CampaignForm';
 import { Drawer } from '@/components/Drawer';
-import { recordPurchase, saveCampaign, savePromo, saveReward, saveTier } from '../actions';
+import { FilterTable, type FRow } from '@/components/FilterTable';
+import { deleteCampaign, recordPurchase, saveCampaign, savePromo, saveReward, saveTier } from '../actions';
 import { thDate, bkkDay } from '@/lib/format';
 
 export const dynamic = 'force-dynamic';
@@ -31,6 +32,8 @@ const effect = (c: Campaign) => c.kind === 'multiplier' ? `แต้ม x${Numbe
   : c.kind === 'percent_off' ? `ลดค่าจอด ${c.percent_off}%${c.min_days > 1 ? ` (จอด ${c.min_days}+ วัน)` : ''}` : 'ประกาศ';
 const localInput = (ts: string | null) => (ts ? new Date(ts).toLocaleString('sv-SE', { timeZone: 'Asia/Bangkok' }).slice(0, 16).replace(' ', 'T') : '');
 
+const STATE_TABS = [{ key: 'ok', label: 'กำลังใช้' }, { key: 'wait', label: 'รอเริ่ม' }, { key: 'off', label: 'จบแล้ว / ปิด' }, { key: 'all', label: 'ทั้งหมด' }];
+
 function campaignState(c: Campaign): [string, string] {
   const now = Date.now();
   if (!c.active) return ['ปิด', 'st-off'];
@@ -43,13 +46,13 @@ export default async function CampaignsPage() {
   const sb = db();
   const [{ data: tiers }, { data: camps }, { data: st }, { data: tc }, { data: purchases }, { data: rewards }, { count: bdCount }, { data: promos }] = await Promise.all([
     sb.from('member_tiers').select('*').order('sort'),
-    sb.from('campaigns').select('*').order('starts_at', { ascending: false }).limit(100),
+    sb.from('campaigns').select('*').order('starts_at', { ascending: false }).limit(300),
     sb.from('settings').select('points_per_baht, tier_window_months').eq('id', 1).single(),
     sb.rpc('tier_counts'),
     sb.from('member_purchases').select('id, business, amount, note, staff, created_at, customers(name, member_no)').order('created_at', { ascending: false }).limit(15),
     sb.from('rewards').select('*').order('sort').order('points_cost'),
     sb.from('black_diamond').select('customer_id', { count: 'exact', head: true }).eq('active', true),
-    sb.from('promo_codes').select('*').order('created_at', { ascending: false }).limit(100),
+    sb.from('promo_codes').select('*').order('created_at', { ascending: false }).limit(300),
   ]);
   const T = (tiers ?? []) as Tier[];
   // tier per customer (computed in the database)
@@ -102,6 +105,53 @@ export default async function CampaignsPage() {
   const campaignForm = (c?: Campaign) => <CampaignForm action={saveCampaign} tiers={tierList} init={c ? { ...c, multiplier: Number(c.multiplier) } : undefined} />;
 
 
+  const stateKey = (cls: string) => cls.replace('st-', '');
+  const campRows: FRow[] = ((camps ?? []) as Campaign[]).map((c) => {
+    const [label, cls] = campaignState(c);
+    return {
+      id: c.id, tab: stateKey(cls),
+      search: `${c.name} ${c.description ?? ''} ${effect(c)} ${BIZ[c.business] ?? ''}`,
+      node: (
+        <tr>
+                    <td><b>{c.name}</b>{c.description && <small className="hint" style={{ display: 'block', margin: 0 }}>{c.description}</small>}</td>
+                    <td>{BIZ[c.business] ?? c.business}</td>
+                    <td>{c.tiers?.length ? c.tiers.map((x) => T.find((t) => t.code === x)?.name ?? x).join(', ') : 'ทุกระดับ'}</td>
+                    <td>{effect(c)}{['free_days', 'amount_off', 'percent_off'].includes(c.kind) && !c.stackable && <small className="hint" style={{ display: 'block', margin: 0 }}>ไม่ใช้ร่วมกับส่วนลดลูกค้าเก่า</small>}</td>
+                    <td>จอง {thDate(bkkDay(c.starts_at))} – {c.ends_at ? thDate(bkkDay(c.ends_at)) : 'ไม่กำหนด'}{(c.stay_from || c.stay_to) && <small className="hint" style={{ display: 'block', margin: 0 }}>เข้าจอด {c.stay_from ? thDate(c.stay_from) : '…'} – {c.stay_to ? thDate(c.stay_to) : '…'}</small>}</td>
+                    <td><span className={`st ${cls}`}>{label}</span></td>
+                    <td className="r"><Drawer label="✏️ แก้ไข" title={`แก้ไขแคมเปญ · ${c.name}`}>
+                      {campaignForm(c)}
+                      <div className="danger-zone">
+                        <p>ไม่ใช้แล้ว? ลบแคมเปญนี้ออกจากรายการ การจองที่ได้ส่วนลดไปแล้วไม่เปลี่ยน · ถ้าแค่อยากหยุดชั่วคราว ให้ปิดสวิตช์ด้านบนแทน</p>
+                        <ActionForm action={deleteCampaign} confirm={`ลบแคมเปญ “${c.name}” ถาวร? กู้คืนไม่ได้`}>
+                          <input type="hidden" name="id" value={c.id} />
+                          <Submit variant="danger" small>🗑 ลบแคมเปญนี้</Submit>
+                        </ActionForm>
+                      </div>
+                    </Drawer></td>
+                  </tr>
+      ),
+    };
+  });
+  const promoRows: FRow[] = ((promos ?? []) as Promo[]).map((p) => {
+    const [label, cls] = promoState(p);
+    return {
+      id: p.id, tab: stateKey(cls),
+      search: `${p.code} ${p.title} ${p.channel ?? ''}`,
+      node: (
+        <tr>
+                    <td><b style={{ letterSpacing: 1 }}>{p.code}</b><small className="hint" style={{ display: 'block', margin: 0, wordBreak: 'break-all' }}>{shareLink(p.code)}</small></td>
+                    <td>{p.title}<small className="hint" style={{ display: 'block', margin: 0 }}>เงื่อนไข: จอง {p.min_days}+ วัน{p.needs_shuttle ? ' · ต้องใช้รถรับ-ส่ง' : ''}{p.stackable ? ' · ใช้ร่วมกับส่วนลดลูกค้าเก่าได้' : ' · ไม่ร่วมกับส่วนลดลูกค้าเก่า'}</small>{p.channel && <small className="hint" style={{ display: 'block', margin: 0 }}>{p.channel}</small>}</td>
+                    <td className="r">{p.value_baht.toLocaleString('th-TH')}</td>
+                    <td className="r">{p.used_count}{p.max_uses != null ? ` / ${p.max_uses}` : ' / ไม่จำกัด'}</td>
+                    <td>{p.valid_from ? thDate(bkkDay(p.valid_from)) : 'ทันที'} – {p.valid_until ? thDate(bkkDay(p.valid_until)) : 'ไม่กำหนด'}</td>
+                    <td><span className={`st ${cls}`}>{label}</span></td>
+                    <td className="r"><Drawer label="✏️ แก้ไข" title={`แก้ไขโค้ด · ${p.code}`}>{promoForm(p)}</Drawer></td>
+                  </tr>
+      ),
+    };
+  });
+
   return (
     <main className="page">
       <header className="page-head">
@@ -152,54 +202,26 @@ export default async function CampaignsPage() {
       <section className="panel">
         <div className="panel-head"><h2>แคมเปญ</h2></div>
         <p className="hint">ส่วนลดการจอง (จอดครบ ฟรีวัน / ลดเงิน / ลด %): ระบบหักให้เองตอนจอง กำหนดช่วงวันเข้าจอดได้ เช่น ปีใหม่ สงกรานต์ ถ้าเข้าได้หลายแคมเปญใช้ตัวที่ลดมากที่สุด · แต้มคูณ: ใช้ตัวที่คูณมากที่สุด · แต้มโบนัส: บวกทุกแคมเปญ · ประกาศ: แสดงบนบัตรสมาชิกใน LINE อย่างเดียว</p>
-        {!camps?.length ? <p className="empty">ยังไม่มีแคมเปญ</p> : (
-          <table className="tbl">
-            <thead><tr><th>แคมเปญ</th><th>ธุรกิจ</th><th>ระดับ</th><th>สิทธิ์</th><th>ช่วงเวลา</th><th>สถานะ</th><th></th></tr></thead>
-            <tbody>
-              {(camps as Campaign[]).map((c) => {
-                const [label, cls] = campaignState(c);
-                return (
-                  <tr key={c.id}>
-                    <td><b>{c.name}</b>{c.description && <small className="hint" style={{ display: 'block', margin: 0 }}>{c.description}</small>}</td>
-                    <td>{BIZ[c.business] ?? c.business}</td>
-                    <td>{c.tiers?.length ? c.tiers.map((x) => T.find((t) => t.code === x)?.name ?? x).join(', ') : 'ทุกระดับ'}</td>
-                    <td>{effect(c)}{['free_days', 'amount_off', 'percent_off'].includes(c.kind) && !c.stackable && <small className="hint" style={{ display: 'block', margin: 0 }}>ไม่ใช้ร่วมกับส่วนลดลูกค้าเก่า</small>}</td>
-                    <td>จอง {thDate(bkkDay(c.starts_at))} – {c.ends_at ? thDate(bkkDay(c.ends_at)) : 'ไม่กำหนด'}{(c.stay_from || c.stay_to) && <small className="hint" style={{ display: 'block', margin: 0 }}>เข้าจอด {c.stay_from ? thDate(c.stay_from) : '…'} – {c.stay_to ? thDate(c.stay_to) : '…'}</small>}</td>
-                    <td><span className={`st ${cls}`}>{label}</span></td>
-                    <td className="r"><Drawer label="✏️ แก้ไข" title={`แก้ไขแคมเปญ · ${c.name}`}>{campaignForm(c)}</Drawer></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
+        <FilterTable
+          empty="ยังไม่มีแคมเปญ"
+          searchPlaceholder="ค้นหาชื่อแคมเปญ…"
+          tabs={STATE_TABS}
+          head={<tr><th>แคมเปญ</th><th>ธุรกิจ</th><th>ระดับ</th><th>สิทธิ์</th><th>ช่วงเวลา</th><th>สถานะ</th><th></th></tr>}
+          rows={campRows}
+        />
         <div style={{ marginTop: 12 }}><Drawer variant="primary" label="+ สร้างแคมเปญ" title="สร้างแคมเปญใหม่">{campaignForm()}</Drawer></div>
       </section>
 
       <section className="panel" id="promos">
         <h2>โค้ดโปรโมชัน (Gen Code)</h2>
         <p className="hint">สร้างโค้ดเดียวไปโพสต์ Facebook หรือช่องทางอื่น · ลูกค้ากรอกโค้ดในหน้า “แลกของรางวัล” (หรือกดลิงก์ที่มี ?code=) แล้วได้คูปองส่วนลดค่าจอดเป็นของตัวเอง (มี QR) เลือกใช้ในหน้ายืนยันการจอง · เว้นจำนวนสิทธิ์ว่าง = ใช้ได้ไม่จำกัดคน · ถ้ายกเลิกคูปองของลูกค้า สิทธิ์จะคืนให้โค้ด</p>
-        {!promos?.length ? <p className="empty">ยังไม่มีโค้ด</p> : (
-          <table className="tbl">
-            <thead><tr><th>โค้ด</th><th>โปรโมชัน</th><th className="r">ลด</th><th className="r">ใช้แล้ว</th><th>ช่วงรับโค้ด</th><th>สถานะ</th><th></th></tr></thead>
-            <tbody>
-              {(promos as Promo[]).map((p) => {
-                const [label, cls] = promoState(p);
-                return (
-                  <tr key={p.id}>
-                    <td><b style={{ letterSpacing: 1 }}>{p.code}</b><small className="hint" style={{ display: 'block', margin: 0, wordBreak: 'break-all' }}>{shareLink(p.code)}</small></td>
-                    <td>{p.title}<small className="hint" style={{ display: 'block', margin: 0 }}>เงื่อนไข: จอง {p.min_days}+ วัน{p.needs_shuttle ? ' · ต้องใช้รถรับ-ส่ง' : ''}{p.stackable ? ' · ใช้ร่วมกับส่วนลดลูกค้าเก่าได้' : ' · ไม่ร่วมกับส่วนลดลูกค้าเก่า'}</small>{p.channel && <small className="hint" style={{ display: 'block', margin: 0 }}>{p.channel}</small>}</td>
-                    <td className="r">{p.value_baht.toLocaleString('th-TH')}</td>
-                    <td className="r">{p.used_count}{p.max_uses != null ? ` / ${p.max_uses}` : ' / ไม่จำกัด'}</td>
-                    <td>{p.valid_from ? thDate(bkkDay(p.valid_from)) : 'ทันที'} – {p.valid_until ? thDate(bkkDay(p.valid_until)) : 'ไม่กำหนด'}</td>
-                    <td><span className={`st ${cls}`}>{label}</span></td>
-                    <td className="r"><Drawer label="✏️ แก้ไข" title={`แก้ไขโค้ด · ${p.code}`}>{promoForm(p)}</Drawer></td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
+        <FilterTable
+          empty="ยังไม่มีโค้ด"
+          searchPlaceholder="ค้นหารหัสโค้ด ชื่อโปรโมชัน หรือช่องทาง…"
+          tabs={STATE_TABS}
+          head={<tr><th>โค้ด</th><th>โปรโมชัน</th><th className="r">ลด</th><th className="r">ใช้แล้ว</th><th>ช่วงรับโค้ด</th><th>สถานะ</th><th></th></tr>}
+          rows={promoRows}
+        />
         <div style={{ marginTop: 12 }}><Drawer variant="primary" label="+ สร้างโค้ดโปรโมชัน" title="สร้างโค้ดโปรโมชัน">{promoForm()}</Drawer></div>
       </section>
 

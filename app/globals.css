@@ -949,3 +949,13 @@ a.chip-btn.on { color: #fff; }
 .cform-active { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: 10px; background: #F4E6E5; color: #8A2F28; cursor: pointer; margin-bottom: 12px; }
 .cform-active.on { background: #E3F1E8; color: #1E6B40; }
 .cform-active input { width: 20px; height: 20px; margin: 0; }
+.danger-zone { margin: 20px 0 24px; padding: 14px; border: 1.5px dashed #E3B9B5; border-radius: 12px; background: #FDF6F5; }
+.danger-zone p { margin: 0 0 10px; font-size: 13.5px; color: #8A2F28; }
+/* status tabs + search above long tables (components/FilterTable.tsx) */
+.ftools { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; justify-content: space-between; margin: 4px 0 10px; }
+.ftabs { display: flex; flex-wrap: wrap; gap: 6px; }
+.ftabs button { font: inherit; font-size: 14px; padding: 7px 14px; border-radius: 999px; border: 1.5px solid #D5DCE6; background: #fff; color: var(--ink, #1B2A22); cursor: pointer; }
+.ftabs button i { font-style: normal; font-size: 12.5px; margin-left: 4px; padding: 1px 8px; border-radius: 999px; background: #EEF1F4; color: #4A5868; }
+.ftabs button.on { background: var(--navy); color: #fff; border-color: var(--navy); }
+.ftabs button.on i { background: rgba(255,255,255,.2); color: #fff; }
+.fsearch { font: inherit; font-size: 14.5px; padding: 8px 12px; border: 1.5px solid #D5DCE6; border-radius: 10px; min-width: 240px; flex: 1; max-width: 360px; }

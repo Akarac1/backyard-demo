@@ -501,6 +501,10 @@ export async function saveCampaign(_: ActionResult, f: FormData): Promise<Action
   }, 'บันทึกแคมเปญแล้ว', ['/admin/campaigns']);
 }
 
+export async function deleteCampaign(_: ActionResult, f: FormData): Promise<ActionResult> {
+  return run('admin_delete_campaign', { p_id: str(f, 'id') }, 'ลบแคมเปญแล้ว', ['/admin/campaigns']);
+}
+
 export async function recordPurchase(_: ActionResult, f: FormData): Promise<ActionResult> {
   let actor: string;
   try { actor = (await staffForAction(['admin', 'ops'])).uid; } catch { return { error: ERR.not_allowed }; }
