@@ -1,0 +1,164 @@
+#!/usr/bin/env node
+// Backyard LPR bridge: keeps the NVR plate allow list in step with confirmed bookings.
+// Runs on a computer on the same LAN as the NVR. It only makes outbound HTTPS calls to the web app.
+//   node bridge.mjs probe            read-only check of the NVR API (no changes)
+//   node bridge.mjs once             show what would change (dry run)
+//   node bridge.mjs once --apply     make the changes once
+//   node bridge.mjs run --apply      keep doing it every POLL_SECONDS
+// Needs Node 20+. No packages to install.
+import { createHash, randomBytes } from 'node:crypto';
+import { readFileSync, existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const here = dirname(fileURLToPath(import.meta.url));
+const envFile = join(here, '.env');
+if (existsSync(envFile)) {
+  for (const line of readFileSync(envFile, 'utf8').split(/\r?\n/)) {
+    const m = line.match(/^\s*([A-Z_]+)\s*=\s*(.*?)\s*$/);
+    if (m && !(m[1] in process.env)) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+  }
+}
+const cfg = {
+  site: (process.env.SITE_URL ?? '').replace(/\/$/, ''),
+  key: process.env.LPR_BRIDGE_KEY ?? '',
+  nvr: (process.env.NVR_URL ?? 'http://192.168.1.100').replace(/\/$/, ''),
+  user: process.env.NVR_USER ?? '',
+  pass: process.env.NVR_PASS ?? '',
+  list: process.env.NVR_LIST_NAME ?? 'TrafficRedList',
+  poll: Number(process.env.POLL_SECONDS ?? 120),
+  maxChanges: Number(process.env.MAX_CHANGES ?? 10),
+  maxDeletes: Number(process.env.MAX_DELETES ?? 5),
+};
+const TAG = 'BY-';
+const log = (...a) => console.log(new Date().toLocaleString('sv-SE'), ...a);
+
+// ---------- Digest auth (Dahua uses it on /cgi-bin) ----------
+const md5 = (s) => createHash('md5').update(s).digest('hex');
+async function nvrFetch(path) {
+  const url = `${cfg.nvr}${path}`;
+  const first = await fetch(url, { signal: AbortSignal.timeout(10000) });
+  if (first.status !== 401) return first;
+  const h = first.headers.get('www-authenticate') ?? '';
+  const p = Object.fromEntries([...h.matchAll(/(\w+)="?([^",]+)"?/g)].map((m) => [m[1], m[2]]));
+  const uri = new URL(url).pathname + new URL(url).search;
+  const nc = '00000001', cnonce = randomBytes(8).toString('hex');
+  const ha1 = md5(`${cfg.user}:${p.realm}:${cfg.pass}`);
+  const ha2 = md5(`GET:${uri}`);
+  const response = p.qop ? md5(`${ha1}:${p.nonce}:${nc}:${cnonce}:auth:${ha2}`) : md5(`${ha1}:${p.nonce}:${ha2}`);
+  const auth = `Digest username="${cfg.user}", realm="${p.realm}", nonce="${p.nonce}", uri="${uri}", response="${response}"` +
+    (p.qop ? `, qop=auth, nc=${nc}, cnonce="${cnonce}"` : '') + (p.opaque ? `, opaque="${p.opaque}"` : '');
+  return fetch(url, { headers: { Authorization: auth }, signal: AbortSignal.timeout(10000) });
+}
+const q = (o) => Object.entries(o).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+
+// ---------- NVR adapter (Dahua HTTP API). Confirm with `probe` before using --apply. ----------
+const dahuaTime = (d, end) => `${d} ${end ? '23:59:59' : '00:00:00'}`;
+const nvr = {
+  async list() {
+    const r = await nvrFetch(`/cgi-bin/recordFinder.cgi?${q({ action: 'find', name: cfg.list, count: 5000 })}`);
+    const t = await r.text();
+    if (r.status !== 200) throw new Error(`NVR list HTTP ${r.status}`);
+    const rows = new Map();
+    for (const m of t.matchAll(/^records\[(\d+)\]\.(\w+)=(.*)$/gm)) {
+      const row = rows.get(m[1]) ?? {};
+      row[m[2]] = m[3].trim();
+      rows.set(m[1], row);
+    }
+    return [...rows.values()].map((x) => ({
+      recno: x.RecNo, plate: x.PlateNumber ?? '', owner: x.MasterOfCar ?? '', begin: x.BeginTime ?? '', end: x.CancelTime ?? '',
+    }));
+  },
+  async insert(p) {
+    const r = await nvrFetch(`/cgi-bin/recordUpdater.cgi?${q({ action: 'insert', name: cfg.list, PlateNumber: p.plate, MasterOfCar: p.owner, BeginTime: dahuaTime(p.from), CancelTime: dahuaTime(p.to, true) })}`);
+    const t = await r.text();
+    if (r.status !== 200 || /error/i.test(t)) throw new Error(`insert ${p.plate}: HTTP ${r.status} ${t.slice(0, 80)}`);
+  },
+  async update(recno, p) {
+    const r = await nvrFetch(`/cgi-bin/recordUpdater.cgi?${q({ action: 'update', name: cfg.list, recno, PlateNumber: p.plate, MasterOfCar: p.owner, BeginTime: dahuaTime(p.from), CancelTime: dahuaTime(p.to, true) })}`);
+    const t = await r.text();
+    if (r.status !== 200 || /error/i.test(t)) throw new Error(`update ${p.plate}: HTTP ${r.status} ${t.slice(0, 80)}`);
+  },
+  async remove(recno, plate) {
+    const r = await nvrFetch(`/cgi-bin/recordUpdater.cgi?${q({ action: 'remove', name: cfg.list, recno })}`);
+    const t = await r.text();
+    if (r.status !== 200 || /error/i.test(t)) throw new Error(`remove ${plate}: HTTP ${r.status} ${t.slice(0, 80)}`);
+  },
+};
+
+// ---------- web app ----------
+async function site(path, init) {
+  const r = await fetch(`${cfg.site}${path}`, { ...init, headers: { Authorization: `Bearer ${cfg.key}`, 'content-type': 'application/json' }, signal: AbortSignal.timeout(20000) });
+  if (!r.ok) throw new Error(`${path} HTTP ${r.status}`);
+  return r.json();
+}
+
+// ---------- the sync ----------
+const norm = (t) => (t ?? '').slice(0, 10); // "2026-11-20 00:00:00" -> "2026-11-20"
+async function sync(apply) {
+  const { snapshot_at, plates } = await site('/api/lpr/desired');
+  const rows = await nvr.list();
+  const mine = rows.filter((r) => r.owner.startsWith(TAG));
+  const others = new Map(rows.filter((r) => !r.owner.startsWith(TAG)).map((r) => [r.plate, r]));
+  const have = new Map(mine.map((r) => [r.plate, r]));
+  const want = new Map(plates.map((p) => [p.plate, p]));
+  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Bangkok' });
+
+  const add = [], upd = [], del = [], skipped = [];
+  for (const p of plates) {
+    if (others.has(p.plate)) { skipped.push(p.plate); continue; } // a row the team made: never touch it
+    const cur = have.get(p.plate);
+    if (!cur) add.push(p);
+    else if (cur.owner !== p.owner || norm(cur.begin) !== p.from || norm(cur.end) !== p.to) upd.push([cur, p]);
+  }
+  for (const r of mine) {
+    // gone from the desired list: remove, but keep rows that ended less than 2 days ago (cheap safety margin)
+    if (!want.has(r.plate) && norm(r.end) < new Date(Date.parse(today) - 2 * 86400000).toISOString().slice(0, 10)) del.push(r);
+    else if (!want.has(r.plate) && norm(r.end) >= today) del.push(r); // cancelled before it ended
+  }
+  const summary = { desired: plates.length, nvr_rows: rows.length, nvr_mine: mine.length, add: add.length, update: upd.length, remove: del.length, skipped_manual: skipped.length };
+  log('plan', JSON.stringify(summary));
+  for (const p of add) log(' + add', p.plate, p.from, '->', p.to, p.owner);
+  for (const [, p] of upd) log(' ~ update', p.plate, p.from, '->', p.to);
+  for (const r of del) log(' - remove', r.plate, r.begin, '->', r.end);
+  for (const s of skipped) log(' ! skip (team-managed row exists)', s);
+
+  if (!apply) { log('dry run: nothing changed. Add --apply to do it.'); return { ok: true, summary, snapshot_at, dry: true }; }
+  if (add.length + upd.length + del.length > cfg.maxChanges) throw new Error(`too many changes (${add.length + upd.length + del.length} > MAX_CHANGES=${cfg.maxChanges}); raise MAX_CHANGES in .env after checking the plan`);
+  if (del.length > cfg.maxDeletes) throw new Error(`too many removals (${del.length} > MAX_DELETES=${cfg.maxDeletes}); check the plan, then raise MAX_DELETES`);
+  const errors = [];
+  const step = async (fn) => { try { await fn(); } catch (e) { errors.push(String(e.message ?? e)); } };
+  for (const p of add) await step(() => nvr.insert(p));
+  for (const [cur, p] of upd) await step(() => nvr.update(cur.recno, p));
+  for (const r of del) await step(() => nvr.remove(r.recno, r.plate));
+  if (errors.length) throw new Error(errors.slice(0, 3).join(' | '));
+  return { ok: true, summary, snapshot_at };
+}
+
+async function report(body) {
+  try { await site('/api/lpr/report', { method: 'POST', body: JSON.stringify(body) }); } catch (e) { log('report failed:', e.message); }
+}
+
+async function probe() {
+  log('NVR', cfg.nvr, 'list name', cfg.list);
+  const a = await nvrFetch('/cgi-bin/magicBox.cgi?action=getDeviceType');
+  log('getDeviceType ->', a.status, (await a.text()).trim().slice(0, 60));
+  try { const rows = await nvr.list(); log('list ->', rows.length, 'rows,', rows.filter((r) => r.owner.startsWith(TAG)).length, 'made by this system'); }
+  catch (e) { log('list failed:', e.message); }
+  log('If list failed, the list name or API differs on this NVR: tell Claude the HTTP status above.');
+}
+
+const [cmd = 'once', ...flags] = process.argv.slice(2);
+const apply = flags.includes('--apply');
+for (const [k, v] of Object.entries({ SITE_URL: cfg.site, NVR_USER: cfg.user, NVR_PASS: cfg.pass, ...(cmd === 'probe' ? {} : { LPR_BRIDGE_KEY: cfg.key }) })) {
+  if (!v) { console.error(`missing ${k} in .env`); process.exit(1); }
+}
+if (cmd === 'probe') await probe();
+else if (cmd === 'once') {
+  try { const r = await sync(apply); if (apply) await report(r); } catch (e) { log('ERROR', e.message); if (apply) await report({ ok: false, error: e.message }); process.exitCode = 1; }
+} else if (cmd === 'run') {
+  for (;;) {
+    try { const r = await sync(apply); if (apply) await report(r); } catch (e) { log('ERROR', e.message); if (apply) await report({ ok: false, error: e.message }); }
+    await new Promise((r) => setTimeout(r, cfg.poll * 1000));
+  }
+} else { console.error('usage: node bridge.mjs probe | once [--apply] | run --apply'); process.exit(1); }
