@@ -314,6 +314,17 @@ export async function setLateGraceHour(_: ActionResult, f: FormData): Promise<Ac
   return run('admin_set_late_grace_hour', { p_hour: num(f, 'hour') }, 'บันทึกเวลาแล้ว', ['/admin/settings', '/ops', '/ops/lot']);
 }
 
+/** Close the lot to new bookings for a range of dates (e.g. no one on site). Does not touch existing confirmed bookings. */
+export async function setBlackout(_: ActionResult, f: FormData): Promise<ActionResult> {
+  const start = str(f, 'start'), end = str(f, 'end') || start;
+  return run('admin_set_blackout', { p_start: start, p_end: end, p_note: str(f, 'note') || null },
+    start === end ? `ปิดลานวันที่ ${thDate(start)} แล้ว` : `ปิดลานวันที่ ${thDate(start)}–${thDate(end)} แล้ว`,
+    ['/admin/settings']);
+}
+export async function clearBlackout(_: ActionResult, f: FormData): Promise<ActionResult> {
+  return run('admin_clear_blackout', { p_day: str(f, 'day') }, 'เปิดให้จองวันนี้แล้ว', ['/admin/settings']);
+}
+
 /** Guard marks a car as found in the lot: sends the "your car is safe" card (once per booking per day). */
 export async function markCarFound(bookingId: string): Promise<{ result?: SafeResult; error?: string }> {
   let actor: string;

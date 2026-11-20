@@ -2,6 +2,7 @@ import { db } from '@/lib/supabase';
 import { ActionForm, Submit } from '@/components/ActionForm';
 import { setContact, setDispatch, setExitMinutes, setGroupMax, setLateGraceHour, setMemberDiscount, setMemberDiscountRules, setPointsSettings, updateSettings } from '../actions';
 import { Vehicles } from './Vehicles';
+import { Blackout } from './Blackout';
 import { TvLink } from './TvLink';
 import { NotePresets } from './NotePresets';
 import { LineReplies, type LineReply } from './LineReplies';
@@ -66,6 +67,7 @@ export default async function SettingsPage() {
           <div className="form-actions span2"><Submit>บันทึกเวลาผ่อนผัน</Submit></div>
         </ActionForm>
       </section>
+      <Blackout />
     <section className="panel" id="points">
       <h2>กติกาแต้มสะสม</h2>
       <p className="hint">แต้มได้เมื่อชำระเงินสำเร็จ คิดจากยอดที่จ่ายจริง · ลูกค้าเอาแต้มไปแลกคูปองจากรายการของรางวัล · แต้มเก่าถูกใช้ก่อน</p>

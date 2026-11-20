@@ -16,7 +16,7 @@ function daysBetween(a: string, b: string) {
   return Math.round((Date.parse(b) - Date.parse(a)) / 864e5) + 1;
 }
 
-type Avail = { day: string; used: number; cap: number; available: boolean };
+type Avail = { day: string; used: number; cap: number; available: boolean; closed?: boolean };
 
 
 const r_waste = (value: number, payable: number) => value > payable;
@@ -321,7 +321,7 @@ export default function BookPage() {
             <div><label htmlFor="start">{t('วันเข้าจอด')}</label><input id="start" type="date" min={today} value={f.start} onChange={(e) => changeDates(e.target.value, f.end)} required /></div>
             <div><label htmlFor="end">{t('วันรับรถคืน')}</label><input id="end" type="date" min={f.start} value={f.end} onChange={(e) => changeDates(f.start, e.target.value)} required /></div>
           </div>
-          {full && <div className="alert bad">{cars > 1 && full.available ? t('วันที่ {d} ที่ว่างเหลือไม่พอสำหรับ {n} คัน', { d: thDay(full.day), n: cars }) : t('วันที่ {d} ที่จอดเต็มแล้ว ลองเลือกวันอื่น', { d: thDay(full.day) })}</div>}
+          {full && <div className="alert bad">{full.closed ? t('ลานปิดให้บริการวันที่ {d} กรุณาเลือกวันอื่น', { d: thDay(full.day) }) : cars > 1 && full.available ? t('วันที่ {d} ที่ว่างเหลือไม่พอสำหรับ {n} คัน', { d: thDay(full.day), n: cars }) : t('วันที่ {d} ที่จอดเต็มแล้ว ลองเลือกวันอื่น', { d: thDay(full.day) })}</div>}
           {!full && minLeft != null && (minLeft < 10
             ? <div className="alert warn">{t('เหลือที่ว่างน้อยกว่า 10 ช่อง สำหรับช่วงวันที่เลือก')}</div>
             : <div className="alert ok">{t('เหลือ {n} ช่อง สำหรับช่วงวันที่เลือก', { n: minLeft })}</div>)}
