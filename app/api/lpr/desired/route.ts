@@ -8,7 +8,7 @@ export const dynamic = 'force-dynamic';
 export async function GET(req: Request) {
   if (!bridgeAuthorized(req)) return json({ error: 'unauthorized' }, 401);
   try {
-    return json({ snapshot_at: new Date().toISOString(), plates: await lprDesired() });
+    return json({ snapshot_at: new Date().toISOString(), ...(await lprDesired()) });
   } catch (e) {
     console.error('lpr desired', e);
     return json({ error: 'failed' }, 500);
