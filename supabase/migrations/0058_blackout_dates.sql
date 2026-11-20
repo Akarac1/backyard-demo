@@ -10,17 +10,28 @@
 
 create table if not exists blackout_dates (
   day        date not null,
-  start_time time,  -- null = ปิดทั้งวัน; ถ้าไม่ null ต้องมี end_time ด้วย (ปิดเฉพาะช่วงเวลานี้)
-  end_time   time,
   note       text,
   created_by uuid references staff_users(id),
-  created_at timestamptz not null default now(),
-  constraint blackout_dates_time_pair check ((start_time is null) = (end_time is null)),
-  constraint blackout_dates_time_order check (start_time is null or end_time > start_time)
+  created_at timestamptz not null default now()
 );
--- ปิดวันเดียวกันซ้ำ (เรียก admin_set_blackout ครั้งใหม่) จะอัปเดตแถวเดิมแทนการเพิ่มช่วงเวลาที่ 2 ของวันนั้น
+-- เผื่อรันซ้ำ/ตารางนี้ถูกสร้างไปแล้วจาก migration รอบก่อน (ยังไม่มีคอลัมน์เวลา) — เพิ่มให้ครบ
+alter table blackout_dates add column if not exists start_time time;  -- null = ปิดทั้งวัน; ถ้าไม่ null ต้องมี end_time ด้วย (ปิดเฉพาะช่วงเวลานี้)
+alter table blackout_dates add column if not exists end_time   time;
+
 do $$ begin
-  if not exists (select 1 from pg_constraint where conname = 'blackout_dates_day_key') then
+  if not exists (select 1 from pg_constraint where conname = 'blackout_dates_time_pair') then
+    alter table blackout_dates add constraint blackout_dates_time_pair check ((start_time is null) = (end_time is null));
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'blackout_dates_time_order') then
+    alter table blackout_dates add constraint blackout_dates_time_order check (start_time is null or end_time > start_time);
+  end if;
+end $$;
+-- ปิดวันเดียวกันซ้ำ (เรียก admin_set_blackout ครั้งใหม่) จะอัปเดตแถวเดิมแทนการเพิ่มช่วงเวลาที่ 2 ของวันนั้น
+-- (ตารางที่สร้างจาก migration รอบก่อนมี day เป็น primary key อยู่แล้ว ซึ่งรับประกันความ unique นี้ไว้แล้ว)
+do $$ begin
+  if not exists (
+    select 1 from pg_constraint where conrelid = 'blackout_dates'::regclass and contype in ('p', 'u')
+  ) then
     alter table blackout_dates add constraint blackout_dates_day_key unique (day);
   end if;
 end $$;
