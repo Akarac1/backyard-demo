@@ -29,6 +29,10 @@ export const baht = (n: number) => `${n.toLocaleString('th-TH')} บาท`;
 export function dbErrorToThai(msg: string, lang: Lang = 'th'): string {
   if (msg.startsWith('full:')) return tr(lang, 'วันที่ {d} ที่จอดเต็มแล้ว ลองเลือกวันอื่น', { d: dayIn(lang, msg.slice(5)) });
   if (msg.startsWith('full_after_hold_expired:')) return tr(lang, 'หมดเวลากันที่ และวันที่ {d} เต็มแล้ว แอดมินจะติดต่อกลับ', { d: dayIn(lang, msg.split(':')[1]) });
+  if (msg.startsWith('closed_time:')) {
+    const [, day, range] = msg.split(':');
+    return tr(lang, 'ลานปิดให้บริการวันที่ {d} ช่วงเวลา {r} น. กรุณาเลือกเวลาอื่น', { d: dayIn(lang, day), r: range });
+  }
   const map: Record<string, string> = {
     start_date_in_past: 'วันเข้าจอดต้องไม่ใช่วันที่ผ่านมาแล้ว',
     invalid_range: 'วันรับรถคืนต้องไม่ก่อนวันเข้าจอด',
