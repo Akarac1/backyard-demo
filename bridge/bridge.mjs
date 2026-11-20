@@ -110,9 +110,14 @@ async function sync(apply) {
   const want = new Map(plates.map((p) => [p.plate, p]));
   const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Bangkok' });
 
-  const add = [], upd = [], del = [], skipped = [];
+  const add = [], upd = [], del = [], skipped = [], problems = [];
   for (const p of plates) {
-    if (others.has(p.plate)) { skipped.push(p.plate); continue; } // a row the team made: never touch it
+    if (others.has(p.plate)) { // a row the team made: never touch it, but say so if it does not cover the booking
+      skipped.push(p.plate);
+      const t = others.get(p.plate);
+      if (norm(t.begin) > p.from || norm(t.end) < p.to) problems.push({ plate: p.plate, code: p.owner.split(' ')[0].replace(/^BY-/, ''), why: `แถวของทีมใน NVR (${norm(t.begin)} ถึง ${norm(t.end)}) ไม่ครอบคลุมการจอง ${p.from} ถึง ${p.to} ระบบไม่แก้แถวของทีม ให้แก้ใน NVR เอง` });
+      continue;
+    }
     const cur = have.get(p.plate);
     if (!cur) add.push(p);
     else if (cur.owner !== p.owner || norm(cur.begin) !== p.from || norm(cur.end) !== p.to) upd.push([cur, p]);
@@ -127,10 +132,12 @@ async function sync(apply) {
   for (const p of add) log(' + add', p.plate, p.from, '->', p.to, p.owner);
   for (const [, p] of upd) log(' ~ update', p.plate, p.from, '->', p.to);
   for (const r of del) log(' - remove', r.plate, r.begin, '->', r.end);
-  for (const s of skipped) log(' ! skip (team-managed row exists)', s);
-  for (const i of invalid) log(' ? not a Thai plate, not sent to the NVR: booking', i.code, JSON.stringify(i.plate));
+  if (process.env.VERBOSE) for (const s of skipped) log(' ! skip (team-managed row exists)', s);
+  else if (skipped.length) log(` (${skipped.length} plates already in the NVR from the team are left alone; set VERBOSE=1 to list them)`);
+  for (const x of problems) log(' ! needs a person:', x.plate, x.why);
+  for (const i of invalid) { log(' ? not a Thai plate, not sent to the NVR: booking', i.code, JSON.stringify(i.plate)); problems.push({ plate: i.plate, code: i.code, why: 'ทะเบียนไม่ใช่รูปแบบป้ายไทย ไม่ได้ส่งเข้า NVR ให้แก้ทะเบียนของการจองในหน้าการจอง' }); }
 
-  if (!apply) { log('dry run: nothing changed. Add --apply to do it.'); return { ok: true, summary, snapshot_at, dry: true }; }
+  if (!apply) { log('dry run: nothing changed. Add --apply to do it.'); return { ok: true, summary, snapshot_at, problems, dry: true }; }
   if (add.length + upd.length + del.length > cfg.maxChanges) throw new Error(`too many changes (${add.length + upd.length + del.length} > MAX_CHANGES=${cfg.maxChanges}); raise MAX_CHANGES in .env after checking the plan`);
   if (del.length > cfg.maxDeletes) throw new Error(`too many removals (${del.length} > MAX_DELETES=${cfg.maxDeletes}); check the plan, then raise MAX_DELETES`);
   const errors = [];
@@ -139,7 +146,7 @@ async function sync(apply) {
   for (const [cur, p] of upd) await step(() => nvr.update(cur.recno, p));
   for (const r of del) await step(() => nvr.remove(r.recno, r.plate));
   if (errors.length) throw new Error(errors.slice(0, 3).join(' | '));
-  return { ok: true, summary, snapshot_at };
+  return { ok: true, summary, snapshot_at, problems };
 }
 
 async function report(body) {

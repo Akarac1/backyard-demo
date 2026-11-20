@@ -39,6 +39,10 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
     sb0().from('bookings').select('id', { count: 'exact', head: true }).eq('status', 'confirmed').lt('start_date', today),
     sb0().from('bookings').select('id', { count: 'exact', head: true }).eq('status', 'checked_in').lt('end_date', today),
   ]);
+  const { data: bridge } = await sb.from('lpr_bridge_status').select('last_seen, last_ok, last_error, last_summary').eq('id', 1).maybeSingle();
+  const lprProblems = ((bridge?.last_summary as { problems?: { plate: string; code: string; why: string }[] } | null)?.problems ?? []);
+  const bridgeLate = !!bridge?.last_seen && Date.now() - Date.parse(bridge.last_seen) > 15 * 60000;
+  const bridgeBad = !!bridge?.last_seen && (bridge.last_ok === false || bridgeLate);
   const { data: dens } = await sb.rpc('lot_density', { p_from: df, p_to: dt });
   const density = ((dens ?? []) as DensityRow[]);
   const [occ, arrivals, departures, inLot, slips, lpr, trips, owed, notes, calls] = await Promise.all([
@@ -70,7 +74,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
     const { data } = await sb.storage.from('slips').createSignedUrl(p.slip_path!, 3600);
     if (data) slipLinks[p.id] = data.signedUrl;
   }
-  const todo = (slips.data?.length ?? 0) + (lpr.data?.length ?? 0) + unassigned.length + (owed.data?.length ?? 0) + (notes.data?.length ?? 0) + (calls.data?.length ?? 0);
+  const todo = (slips.data?.length ?? 0) + (lpr.data?.length ?? 0) + lprProblems.length + (bridgeBad ? 1 : 0) + unassigned.length + (owed.data?.length ?? 0) + (notes.data?.length ?? 0) + (calls.data?.length ?? 0);
   const d = new Date(today + 'T00:00:00Z');
 
   return (
@@ -167,6 +171,18 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
               <span className={`todo-kind ${r.action === 'add' ? 'k-add' : 'k-del'}`}>{r.action === 'add' ? 'เพิ่มทะเบียน' : 'ลบทะเบียน'}</span>
               <div className="todo-main"><b>{r.plate}</b> {r.plate_province}<small>ระบบไม้กั้น · {r.valid_from && thDate(r.valid_from)} – {r.valid_to && thDate(r.valid_to)}</small></div>
               <div className="todo-act"><Act action={lprDone} fields={{ id: r.id }} label="ทำแล้ว" /></div>
+            </li>
+          ))}
+          {bridgeBad && (
+            <li key="lprbridge">
+              <span className="todo-kind k-del">ตัวกลางป้าย</span>
+              <div className="todo-main"><b>{bridgeLate ? 'ตัวกลางไม่ส่งสัญญาณเกิน 15 นาที' : 'ตัวกลางป้ายทะเบียนทำงานล้มเหลว'}</b><small>{bridgeLate ? 'เช็กว่าคอมในลานเปิดอยู่และโปรแกรมยังทำงาน' : bridge?.last_error} · ป้ายใหม่ยังไม่เข้า NVR</small></div>
+            </li>
+          )}
+          {lprProblems.map((x) => (
+            <li key={`lp${x.plate}${x.code}`}>
+              <span className="todo-kind k-del">ตรวจทะเบียน</span>
+              <div className="todo-main"><b>{x.plate}</b> {x.code && `· ${x.code}`}<small>{x.why}</small></div>
             </li>
           ))}
           {unassigned.map((t) => (
