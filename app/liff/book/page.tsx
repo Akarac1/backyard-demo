@@ -118,8 +118,20 @@ export default function BookPage() {
   const full = useMemo(() => avail?.find((a) => !a.available || a.cap - a.used < cars), [avail, cars]);
   const minLeft = useMemo(() => (avail?.length ? Math.min(...avail.map((a) => a.cap - a.used)) : null), [avail]);
   // วันไหนในช่วงที่เลือก ปิดเฉพาะบางช่วงเวลา (ไม่ได้ปิดทั้งวัน) — เตือนไว้ก่อนเลือกเวลารถรับส่ง ไม่ใช่รอให้ชนตอนกดยืนยัน
-  const timeWindows = useMemo(() => (avail ?? []).filter((a) => a.closed_start), [avail]);
+  // วันติดกันที่ปิดช่วงเวลาเดียวกัน รวมเป็นข้อความเดียว (เช่น "6-7 ธ.ค. ช่วง 06:00-20:00") แทนที่จะพูดซ้ำทีละวัน
   const hm = (t?: string | null) => (t ? t.slice(0, 5) : '');
+  const timeWindows = useMemo(() => {
+    const rows = (avail ?? []).filter((a) => a.closed_start);
+    const out: { from: string; to: string; a: string; b: string }[] = [];
+    for (const r of rows) {
+      const last = out[out.length - 1];
+      const nextDay = last && new Date(Date.parse(last.to) + 864e5).toISOString().slice(0, 10);
+      const a = hm(r.closed_start), b = hm(r.closed_end);
+      if (last && last.a === a && last.b === b && nextDay === r.day) last.to = r.day;
+      else out.push({ from: r.day, to: r.day, a, b });
+    }
+    return out;
+  }, [avail]);
 
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setF({ ...f, [k]: e.target.value });
@@ -330,7 +342,10 @@ export default function BookPage() {
             : <div className="alert ok">{t('เหลือ {n} ช่อง สำหรับช่วงวันที่เลือก', { n: minLeft })}</div>)}
           {timeWindows.length > 0 && (
             <div className="alert warn">
-              {timeWindows.map((w) => t('วันที่ {d} ลานปิดให้บริการช่วง {a}–{b} น. — ถ้าใช้รถรับส่ง เลี่ยงเลือกเวลาในช่วงนี้', { d: thDay(w.day), a: hm(w.closed_start), b: hm(w.closed_end) })).join(' · ')}
+              {timeWindows.map((w) => {
+                const d = w.from === w.to ? t('วันที่ {d}', { d: thDay(w.from) }) : t('วันที่ {f}–{t2}', { f: thDay(w.from), t2: thDay(w.to) });
+                return t('{d} ลานปิดให้บริการช่วง {a}–{b} น. — ถ้าใช้รถรับส่ง เลี่ยงเลือกเวลาในช่วงนี้', { d, a: w.a, b: w.b });
+              }).join(' · ')}
             </div>
           )}
         </div>
