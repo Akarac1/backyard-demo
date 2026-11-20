@@ -67,6 +67,8 @@ export async function Blackout() {
           <label>วันที่ปิด (เริ่ม)<input name="start" type="date" min={today} required /></label>
           <label>ถึงวันที่<input name="end" type="date" min={today} /><small>ไม่กรอก = ปิดวันเดียว</small></label>
           <label className="span2">หมายเหตุ (เห็นเฉพาะทีมงาน)<input name="note" placeholder="เช่น ปีใหม่ ไม่มีคนเฝ้าลาน" maxLength={120} /></label>
+          <p className="small span2" style={{ margin: 0 }}>ระบบเช็กก่อนว่าช่วงนี้มีการจอง/รถรับส่งนัดไว้แล้วหรือไม่ ถ้ามีจะแจ้งจำนวนก่อน ยังไม่ปิดจนกว่าจะติ๊กยืนยันด้านล่าง</p>
+          <label className="check span2"><input type="checkbox" name="force" value="1" /> ปิดแม้มีลูกค้าจองอยู่ (ฉันตรวจสอบแล้ว จะติดต่อลูกค้าเอง)</label>
           <div className="form-actions span2"><Submit>ปิดลานวันนี้</Submit></div>
         </ActionForm>
       </details>

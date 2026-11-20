@@ -314,12 +314,28 @@ export async function setLateGraceHour(_: ActionResult, f: FormData): Promise<Ac
   return run('admin_set_late_grace_hour', { p_hour: num(f, 'hour') }, 'บันทึกเวลาแล้ว', ['/admin/settings', '/ops', '/ops/lot']);
 }
 
-/** Close the lot to new bookings for a range of dates (e.g. no one on site). Does not touch existing confirmed bookings. */
+/** Close the lot to new bookings for a range of dates (e.g. no one on site). Does not touch existing confirmed bookings.
+ *  If bookings/shuttle trips already exist in that range and the "force" box isn't ticked, the DB blocks it and
+ *  reports the counts so the admin can decide — tick the box in the same form to close anyway. */
 export async function setBlackout(_: ActionResult, f: FormData): Promise<ActionResult> {
+  let actor: string;
+  try { actor = (await staffForAction(['admin'])).uid; } catch { return { error: ERR.not_allowed }; }
   const start = str(f, 'start'), end = str(f, 'end') || start;
-  return run('admin_set_blackout', { p_start: start, p_end: end, p_note: str(f, 'note') || null },
-    start === end ? `ปิดลานวันที่ ${thDate(start)} แล้ว` : `ปิดลานวันที่ ${thDate(start)}–${thDate(end)} แล้ว`,
-    ['/admin/settings']);
+  const force = str(f, 'force') === '1';
+  const { data, error } = await db().rpc('admin_set_blackout', { p_actor: actor, p_start: start, p_end: end, p_note: str(f, 'note') || null, p_force: force });
+  if (error) {
+    if (error.message.startsWith('has_bookings:')) {
+      const [, n, m] = error.message.split(':');
+      return { error: `ช่วงนี้มีการจองที่ยืนยัน/เข้าลานอยู่แล้ว ${n} รายการ (มีรถรับส่งที่นัดไว้ ${m} เที่ยว) ปิดลานไม่ยกเลิกการจองเดิมให้ — ถ้าตรวจสอบแล้วจะปิดต่อ ให้ติ๊ก “ปิดแม้มีลูกค้าจองอยู่” ด้านล่างแล้วกดปิดอีกครั้ง` };
+    }
+    if (!ERR[error.message]) console.error('setBlackout', error.message);
+    return { error: thai(error.message) };
+  }
+  revalidatePath('/admin/settings');
+  const row = (Array.isArray(data) ? data[0] : data) as { bookings: number; shuttle_trips: number } | undefined;
+  const warn = row && (row.bookings > 0 || row.shuttle_trips > 0)
+    ? ` (มีการจองเดิมอยู่ ${row.bookings} รายการ รถรับส่ง ${row.shuttle_trips} เที่ยว ระบบไม่ยกเลิกให้ ตรวจสอบและติดต่อลูกค้าเอง)` : '';
+  return { ok: (start === end ? `ปิดลานวันที่ ${thDate(start)} แล้ว` : `ปิดลานวันที่ ${thDate(start)}–${thDate(end)} แล้ว`) + warn };
 }
 export async function clearBlackout(_: ActionResult, f: FormData): Promise<ActionResult> {
   return run('admin_clear_blackout', { p_day: str(f, 'day') }, 'เปิดให้จองวันนี้แล้ว', ['/admin/settings']);
