@@ -102,6 +102,7 @@ async function site(path, init) {
 const norm = (t) => (t ?? '').slice(0, 10); // "2026-11-20 00:00:00" -> "2026-11-20"
 async function sync(apply) {
   const { snapshot_at, plates, invalid = [] } = await site('/api/lpr/desired');
+  for (const p of plates) while (Buffer.byteLength(p.owner) > 15) p.owner = p.owner.slice(0, -1); // the NVR API rejects an Owner over 15 bytes
   const rows = await nvr.list();
   const mine = rows.filter((r) => r.owner.startsWith(TAG));
   const others = new Map(rows.filter((r) => !r.owner.startsWith(TAG)).map((r) => [r.plate, r]));
@@ -194,12 +195,28 @@ async function sample() {
   log('HTTP', r.status); console.log(out.join('\n'));
 }
 
+// Which Owner texts does the NVR accept? Tries several on ONE throw-away plate and removes it each time.
+async function ownertest() {
+  const base = { plate: 'ทดสอบ9998', from: new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Bangkok' }), to: '2030-01-01' };
+  const find = async () => (await nvr.list()).filter((r) => r.plate === base.plate);
+  const until = async (ok) => { let r; for (let i = 0; i < 15; i++) { r = await find(); if (ok(r)) return r; await new Promise((x) => setTimeout(x, 1000)); } return r; };
+  const cands = ['BY-AAAAAA 1234', 'BY-AAAAAA 12345', 'BY-AAAAAA 123456', 'BY-AAAAAA 1234567', 'BY-AAAAAA 12345678', 'BY-AAAAAA 123456789', 'BY-AAAAAA ก', 'BY-AAAAAA กข'];
+  for (const owner of cands) {
+    try { await nvr.insert({ ...base, owner }); log('OK     ', JSON.stringify(owner), `(${[...owner].length} chars, ${Buffer.byteLength(owner)} bytes)`); }
+    catch (e) { log('FAILED ', JSON.stringify(owner), `(${[...owner].length} chars, ${Buffer.byteLength(owner)} bytes)`, e.message.split('\n')[0]); continue; }
+    for (const r of await until((x) => x.length > 0)) await nvr.remove(r.recno, base.plate);
+    await until((x) => x.length === 0);
+  }
+  log('done; if a row for ทดสอบ9998 is left in the NVR, delete it by hand');
+}
+
 const [cmd = 'once', ...flags] = process.argv.slice(2);
 const apply = flags.includes('--apply');
 for (const [k, v] of Object.entries({ SITE_URL: cfg.site, NVR_USER: cfg.user, NVR_PASS: cfg.pass, ...(cmd === 'probe' ? {} : { LPR_BRIDGE_KEY: cfg.key }) })) {
   if (!v) { console.error(`missing ${k} in .env`); process.exit(1); }
 }
 if (cmd === 'probe') await probe();
+else if (cmd === 'ownertest') { try { await ownertest(); } catch (e) { log('ERROR', e.message); process.exitCode = 1; } }
 else if (cmd === 'sample') await sample();
 else if (cmd === 'selftest') { try { await selftest(); } catch (e) { log('ERROR', e.message); process.exitCode = 1; } }
 else if (cmd === 'once') {
@@ -209,4 +226,4 @@ else if (cmd === 'once') {
     try { const r = await sync(apply); if (apply) await report(r); } catch (e) { log('ERROR', e.message); if (apply) await report({ ok: false, error: e.message }); }
     await new Promise((r) => setTimeout(r, cfg.poll * 1000));
   }
-} else { console.error('usage: node bridge.mjs probe | selftest | once [--apply] | run --apply'); process.exit(1); }
+} else { console.error('usage: node bridge.mjs probe | selftest | ownertest | once [--apply] | run --apply'); process.exit(1); }

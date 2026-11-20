@@ -8,8 +8,14 @@ export type LprInvalid = { code: string; plate: string };
 const THAI_PLATE = /^[0-9]?[ก-ฮ]{1,3}[0-9]{1,4}$/;
 /** Customers sometimes type two plates in one field ("1กข123 / 2ขค456"): one NVR row per plate. */
 const splitPlates = (raw: string) => raw.split(/[\/,;&]|\s+และ\s+/).map((p) => p.replace(/[\s-]+/g, '').toUpperCase()).filter(Boolean);
-/** Thai letters, Latin letters, digits and a few marks only: no emoji or control characters in the owner field. */
-const cleanOwner = (t: string) => t.replace(/[^\u0E00-\u0E7Fa-zA-Z0-9 ().+\-/]/g, '').replace(/\s+/g, ' ').trim();
+/** The NVR API refuses an Owner longer than 15 bytes (16 fails). Ours is ASCII only: BY-<code>[+n] <last 4 phone digits>. */
+const OWNER_MAX_BYTES = 15;
+const ownerText = (codes: string[], phone: string) => {
+  const base = `BY-${codes[0]}${codes.length > 1 ? `+${codes.length - 1}` : ''}`;
+  const last4 = phone.replace(/\D/g, '').slice(-4);
+  const full = last4 ? `${base} ${last4}` : base;
+  return Buffer.byteLength(full) <= OWNER_MAX_BYTES ? full : base.slice(0, OWNER_MAX_BYTES);
+};
 
 const bkkToday = () => new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Bangkok' });
 const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) + n * 86400000).toISOString().slice(0, 10);
@@ -18,7 +24,7 @@ const addDays = (d: string, n: number) => new Date(Date.parse(`${d}T00:00:00Z`) 
  * The plates the NVR allow list should hold right now: every confirmed / checked-in booking that has not ended yet,
  * one row per plate. A plate with several bookings gets ONE row covering all of them, because the NVR overwrites
  * a duplicate plate instead of extending it. A late-return grace day (bookings.late_grace) extends the end.
- * Rows are tagged "BY-<code> <name> <phone>" so the bridge only ever touches rows this system made.
+ * Rows are tagged "BY-<code> <last 4 of phone>" (15 bytes max) so the bridge only ever touches rows this system made.
  */
 export async function lprDesired(): Promise<{ plates: LprDesired[]; invalid: LprInvalid[] }> {
   const today = bkkToday();
@@ -37,7 +43,7 @@ export async function lprDesired(): Promise<{ plates: LprDesired[]; invalid: Lpr
     for (const plate of splitPlates(b.plate)) {
       if (!THAI_PLATE.test(plate)) { invalid.push({ code: b.code, plate }); continue; }
       const cur = byPlate.get(plate);
-      if (!cur) byPlate.set(plate, { from: b.start_date, to, codes: [b.code], name: cleanOwner(b.customers?.name ?? ''), phone: cleanOwner(b.customers?.phone ?? '') });
+      if (!cur) byPlate.set(plate, { from: b.start_date, to, codes: [b.code], name: '', phone: b.customers?.phone ?? '' });
       else {
         if (b.start_date < cur.from) cur.from = b.start_date;
         if (to > cur.to) cur.to = to;
@@ -47,7 +53,7 @@ export async function lprDesired(): Promise<{ plates: LprDesired[]; invalid: Lpr
   }
   const plates = [...byPlate.entries()].map(([plate, v]) => ({
     plate,
-    owner: `BY-${v.codes[0]}${v.codes.length > 1 ? `+${v.codes.length - 1}` : ''} ${v.name} ${v.phone}`.trim().slice(0, 60),
+    owner: ownerText(v.codes, v.phone),
     from: v.from,
     to: v.to,
   }));
