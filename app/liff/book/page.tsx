@@ -16,7 +16,7 @@ function daysBetween(a: string, b: string) {
   return Math.round((Date.parse(b) - Date.parse(a)) / 864e5) + 1;
 }
 
-type Avail = { day: string; used: number; cap: number; available: boolean; closed?: boolean };
+type Avail = { day: string; used: number; cap: number; available: boolean; closed?: boolean; closed_start?: string | null; closed_end?: string | null };
 
 
 const r_waste = (value: number, payable: number) => value > payable;
@@ -117,6 +117,9 @@ export default function BookPage() {
 
   const full = useMemo(() => avail?.find((a) => !a.available || a.cap - a.used < cars), [avail, cars]);
   const minLeft = useMemo(() => (avail?.length ? Math.min(...avail.map((a) => a.cap - a.used)) : null), [avail]);
+  // วันไหนในช่วงที่เลือก ปิดเฉพาะบางช่วงเวลา (ไม่ได้ปิดทั้งวัน) — เตือนไว้ก่อนเลือกเวลารถรับส่ง ไม่ใช่รอให้ชนตอนกดยืนยัน
+  const timeWindows = useMemo(() => (avail ?? []).filter((a) => a.closed_start), [avail]);
+  const hm = (t?: string | null) => (t ? t.slice(0, 5) : '');
 
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
     setF({ ...f, [k]: e.target.value });
@@ -325,6 +328,11 @@ export default function BookPage() {
           {!full && minLeft != null && (minLeft < 10
             ? <div className="alert warn">{t('เหลือที่ว่างน้อยกว่า 10 ช่อง สำหรับช่วงวันที่เลือก')}</div>
             : <div className="alert ok">{t('เหลือ {n} ช่อง สำหรับช่วงวันที่เลือก', { n: minLeft })}</div>)}
+          {timeWindows.length > 0 && (
+            <div className="alert warn">
+              {timeWindows.map((w) => t('วันที่ {d} ลานปิดให้บริการช่วง {a}–{b} น. — ถ้าใช้รถรับส่ง เลี่ยงเลือกเวลาในช่วงนี้', { d: thDay(w.day), a: hm(w.closed_start), b: hm(w.closed_end) })).join(' · ')}
+            </div>
+          )}
         </div>
 
         <div className="card">
