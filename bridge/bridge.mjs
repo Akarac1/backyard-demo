@@ -217,20 +217,34 @@ async function events(minutes) {
   const end = new Date();
   const start = new Date(end.getTime() - minutes * 60000);
   const fmt = (d) => d.toLocaleString('sv-SE', { timeZone: 'Asia/Bangkok' }).replace(',', '');
-  const candidates = ['TrafficCar', 'ITSPlateResult', 'TrafficSnapshot', 'TrafficJunction', 'ANPR'];
-  log(`looking for pass-by records between ${fmt(start)} and ${fmt(end)} ...`);
+  const candidates = ['TrafficCar', 'ITSPlateResult', 'TrafficSnapshot', 'TrafficJunction', 'ANPR', 'TrafficInfo', 'ITSCapture', 'Hybrid_TrafficJunction'];
+
+  // Step 1: which table names even exist on this NVR? Same bare query style as the
+  // allow-list lookup that already works (no time filter yet) — a 400 here means the
+  // name itself is wrong, not that the time filter is the problem.
+  log('step 1: which record table names exist on this NVR (no time filter yet) ...');
+  const ok = [];
   for (const name of candidates) {
+    const r = await nvrFetch(`/cgi-bin/recordFinder.cgi?${q({ action: 'find', name, count: 5 })}`);
+    const t = await r.text();
+    console.log(`\n# name=${name}\nHTTP ${r.status}\n${t.split(/\r?\n/).slice(0, 15).join('\n')}`);
+    if (r.status === 200 && !/error/i.test(t)) { ok.push(name); log(`-> "${name}" looks valid`); }
+  }
+  if (ok.length === 0) {
+    log('none of the usual table names worked at all — send me the output above and I will look for other ones for this NVR model.');
+    return;
+  }
+
+  // Step 2: now try a time filter on whichever table name(s) actually worked.
+  log(`step 2: trying a time filter on: ${ok.join(', ')} ...`);
+  for (const name of ok) {
     const r = await nvrFetch(`/cgi-bin/recordFinder.cgi?${q({
       action: 'find', name, count: 20,
-      'condition.Channel': 0,
       'condition.StartTime': fmt(start),
       'condition.EndTime': fmt(end),
     })}`);
     const t = await r.text();
-    const lines = t.split(/\r?\n/).slice(0, 30);
-    console.log(`\n# name=${name}\nHTTP ${r.status}\n${lines.join('\n')}`);
-    if (r.status === 200 && /records\[\d+\]\./.test(t)) log(`-> "${name}" has records[] rows — likely the right table name`);
-    else if (r.status === 200 && /^found=0/m.test(t)) log(`-> "${name}" exists but found 0 rows in this time window (table name may still be right)`);
+    console.log(`\n# name=${name} + time filter (${fmt(start)} .. ${fmt(end)})\nHTTP ${r.status}\n${t.split(/\r?\n/).slice(0, 30).join('\n')}`);
   }
   log('send me the output above (it has no password in it) and I will build the real matching feature from whichever table name actually works.');
 }
