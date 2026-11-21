@@ -209,66 +209,45 @@ async function sample() {
   log('HTTP', r.status); console.log(out.join('\n'));
 }
 
-// Diagnostic, read-only: look for the NVR's actual ANPR pass-by log (every car the camera
+// Diagnostic, read-only: look for the real ANPR pass-by log (every car the camera actually
 // recognized, not just the allow-list) so we can later check bookings against real arrivals.
-// Dahua NVRs usually keep this under a different record table than the allow list — tries
-// the common names and dumps what each returns so we can see which one is real on this NVR.
+// This NVR (DHI-NVR5216-EI) has no ITC/ANPR license — confirmed by an earlier run of this
+// command — so the pass-by log, if it exists anywhere, is on the plate-reading CAMERAS
+// (CAM_IN_URL / CAM_OUT_URL) themselves, not the NVR. Tries both cameras plus the NVR.
 async function events(minutes) {
   const end = new Date();
   const start = new Date(end.getTime() - minutes * 60000);
   const fmt = (d) => d.toLocaleString('sv-SE', { timeZone: 'Asia/Bangkok' }).replace(',', '');
   const candidates = ['TrafficCar', 'ITSPlateResult', 'TrafficSnapshot', 'TrafficJunction', 'ANPR', 'TrafficInfo', 'ITSCapture', 'Hybrid_TrafficJunction'];
+  const devices = [
+    { label: 'NVR', dev: { base: cfg.nvr, user: cfg.user, pass: cfg.pass } },
+    { label: 'IN camera', dev: { base: cfg.camIn, user: cfg.camUser, pass: cfg.camPass } },
+    { label: 'OUT camera', dev: { base: cfg.camOut, user: cfg.camUser, pass: cfg.camPass } },
+  ];
 
-  // Sanity check first: the SAME query shape against the table we already know works
-  // (the allow list). If this one also fails, the problem is the query shape, not the name.
-  const sane = await nvrFetch(`/cgi-bin/recordFinder.cgi?${q({ action: 'find', name: cfg.list, count: 5 })}`);
-  const saneText = await sane.text();
-  console.log(`\n# sanity check: name=${cfg.list} (known-good table, allow list)\nHTTP ${sane.status}\n${saneText.split(/\r?\n/).slice(0, 10).join('\n')}`);
-  if (sane.status !== 200 || /error/i.test(saneText)) {
-    log('even the known-good table failed with the same query shape — the problem is NOT the table name, something else about this query is wrong on this NVR. Send me the output above.');
-    return;
-  }
-  log('sanity check passed (the known-good table still works this way) — so if the candidates below all 400, those table names genuinely do not exist on this NVR.');
-
-  // Step 1: which table names even exist on this NVR? Same bare query style as the
-  // allow-list lookup that already works (no time filter yet) — a 400 here means the
-  // name itself is wrong, not that the time filter is the problem.
-  log('step 1: which record table names exist on this NVR (no time filter yet) ...');
-  const ok = [];
-  for (const name of candidates) {
-    const r = await nvrFetch(`/cgi-bin/recordFinder.cgi?${q({ action: 'find', name, count: 5 })}`);
-    const t = await r.text();
-    console.log(`\n# name=${name}\nHTTP ${r.status}\n${t.split(/\r?\n/).slice(0, 15).join('\n')}`);
-    if (r.status === 200 && !/error/i.test(t)) { ok.push(name); log(`-> "${name}" looks valid`); }
-  }
-  if (ok.length === 0) {
-    log('none of the usual ANPR table names worked — checking whether this NVR even advertises traffic/ITC capability ...');
-    for (const path of [
-      '/cgi-bin/magicBox.cgi?action=getProductDefinition&name=ITC',
-      '/cgi-bin/magicBox.cgi?action=getProductDefinition&name=Traffic',
-      '/cgi-bin/magicBox.cgi?action=getDeviceType',
-      '/cgi-bin/configManager.cgi?action=getConfig&name=ITC',
-    ]) {
-      const r = await nvrFetch(path);
+  for (const { label, dev } of devices) {
+    log(`=== ${label} (${dev.base}) ===`);
+    const ok = [];
+    for (const name of candidates) {
+      const r = await nvrFetch(`/cgi-bin/recordFinder.cgi?${q({ action: 'find', name, count: 5 })}`, dev);
       const t = await r.text();
-      console.log(`\n# ${path}\nHTTP ${r.status}\n${t.split(/\r?\n/).slice(0, 10).join('\n')}`);
+      console.log(`\n# ${label}: name=${name}\nHTTP ${r.status}\n${t.split(/\r?\n/).slice(0, 15).join('\n')}`);
+      if (r.status === 200 && !/error/i.test(t)) { ok.push(name); log(`-> ${label}: "${name}" looks valid`); }
+      if (r.status === 401 || r.status === 403) { log(`-> ${label}: login refused — STOP trying this device, do not retry (Dahua locks accounts after repeated bad logins)`); break; }
     }
-    log('send me everything above — if this NVR has no ITC/ANPR license, it likely never logged real pass-by events at all (the allow list is a separate, simpler feature) and we may need a different source (e.g. the plate camera itself, if it is a dedicated ANPR camera rather than this NVR).');
-    return;
+    if (ok.length === 0) { log(`-> ${label}: none of the candidate table names worked`); continue; }
+    log(`${label}: trying a time filter on: ${ok.join(', ')} ...`);
+    for (const name of ok) {
+      const r = await nvrFetch(`/cgi-bin/recordFinder.cgi?${q({
+        action: 'find', name, count: 20,
+        'condition.StartTime': fmt(start),
+        'condition.EndTime': fmt(end),
+      })}`, dev);
+      const t = await r.text();
+      console.log(`\n# ${label}: name=${name} + time filter (${fmt(start)} .. ${fmt(end)})\nHTTP ${r.status}\n${t.split(/\r?\n/).slice(0, 30).join('\n')}`);
+    }
   }
-
-  // Step 2: now try a time filter on whichever table name(s) actually worked.
-  log(`step 2: trying a time filter on: ${ok.join(', ')} ...`);
-  for (const name of ok) {
-    const r = await nvrFetch(`/cgi-bin/recordFinder.cgi?${q({
-      action: 'find', name, count: 20,
-      'condition.StartTime': fmt(start),
-      'condition.EndTime': fmt(end),
-    })}`);
-    const t = await r.text();
-    console.log(`\n# name=${name} + time filter (${fmt(start)} .. ${fmt(end)})\nHTTP ${r.status}\n${t.split(/\r?\n/).slice(0, 30).join('\n')}`);
-  }
-  log('send me the output above (it has no password in it) and I will build the real matching feature from whichever table name actually works.');
+  log('send me everything above (no password in it). If a camera has a working table name, that is where the real pass-by log lives. If NONE of the three devices has one, this hardware cannot give us arrival events at all and we will need a different approach (e.g. the realtime event stream, or accept we cannot verify exact arrival time).');
 }
 
 // Which Owner texts does the NVR accept? Tries several on ONE throw-away plate and removes it each time.
