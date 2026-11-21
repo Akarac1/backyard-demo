@@ -14,6 +14,8 @@ export const dynamic = 'force-dynamic';
 const KIND: Record<string, string> = { booking: 'ค่าจอง', reschedule_extra: 'ส่วนต่างเลื่อนวัน', overstay: 'จอดเพิ่ม/เกินวัน' };
 const PAY: Record<string, string> = { pending: 'รอชำระ', verified: 'ได้รับแล้ว', rejected: 'ยกเลิก' };
 const ACTION: Record<string, string> = { update: 'แก้ไขข้อมูล', status: 'เปลี่ยนสถานะ', mark_paid: 'บันทึกรับเงิน', extra_days: 'เพิ่มวันจอด', reschedule: 'เลื่อนวันจอง', confirm_slip: 'ยืนยันสลิป' };
+const LPR_ACTION: Record<string, string> = { add: 'เพิ่มป้ายเข้า NVR', remove: 'ลบป้ายออกจาก NVR' };
+const LPR_STATUS: Record<string, string> = { pending: 'รอซิงก์เข้า NVR', done: 'ซิงก์เข้า NVR แล้ว', failed: 'ซิงก์ล้มเหลว' };
 const n = (v: number) => v.toLocaleString('th-TH');
 const when = (ts: string) => `${thDate(new Date(ts).toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }))} ${thTime(ts)}`;
 
@@ -21,13 +23,14 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
   const { id } = await params;
   if (!/^[0-9a-f-]{36}$/.test(id)) notFound();
   const sb = db();
-  const [{ data: b }, { data: pays }, { data: trips }, { data: log }, { data: vehicles }, { data: st }] = await Promise.all([
+  const [{ data: b }, { data: pays }, { data: trips }, { data: log }, { data: vehicles }, { data: st }, { data: lprLog }] = await Promise.all([
     sb.from('bookings').select('*, customers(name, phone, line_user_id)').eq('id', id).maybeSingle(),
     sb.from('payments').select('id, kind, amount, status, slip_path, verified_by, paid_at, created_at').eq('booking_id', id).order('created_at'),
     sb.from('shuttle_trips').select('id, direction, pax, pickup_at, landing_at, flight_number, status, vehicle_id, called_at').eq('booking_id', id).order('pickup_at'),
     sb.from('admin_audit').select('id, staff_name, action, detail, at').eq('entity', 'booking').eq('entity_id', id).order('at', { ascending: false }).limit(30),
     sb.from('vehicles').select('id, name'),
     sb.from('settings').select('price_per_day, extra_price_per_day').eq('id', 1).single(),
+    sb.from('lpr_sync').select('id, plate, action, valid_from, valid_to, status, last_error, created_at, done_at').eq('booking_id', id).order('created_at', { ascending: false }).limit(30),
   ]);
   if (!b) notFound();
   const c = b.customers as { name: string; phone: string; line_user_id: string } | null;
@@ -272,6 +275,22 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
         <ul className="history">
           {(log ?? []).map((l) => (
             <li key={l.id}><time>{when(l.at)}</time><b>{l.staff_name}</b> {ACTION[l.action] ?? l.action}{l.action === 'status' && l.detail ? ` → ${STATUS[(l.detail as { to: string }).to]?.label ?? ''}` : ''}{l.action === 'extra_days' && l.detail ? ` ${(l.detail as { days: number }).days} วัน` : ''}{l.action === 'reschedule' && l.detail ? (() => { const d = l.detail as { old_start: string; old_end: string; new_start: string; new_end: string; extra_amount: number }; return ` ${thDate(d.old_start)}–${thDate(d.old_end)} → ${thDate(d.new_start)}–${thDate(d.new_end)}${d.extra_amount > 0 ? ` · เก็บเพิ่ม ${n(d.extra_amount)} บาท` : ''}`; })() : ''}</li>
+          ))}
+        </ul>
+      </section>
+
+      <section className="panel">
+        <h2>ประวัติซิงก์ป้ายทะเบียน (NVR)</h2>
+        {!lprLog?.length && <p className="empty">ยังไม่มีรายการซิงก์ป้ายทะเบียนสำหรับการจองนี้</p>}
+        <ul className="history">
+          {(lprLog ?? []).map((r) => (
+            <li key={r.id}>
+              <time>{when(r.created_at)}</time>
+              <b>{LPR_ACTION[r.action] ?? r.action}</b> {r.plate} ({thDate(r.valid_from)}–{thDate(r.valid_to)}) ·{' '}
+              {LPR_STATUS[r.status] ?? r.status}
+              {r.status === 'done' && r.done_at ? ` เมื่อ ${when(r.done_at)}` : ''}
+              {r.status === 'failed' && r.last_error ? ` — ${r.last_error}` : ''}
+            </li>
           ))}
         </ul>
       </section>
