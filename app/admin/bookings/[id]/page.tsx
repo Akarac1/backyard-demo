@@ -6,6 +6,7 @@ import { DIRECTION, STATUS, StatusTag } from '@/lib/labels';
 import { ActionButton, ActionForm, Submit } from '@/components/ActionForm';
 import TimeSlotInput from '@/components/TimeSlotInput';
 import { toBkkLocal } from '@/lib/shuttle';
+import { lprQueueStatus } from '@/lib/lprDesired';
 import { addExtraDays, adjustPoints, payPayment, rescheduleBooking, resendPayCard, setStatus, setTierOverride, updateBooking, updateReturnTrip, updateTrip } from '../../actions';
 
 export const dynamic = 'force-dynamic';
@@ -60,6 +61,7 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
   }
   const active = b.status === 'confirmed' || b.status === 'checked_in';
   const rescheduleRate = todayBkk() < b.start_date ? (st?.price_per_day ?? 100) : (st?.extra_price_per_day ?? 120);
+  const lprQueue = active && b.end_date >= todayBkk() ? await lprQueueStatus(b.code, b.plate).catch(() => null) : null;
 
   return (
     <main className="page">
@@ -105,6 +107,13 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
         <div><span>ยอดจอง</span><b>{n(b.total_amount)} บาท</b><small>รับแล้วทั้งหมด {n(paid)} บาท{b.discount_amount > 0 ? ` · ${b.discount_reason === 'referral' ? `ส่วนลดเพื่อนแนะนำ (${b.referrer_phone})` : 'ส่วนลดลูกค้าเก่า'} −${n(b.discount_amount)}` : ''}</small></div>
       </section>
       {b.admin_note && <p className="note">หมายเหตุ: {b.admin_note}</p>}
+      {lprQueue && !lprQueue.mine && (
+        <p className="alert warn">
+          ป้าย <b>{lprQueue.plate}</b> มีจองซ้อนกับการจองอื่น (รหัส {lprQueue.active.codes.join(', ')}) ที่ยัง active อยู่ในช่วง{' '}
+          {thDate(lprQueue.active.from)} – {thDate(lprQueue.active.to)} ระบบ NVR จะยังไม่เปิดรับป้ายนี้สำหรับการจองนี้
+          ({thDate(b.start_date)} – {thDate(b.end_date)}) จนกว่าจะถึงคิวของมัน
+        </p>
+      )}
 
       <div className="cols wide-left">
         <section className="panel">
