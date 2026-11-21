@@ -4,6 +4,7 @@ import { db } from '@/lib/supabase';
 import { bkkDay, thDate, thTime, todayBkk } from '@/lib/format';
 import { DIRECTION, STATUS, StatusTag } from '@/lib/labels';
 import { ActionButton, ActionForm, Submit } from '@/components/ActionForm';
+import TimeSlotInput from '@/components/TimeSlotInput';
 import { toBkkLocal } from '@/lib/shuttle';
 import { addExtraDays, adjustPoints, payPayment, rescheduleBooking, resendPayCard, setStatus, setTierOverride, updateBooking, updateReturnTrip, updateTrip } from '../../actions';
 
@@ -133,12 +134,12 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
                 {b.shuttle && (
                   <>
                     {(trips ?? []).some((t) => t.direction === 'to_airport' && t.status !== 'done' && t.status !== 'cancelled') && (
-                      <label>เวลาไปส่งใหม่ (ไปสนามบิน)<input name="pickup_to" type="datetime-local" step={1800} /><small>เว้นว่างไว้ได้ ไปใส่ทีหลังที่ช่อง &quot;แก้เวลาไปส่ง&quot; ด้านล่าง</small></label>
+                      <label>เวลาไปส่งใหม่ (ไปสนามบิน)<TimeSlotInput name="pickup_to" /><small>เว้นว่างไว้ได้ ไปใส่ทีหลังที่ช่อง &quot;แก้เวลาไปส่ง&quot; ด้านล่าง</small></label>
                     )}
                     {(trips ?? []).some((t) => t.direction === 'from_airport' && t.status !== 'done' && t.status !== 'cancelled') && (
                       <>
-                        <label>เวลาเครื่องลงใหม่ (ขากลับ)<input name="landing_from" type="datetime-local" step={1800} /></label>
-                        <label>เวลารับกลับใหม่<input name="pickup_from" type="datetime-local" step={1800} /><small>เว้นว่าง = ใช้เวลาเครื่องลง</small></label>
+                        <label>เวลาเครื่องลงใหม่ (ขากลับ)<TimeSlotInput name="landing_from" /></label>
+                        <label>เวลารับกลับใหม่<TimeSlotInput name="pickup_from" /><small>เว้นว่าง = ใช้เวลาเครื่องลง</small></label>
                       </>
                     )}
                   </>
@@ -236,8 +237,8 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
                     <ActionForm action={updateReturnTrip} className="form grid2">
                       <input type="hidden" name="id" value={id} />
                       <input type="hidden" name="trip_id" value={t.id} />
-                      <label>เวลาเครื่องลง<input name="landing_at" type="datetime-local" step={1800} defaultValue={t.landing_at ? toBkkLocal(t.landing_at) : ''} /></label>
-                      <label>เวลารับ<input name="pickup_at" type="datetime-local" step={1800} defaultValue={t.pickup_at ? toBkkLocal(t.pickup_at) : ''} /><small>เว้นว่างไว้ = เลื่อนตามเวลาเครื่องลง</small></label>
+                      <label>เวลาเครื่องลง<TimeSlotInput name="landing_at" defaultValue={t.landing_at ? toBkkLocal(t.landing_at) : ''} /></label>
+                      <label>เวลารับ<TimeSlotInput name="pickup_at" defaultValue={t.pickup_at ? toBkkLocal(t.pickup_at) : ''} /><small>เว้นว่างไว้ = เลื่อนตามเวลาเครื่องลง</small></label>
                       <label>เที่ยวบิน<input name="flight" defaultValue={t.flight_number ?? ''} placeholder="เช่น TG123" /></label>
                       <div className="form-actions span2"><Submit small>บันทึกเวลารับกลับ</Submit></div>
                     </ActionForm>
@@ -248,7 +249,7 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
                     <summary>แก้เวลาไปส่ง{!t.pickup_at ? ' (ยังไม่มีเวลา — ตั้งก่อนถึงจะไปจัดรถที่หน้า “รถรับส่ง” ได้)' : ''}</summary>
                     <ActionForm action={updateTrip} className="form grid2">
                       <input type="hidden" name="id" value={t.id} />
-                      <label>เวลารับ (ไปสนามบิน)<input name="pickup_at" type="datetime-local" step={1800} defaultValue={t.pickup_at ? toBkkLocal(t.pickup_at) : ''} required /></label>
+                      <label>เวลารับ (ไปสนามบิน)<TimeSlotInput name="pickup_at" defaultValue={t.pickup_at ? toBkkLocal(t.pickup_at) : ''} required /></label>
                       <div className="form-actions span2"><Submit small>บันทึกเวลาไปส่ง</Submit></div>
                     </ActionForm>
                   </details>

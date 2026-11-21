@@ -1,6 +1,7 @@
 'use client';
 import { useState } from 'react';
 import { ActionForm, Submit } from '@/components/ActionForm';
+import TimeSlotInput from '@/components/TimeSlotInput';
 import { walkinBooking } from '../../actions';
 
 const money = (n: number) => `${n.toLocaleString('th-TH')} บาท`;
@@ -49,8 +50,8 @@ export function WalkinForm({ today, price, shuttlePrice, maxCars }: { today: str
             <div className="form grid2" style={{ marginTop: 10 }}>
               <label>ผู้โดยสาร{cars.length > 1 ? 'ทั้งกลุ่ม' : ''}<span className="with-unit"><input name="pax" type="number" min={1} max={7} defaultValue={2} required /><em>คน</em></span></label>
               <label>กระเป๋าใบใหญ่<span className="with-unit"><input name="large" type="number" min={0} max={20} defaultValue={0} /><em>ใบ</em></span></label>
-              <label>ขาไป: เวลามาถึงลาน<input name="out" type="datetime-local" step={1800} required /></label>
-              <label>ขากลับ: เวลาเครื่องลง<input name="land" type="datetime-local" step={1800} /><small>ไม่ทราบก็เว้นว่างได้ ตั้งเวลาทีหลังที่หน้ารถรับส่ง</small></label>
+              <label>ขาไป: เวลามาถึงลาน<TimeSlotInput name="out" required /></label>
+              <label>ขากลับ: เวลาเครื่องลง<TimeSlotInput name="land" /><small>ไม่ทราบก็เว้นว่างได้ ตั้งเวลาทีหลังที่หน้ารถรับส่ง</small></label>
               <label>เลขไฟลต์ขากลับ<input name="flight" placeholder="TG 629" /></label>
               <label>เที่ยวบิน<select name="ftype" defaultValue="international"><option value="international">ต่างประเทศ</option><option value="domestic">ในประเทศ</option></select></label>
             </div>
