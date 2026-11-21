@@ -1,9 +1,11 @@
 import Link from 'next/link';
 import { db } from '@/lib/supabase';
-import { todayBkk, thDate } from '@/lib/format';
-import { ActionForm, Submit } from '@/components/ActionForm';
-import { givePoints } from '@/app/admin/actions';
+import { todayBkk, thDate, thTime } from '@/lib/format';
+import { ActionForm, ActionButton, Submit } from '@/components/ActionForm';
+import { givePoints, requestGateOpen } from '@/app/admin/actions';
 import { OpsRow, OPS_SELECT, type OpsBooking } from './OpsRow';
+
+type GateCommand = { id: number; which: string; requested_by_name: string; requested_at: string; fired_at: string | null; result: string | null; error: string | null };
 
 export const dynamic = 'force-dynamic';
 
@@ -16,14 +18,17 @@ export default async function OpsPage({ searchParams }: { searchParams: Promise<
   const sb = db();
   await sb.rpc('expire_holds').then(() => null, () => null);
 
-  const [{ data: arr }, { data: dep }, { count: inLot }, { data: late }, { data: over }, { data: st }] = await Promise.all([
+  const [{ data: arr }, { data: dep }, { count: inLot }, { data: late }, { data: over }, { data: st }, { data: gate }] = await Promise.all([
     sb.from('bookings').select(OPS_SELECT).eq('start_date', today).in('status', ['confirmed', 'checked_in']).order('created_at'),
     sb.from('bookings').select(OPS_SELECT).eq('end_date', today).in('status', ['checked_in', 'checked_out']).order('checked_out_at', { ascending: true, nullsFirst: true }),
     sb.from('bookings').select('id', { count: 'exact', head: true }).eq('status', 'checked_in'),
     sb.from('bookings').select(OPS_SELECT).eq('status', 'confirmed').lt('start_date', today).order('start_date').limit(50),
     sb.from('bookings').select(OPS_SELECT).eq('status', 'checked_in').lte('end_date', today).order('end_date').limit(100),
     sb.from('settings').select('ops_points_max, extra_price_per_day').eq('id', 1).single(),
+    sb.from('gate_commands').select('id, which, requested_by_name, requested_at, fired_at, result, error').order('requested_at', { ascending: false }).limit(5),
   ]);
+  const gateLog = (gate ?? []) as GateCommand[];
+  const gateStatus = (g: GateCommand) => (!g.fired_at ? 'กำลังส่งคำสั่ง…' : g.result === 'ok' ? 'เปิดสำเร็จ' : `ไม่สำเร็จ${g.error ? ` (${g.error})` : ''}`);
   const A = (arr ?? []) as unknown as OpsBooking[];
   const D = (dep ?? []) as unknown as OpsBooking[];
   const L = (late ?? []) as unknown as OpsBooking[];
@@ -54,6 +59,22 @@ export default async function OpsPage({ searchParams }: { searchParams: Promise<
         <div className="tile"><span>รถเข้าวันนี้</span><b>{A.length}<small> คัน</small></b><em>ยังไม่เข้า {A.filter((b) => b.status === 'confirmed').length} คัน</em></div>
         <div className="tile"><span>รถออกวันนี้</span><b>{D.length}<small> คัน</small></b><em>ยังไม่ออก {D.filter((b) => b.status === 'checked_in').length} คัน</em></div>
         <div className={`tile ${L.length + O.length ? 'tile-warn' : ''}`}><span>ต้องตรวจสอบ</span><b>{L.length + O.length}<small> รายการ</small></b><em>เลยวันเข้า {L.length} · เกินกำหนดออก {O.length}</em></div>
+      </section>
+
+      <section className="panel ops-warn">
+        <h2>เปิดไม้กั้นฉุกเฉิน</h2>
+        <p className="hint">ใช้เมื่อป้ายทะเบียนจาง กล้องอ่านไม่ออก และไม่มีคนถือรีโมทอยู่ที่ลาน · กดแล้วรอ 5–10 วินาที ไม้กั้นจะยกขึ้นเอง ทุกครั้งที่กดมีบันทึกชื่อและเวลาไว้ด้านล่าง</p>
+        <div className="form-actions">
+          <ActionButton action={requestGateOpen} fields={{ which: 'in' }} label="เปิดไม้กั้นทางเข้า" variant="danger" confirm="ยืนยันเปิดไม้กั้นทางเข้าตอนนี้?" />
+          <ActionButton action={requestGateOpen} fields={{ which: 'out' }} label="เปิดไม้กั้นทางออก" variant="danger" confirm="ยืนยันเปิดไม้กั้นทางออกตอนนี้?" />
+        </div>
+        {gateLog.length > 0 && (
+          <ul className="ops-list">
+            {gateLog.map((g) => (
+              <li key={g.id}><small>{thTime(g.requested_at)} · {g.which === 'out' ? 'ทางออก' : 'ทางเข้า'} · โดย {g.requested_by_name} · {gateStatus(g)}</small></li>
+            ))}
+          </ul>
+        )}
       </section>
 
       {q && (

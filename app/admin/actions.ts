@@ -68,6 +68,7 @@ const ERR: Record<string, string> = {
   invalid_username: 'ชื่อผู้ใช้ใช้ได้เฉพาะ a-z 0-9 . _ - ยาว 3–32 ตัว',
   last_admin: 'ต้องมีแอดมินที่ใช้งานได้อย่างน้อย 1 คน',
   invalid_time_range: 'ใส่เวลาปิดให้ครบทั้งเริ่มและสิ้นสุด และเวลาสิ้นสุดต้องหลังเวลาเริ่ม',
+  invalid_which: 'เลือกไม้กั้นทางเข้าหรือทางออก',
 };
 function thai(msg: string): string {
   if (msg.startsWith('full:')) return `วันที่ ${thDate(msg.slice(5))} ที่จอดเต็มแล้ว (รวมช่องสำรอง)`;
@@ -610,4 +611,12 @@ export async function deleteVehicle(_: ActionResult, f: FormData): Promise<Actio
   if (error) return { error: thai(error.message) };
   ['/admin/settings', '/admin/trips', '/admin/users', '/driver'].forEach((p) => revalidatePath(p));
   return { ok: data === 'retired' ? 'ลบรถแล้ว (ประวัติงานเดิมของคันนี้ยังอยู่ในรายงาน)' : 'ลบรถแล้ว' };
+}
+
+// ---------- emergency gate open ----------
+/** Queues a request for the on-site bridge to fire the barrier's open command. Admin + ops only. */
+export async function requestGateOpen(_: ActionResult, f: FormData): Promise<ActionResult> {
+  const which = str(f, 'which');
+  const label = which === 'out' ? 'ทางออก' : 'ทางเข้า';
+  return run('request_gate_open', { p_which: which, p_note: str(f, 'note') || null }, `ส่งคำสั่งเปิดไม้กั้น${label}แล้ว รอ 5–10 วินาที`, ['/ops'], ['admin', 'ops']);
 }
