@@ -105,18 +105,21 @@ async function rpcRaw(base, body) {
 }
 let rpcId = 1000;
 async function rpcLogin(dev) {
-  const first = await rpcRaw(dev.base, { method: 'global.login', params: { userName: dev.user, password: '', clientType: 'Web3.0' }, id: rpcId++, session: 0 });
+  // Call 1: no "session" field at all yet — just asks for the challenge.
+  const first = await rpcRaw(dev.base, { method: 'global.login', params: { userName: dev.user, password: '', clientType: 'Web3.0' }, id: rpcId++ });
   const p = first.json?.params;
-  if (!p?.realm || !p?.random) return { ok: false, step: 'challenge', raw: first };
+  const loginSession = first.json?.session; // the pre-auth session token to carry into call 2
+  if (!p?.realm || !p?.random || !loginSession) return { ok: false, step: 'challenge', raw: first };
   const pass1 = up(`${dev.user}:${p.realm}:${dev.pass}`);
   const passHash = up(`${dev.user}:${p.random}:${pass1}`);
+  // Call 2: carries the challenge session from call 1's response, plus the hashed password.
   const second = await rpcRaw(dev.base, {
     method: 'global.login',
-    params: { userName: dev.user, password: passHash, clientType: 'Web3.0', authorityType: p.encryption || 'Default' },
-    id: rpcId++, session: 0,
+    params: { userName: dev.user, password: passHash, clientType: 'Web3.0', authorityType: p.encryption || 'Default', passwordType: p.encryption || 'Default' },
+    id: rpcId++, session: loginSession,
   });
   if (!second.json?.result) return { ok: false, step: 'login', raw: second };
-  return { ok: true, session: second.json.session, raw: second };
+  return { ok: true, session: second.json.session, raw: second }; // the NEW session from call 2's response is the real, authenticated one
 }
 async function rpcCall(dev, session, method, params, object) {
   const body = { method, params: params ?? null, id: rpcId++, session, ...(object !== undefined ? { object } : {}) };
