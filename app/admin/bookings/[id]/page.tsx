@@ -137,10 +137,7 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
                       <label>เวลาไปส่งใหม่ (ไปสนามบิน)<TimeSlotInput name="pickup_to" /><small>เว้นว่างไว้ได้ ไปใส่ทีหลังที่ช่อง &quot;แก้เวลาไปส่ง&quot; ด้านล่าง</small></label>
                     )}
                     {(trips ?? []).some((t) => t.direction === 'from_airport' && t.status !== 'done' && t.status !== 'cancelled') && (
-                      <>
-                        <label>เวลาเครื่องลงใหม่ (ขากลับ)<TimeSlotInput name="landing_from" /></label>
-                        <label>เวลารับกลับใหม่<TimeSlotInput name="pickup_from" /><small>เว้นว่าง = ใช้เวลาเครื่องลง</small></label>
-                      </>
+                      <label>เวลาเครื่องลงใหม่ (ขากลับ)<TimeSlotInput name="landing_from" /><small>ระบบคำนวณเวลารับกลับให้อัตโนมัติ (เว้นระยะเท่าเดิม หรือตามเวลาออกโถงมาตรฐานถ้ายังไม่เคยตั้งไว้) แก้เองทีหลังได้ที่ช่อง &quot;แก้เวลารับกลับ&quot; ด้านล่าง</small></label>
                     )}
                   </>
                 )}
