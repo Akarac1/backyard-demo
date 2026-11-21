@@ -15,6 +15,8 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { request as httpRequest } from 'node:http';
+import { request as httpsRequest } from 'node:https';
 import { fileURLToPath } from 'node:url';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -67,18 +69,39 @@ const q = (o) => Object.entries(o).map(([k, v]) => `${k}=${encodeURIComponent(v)
 // auth): call global.login twice (first gets a challenge, second sends a hashed password),
 // then every further call carries the returned "session" token in the request body itself.
 const up = (s) => createHash('md5').update(s).digest('hex').toUpperCase();
-async function rpcRaw(base, body) {
-  // Some Dahua firmware rejects a POST to /RPC2 outright (connection reset, no HTTP response
-  // at all) unless Referer/Origin look like they came from the device's own web UI.
-  const r = await fetch(`${base}/RPC2`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', referer: `${base}/`, origin: base },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(10000),
+// Node's `fetch` (undici) is strict about HTTP response framing and some embedded devices
+// (this NVR included — confirmed, it throws UND_ERR_SOCKET on /RPC2 POSTs) send responses
+// that trip that strictness even though curl/a browser reads them fine. Node's older
+// node:http/https client is far more lenient, so /RPC2 POSTs go through that instead.
+function rawPost(urlStr, body) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(urlStr);
+    const lib = u.protocol === 'https:' ? httpsRequest : httpRequest;
+    const data = JSON.stringify(body);
+    const req = lib({
+      hostname: u.hostname, port: u.port || (u.protocol === 'https:' ? 443 : 80), path: u.pathname + u.search,
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json', 'content-length': Buffer.byteLength(data),
+        referer: `${u.origin}/`, origin: u.origin, connection: 'close',
+      },
+      timeout: 10000,
+    }, (res) => {
+      const chunks = [];
+      res.on('data', (c) => chunks.push(c));
+      res.on('end', () => resolve({ status: res.statusCode, text: Buffer.concat(chunks).toString('utf8') }));
+      res.on('error', reject);
+    });
+    req.on('timeout', () => req.destroy(new Error('request timed out')));
+    req.on('error', reject);
+    req.write(data);
+    req.end();
   });
-  const text = await r.text();
+}
+async function rpcRaw(base, body) {
+  const { status, text } = await rawPost(`${base}/RPC2`, body);
   let json; try { json = JSON.parse(text); } catch { json = null; }
-  return { status: r.status, text, json };
+  return { status, text, json };
 }
 let rpcId = 1000;
 async function rpcLogin(dev) {
