@@ -5,6 +5,7 @@ import { bkkDay, thDate, thTime, todayBkk } from '@/lib/format';
 import { DIRECTION, STATUS, StatusTag } from '@/lib/labels';
 import { ActionButton, ActionForm, Submit } from '@/components/ActionForm';
 import TimeSlotInput from '@/components/TimeSlotInput';
+import TimeOnlyInput from '@/components/TimeOnlyInput';
 import { toBkkLocal } from '@/lib/shuttle';
 import { lprQueueStatus } from '@/lib/lprDesired';
 import { addExtraDays, adjustPoints, payPayment, rescheduleBooking, resendPayCard, setStatus, setTierOverride, updateBooking, updateReturnTrip, updateTrip } from '../../actions';
@@ -146,10 +147,10 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
                 {b.shuttle && (
                   <>
                     {(trips ?? []).some((t) => t.direction === 'to_airport' && t.status !== 'done' && t.status !== 'cancelled') && (
-                      <label>เวลาไปส่งใหม่ (ไปสนามบิน)<TimeSlotInput name="pickup_to" /><small>เว้นว่างไว้ได้ ไปใส่ทีหลังที่ช่อง &quot;แก้เวลาไปส่ง&quot; ด้านล่าง</small></label>
+                      <label>เวลาไปส่งใหม่ (ไปสนามบิน)<TimeOnlyInput name="pickup_to" dateFieldName="start" /><small>ใช้วันที่เดียวกับ &quot;วันเข้าจอดใหม่&quot; ด้านบนเสมอ (เปลี่ยนวันด้านบน วันของช่องนี้ก็เปลี่ยนตาม) เว้นว่างไว้ได้ ไปใส่ทีหลังที่ช่อง &quot;แก้เวลาไปส่ง&quot; ด้านล่าง</small></label>
                     )}
                     {(trips ?? []).some((t) => t.direction === 'from_airport' && t.status !== 'done' && t.status !== 'cancelled') && (
-                      <label>เวลาเครื่องลงใหม่ (ขากลับ)<TimeSlotInput name="landing_from" /><small>ระบบคำนวณเวลารับกลับให้อัตโนมัติ (เว้นระยะเท่าเดิม หรือตามเวลาออกโถงมาตรฐานถ้ายังไม่เคยตั้งไว้) แก้เองทีหลังได้ที่ช่อง &quot;แก้เวลารับกลับ&quot; ด้านล่าง</small></label>
+                      <label>เวลาเครื่องลงใหม่ (ขากลับ)<TimeOnlyInput name="landing_from" dateFieldName="end" /><small>ใช้วันที่เดียวกับ &quot;วันรับรถคืนใหม่&quot; ด้านบนเสมอ · ระบบคำนวณเวลารับกลับให้อัตโนมัติ (เว้นระยะเท่าเดิม หรือตามเวลาออกโถงมาตรฐานถ้ายังไม่เคยตั้งไว้) แก้เองทีหลังได้ที่ช่อง &quot;แก้เวลารับกลับ&quot; ด้านล่าง</small></label>
                     )}
                   </>
                 )}
