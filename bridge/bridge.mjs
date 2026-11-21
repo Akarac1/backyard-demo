@@ -6,9 +6,11 @@
 //   node bridge.mjs once             show what would change (dry run)
 //   node bridge.mjs once --apply     make the changes once
 //   node bridge.mjs run --apply      keep doing it every POLL_SECONDS
-//   node bridge.mjs events [minutes] read-only: look for the NVR's real pass-by (ANPR) log,
-//                                    not just the allow list — first step toward checking
-//                                    whether booked cars actually arrived on time
+//   node bridge.mjs events [minutes] read-only: look for a pass-by (ANPR) log via the old
+//                                    cgi-bin API (this NVR turned out not to have one there)
+//   node bridge.mjs vehicles [minutes] read-only: same lookup via /RPC2 JSON-RPC, matching
+//                                    this NVR's own "AI Search > Motor Vehicle" page — this
+//                                    is the one that actually works on this hardware
 // Needs Node 20+. No packages to install.
 import { createHash, randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -59,6 +61,39 @@ async function nvrFetch(path, dev = { base: cfg.nvr, user: cfg.user, pass: cfg.p
   return fetch(url, { headers: { Authorization: auth }, signal: AbortSignal.timeout(10000) });
 }
 const q = (o) => Object.entries(o).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+
+// ---------- JSON-RPC (/RPC2) — this NVR's Motor Vehicle AI Search uses this, not the plain
+// cgi-bin digest-auth API above. It has its own login handshake (separate from HTTP digest
+// auth): call global.login twice (first gets a challenge, second sends a hashed password),
+// then every further call carries the returned "session" token in the request body itself.
+const up = (s) => createHash('md5').update(s).digest('hex').toUpperCase();
+async function rpcRaw(base, body) {
+  const r = await fetch(`${base}/RPC2`, {
+    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10000),
+  });
+  const text = await r.text();
+  let json; try { json = JSON.parse(text); } catch { json = null; }
+  return { status: r.status, text, json };
+}
+let rpcId = 1000;
+async function rpcLogin(dev) {
+  const first = await rpcRaw(dev.base, { method: 'global.login', params: { userName: dev.user, password: '', clientType: 'Web3.0' }, id: rpcId++, session: 0 });
+  const p = first.json?.params;
+  if (!p?.realm || !p?.random) return { ok: false, step: 'challenge', raw: first };
+  const pass1 = up(`${dev.user}:${p.realm}:${dev.pass}`);
+  const passHash = up(`${dev.user}:${p.random}:${pass1}`);
+  const second = await rpcRaw(dev.base, {
+    method: 'global.login',
+    params: { userName: dev.user, password: passHash, clientType: 'Web3.0', authorityType: p.encryption || 'Default' },
+    id: rpcId++, session: 0,
+  });
+  if (!second.json?.result) return { ok: false, step: 'login', raw: second };
+  return { ok: true, session: second.json.session, raw: second };
+}
+async function rpcCall(dev, session, method, params, object) {
+  const body = { method, params: params ?? null, id: rpcId++, session, ...(object !== undefined ? { object } : {}) };
+  return rpcRaw(dev.base, body);
+}
 
 // ---------- NVR adapter (Dahua HTTP API). Confirm with `probe` before using --apply. ----------
 const dahuaTime = (d, end) => `${d} ${end ? '23:59:59' : '00:00:00'}`;
@@ -250,6 +285,48 @@ async function events(minutes) {
   log('send me everything above (no password in it). If a camera has a working table name, that is where the real pass-by log lives. If NONE of the three devices has one, this hardware cannot give us arrival events at all and we will need a different approach (e.g. the realtime event stream, or accept we cannot verify exact arrival time).');
 }
 
+// Diagnostic, read-only: the NVR's "AI Search > Motor Vehicle" page (confirmed to have real
+// plate/time/color/logo data for this NVR) talks JSON-RPC over /RPC2, not the plain cgi-bin
+// digest-auth API — reproduces exactly what that page's own browser request does:
+// login -> mediaFileFind.factory.create -> findFile(condition) -> findNextFile -> getCount.
+async function vehicles(minutes) {
+  const dev = { base: cfg.nvr, user: cfg.user, pass: cfg.pass };
+  log('logging in over JSON-RPC (separate from the cgi-bin digest auth used elsewhere) ...');
+  const login = await rpcLogin(dev);
+  if (!login.ok) {
+    console.log(`\n# login failed at step: ${login.step}\n${JSON.stringify(login.raw.json ?? login.raw.text, null, 2).slice(0, 1000)}`);
+    log('send me the output above — the login handshake did not work the way I expected for this firmware.');
+    return;
+  }
+  log(`logged in, session=${login.session}`);
+
+  const create = await rpcCall(dev, login.session, 'mediaFileFind.factory.create', null);
+  const obj = create.json?.result;
+  console.log(`\n# mediaFileFind.factory.create\nHTTP ${create.status}\n${create.text.slice(0, 300)}`);
+  if (!obj) { log('could not create a mediaFileFind object — send me the output above.'); return; }
+
+  const end = new Date();
+  const start = new Date(end.getTime() - minutes * 60000);
+  const fmt = (d) => d.toLocaleString('sv-SE', { timeZone: 'Asia/Bangkok' }).replace(',', '');
+  const condition = {
+    StartTime: fmt(start), EndTime: fmt(end),
+    Events: ['VehicleAnalyse', 'TrafficJunction'],
+    DB: { TrafficCar: { GroupType: '', Order: 'Desc', PlateNumber: '' } },
+    Channel: [0],
+  };
+  const find = await rpcCall(dev, login.session, 'mediaFileFind.findFile', { condition }, obj);
+  console.log(`\n# mediaFileFind.findFile (${fmt(start)} .. ${fmt(end)})\nHTTP ${find.status}\n${find.text.slice(0, 500)}`);
+
+  const count = await rpcCall(dev, login.session, 'mediaFileFind.getCount', null, obj);
+  console.log(`\n# mediaFileFind.getCount\nHTTP ${count.status}\n${count.text.slice(0, 300)}`);
+
+  const next = await rpcCall(dev, login.session, 'mediaFileFind.findNextFile', { count: 50 }, obj);
+  console.log(`\n# mediaFileFind.findNextFile\nHTTP ${next.status}\n${next.text.slice(0, 4000)}`);
+
+  await rpcCall(dev, login.session, 'mediaFileFind.factory.destroy', null, obj).catch(() => {});
+  log('send me everything above (the session id in it is a temporary token, not a password — fine to share). If findNextFile lists cars with plates and times, this is the real source we build the feature on.');
+}
+
 // Which Owner texts does the NVR accept? Tries several on ONE throw-away plate and removes it each time.
 async function ownertest() {
   const base = { plate: 'ทดสอบ9998', from: new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Bangkok' }), to: '2030-01-01' };
@@ -355,6 +432,7 @@ if (cmd === 'probe') await probe();
 else if (cmd === 'ownertest') { try { await ownertest(); } catch (e) { log('ERROR', e.message); process.exitCode = 1; } }
 else if (cmd === 'sample') await sample();
 else if (cmd === 'events') { try { await events(Number(flags[0]) > 0 ? Number(flags[0]) : 60); } catch (e) { log('ERROR', e.message); process.exitCode = 1; } }
+else if (cmd === 'vehicles') { try { await vehicles(Number(flags[0]) > 0 ? Number(flags[0]) : 1440); } catch (e) { log('ERROR', e.message); process.exitCode = 1; } }
 else if (cmd === 'gatetest') { try { await gatetest(flags[0] === 'out' ? 'out' : 'in', flags.slice(1)); } catch (e) { log('ERROR', e.message); process.exitCode = 1; } }
 else if (cmd === 'cleanup') { try { await cleanup(apply); } catch (e) { log('ERROR', e.message); process.exitCode = 1; } }
 else if (cmd === 'selftest') { try { await selftest(); } catch (e) { log('ERROR', e.message); process.exitCode = 1; } }
@@ -365,4 +443,4 @@ else if (cmd === 'once') {
     try { const r = await sync(apply); if (apply) await report(r); } catch (e) { log('ERROR', e.message); if (apply) await report({ ok: false, error: e.message }); }
     await new Promise((r) => setTimeout(r, cfg.poll * 1000));
   }
-} else { console.error('usage: node bridge.mjs probe | selftest | ownertest | once [--apply] | cleanup [--apply] | gatetest in|out [fire strobe] | events [minutes] | run --apply'); process.exit(1); }
+} else { console.error('usage: node bridge.mjs probe | selftest | ownertest | once [--apply] | cleanup [--apply] | gatetest in|out [fire strobe] | events [minutes] | vehicles [minutes] | run --apply'); process.exit(1); }
