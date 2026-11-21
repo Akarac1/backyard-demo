@@ -1,17 +1,17 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { db } from '@/lib/supabase';
-import { bkkDay, thDate, thTime } from '@/lib/format';
+import { bkkDay, thDate, thTime, todayBkk } from '@/lib/format';
 import { DIRECTION, STATUS, StatusTag } from '@/lib/labels';
 import { ActionButton, ActionForm, Submit } from '@/components/ActionForm';
 import { toBkkLocal } from '@/lib/shuttle';
-import { addExtraDays, adjustPoints, payPayment, resendPayCard, setStatus, setTierOverride, updateBooking, updateReturnTrip } from '../../actions';
+import { addExtraDays, adjustPoints, payPayment, rescheduleBooking, resendPayCard, setStatus, setTierOverride, updateBooking, updateReturnTrip } from '../../actions';
 
 export const dynamic = 'force-dynamic';
 
 const KIND: Record<string, string> = { booking: 'ค่าจอง', reschedule_extra: 'ส่วนต่างเลื่อนวัน', overstay: 'จอดเพิ่ม/เกินวัน' };
 const PAY: Record<string, string> = { pending: 'รอชำระ', verified: 'ได้รับแล้ว', rejected: 'ยกเลิก' };
-const ACTION: Record<string, string> = { update: 'แก้ไขข้อมูล', status: 'เปลี่ยนสถานะ', mark_paid: 'บันทึกรับเงิน', extra_days: 'เพิ่มวันจอด', confirm_slip: 'ยืนยันสลิป' };
+const ACTION: Record<string, string> = { update: 'แก้ไขข้อมูล', status: 'เปลี่ยนสถานะ', mark_paid: 'บันทึกรับเงิน', extra_days: 'เพิ่มวันจอด', reschedule: 'เลื่อนวันจอง', confirm_slip: 'ยืนยันสลิป' };
 const n = (v: number) => v.toLocaleString('th-TH');
 const when = (ts: string) => `${thDate(new Date(ts).toLocaleDateString('en-CA', { timeZone: 'Asia/Bangkok' }))} ${thTime(ts)}`;
 
@@ -25,7 +25,7 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
     sb.from('shuttle_trips').select('id, direction, pax, pickup_at, landing_at, flight_number, status, vehicle_id, called_at').eq('booking_id', id).order('pickup_at'),
     sb.from('admin_audit').select('id, staff_name, action, detail, at').eq('entity', 'booking').eq('entity_id', id).order('at', { ascending: false }).limit(30),
     sb.from('vehicles').select('id, name'),
-    sb.from('settings').select('extra_price_per_day').eq('id', 1).single(),
+    sb.from('settings').select('price_per_day, extra_price_per_day').eq('id', 1).single(),
   ]);
   if (!b) notFound();
   const c = b.customers as { name: string; phone: string; line_user_id: string } | null;
@@ -58,6 +58,7 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
     gcars = (gc ?? []) as GCar[]; gLead = gg?.lead_booking_id ?? null;
   }
   const active = b.status === 'confirmed' || b.status === 'checked_in';
+  const rescheduleRate = todayBkk() < b.start_date ? (st?.price_per_day ?? 100) : (st?.extra_price_per_day ?? 120);
 
   return (
     <main className="page">
@@ -113,16 +114,28 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
             <label>เบอร์โทร<input name="phone" defaultValue={c?.phone} inputMode="tel" required /></label>
             <label>ทะเบียนรถ<input name="plate" defaultValue={b.plate} required /></label>
             <label>จังหวัด<input name="province" defaultValue={b.plate_province} required /></label>
-            <label>วันเข้าจอด<input name="start" type="date" defaultValue={b.start_date} required /></label>
-            <label>วันรับรถคืน<input name="end" type="date" defaultValue={b.end_date} required /></label>
             {b.shuttle && <label>ผู้โดยสาร (คน)<input name="pax" type="number" min={1} max={7} defaultValue={b.pax ?? 1} required /></label>}
             <label className="span2">หมายเหตุ (เห็นเฉพาะแอดมิน)<textarea name="note" rows={2} defaultValue={b.admin_note ?? ''} /></label>
-            <p className="hint span2">เปลี่ยนวันหรือทะเบียนแล้ว ระบบจะเพิ่มงานแก้ทะเบียนในไม้กั้นให้เอง · ราคาไม่คำนวณใหม่ ถ้าลูกค้าจอดเพิ่มให้ใช้ “เพิ่มวันจอด”</p>
+            <p className="hint span2">เปลี่ยนทะเบียนแล้ว ระบบจะเพิ่มงานแก้ทะเบียนในไม้กั้นให้เอง · จะเปลี่ยน “วันที่จอด” ให้ใช้หัวข้อ “เลื่อนวันจอง” ด้านล่าง (คิดเงินส่วนต่างให้อัตโนมัติ)</p>
             <div className="form-actions span2"><Submit>บันทึกการแก้ไข</Submit></div>
           </ActionForm>
         </section>
 
         <div className="stack">
+          {active && (
+            <section className="panel">
+              <h2>เลื่อนวันจอง</h2>
+              <p className="hint">เปลี่ยนวันเข้าจอด/วันรับรถคืนได้ทั้งคู่ (ก่อนหรือหลังวันเดิมก็ได้) · ถ้าจำนวนวันรวมเพิ่มขึ้น ระบบจะคิดส่วนต่างวันละ {rescheduleRate} บาท ({todayBkk() < b.start_date ? 'ยังไม่ถึงวันเข้าจอด คิดราคาปกติ' : 'เลยวันเข้าจอดเดิมแล้ว คิดราคาจอดเพิ่ม'}) และรีเซ็ตรถรับส่งทั้งขาไป-ขากลับให้จัดใหม่ตามวันที่ใหม่ (ลดวันไม่คืนเงินอัตโนมัติ)</p>
+              <ActionForm action={rescheduleBooking} className="form grid2">
+                <input type="hidden" name="id" value={id} />
+                <label>วันเข้าจอดใหม่<input name="start" type="date" defaultValue={b.start_date} required /></label>
+                <label>วันรับรถคืนใหม่<input name="end" type="date" defaultValue={b.end_date} required /></label>
+                <label className="check"><input name="paid" type="checkbox" /> ได้รับเงินส่วนต่างแล้ว (ถ้ามี)</label>
+                <label className="check"><input name="line" type="checkbox" defaultChecked /> ถ้ายังไม่รับเงิน ส่ง QR ชำระให้ลูกค้าทาง LINE</label>
+                <div className="form-actions span2"><Submit>เลื่อนวันจอง</Submit></div>
+              </ActionForm>
+            </section>
+          )}
           {pendingPays.map((p) => (
             <section className="panel" key={p.id}>
               <h2>รับเงินเอง · {KIND[p.kind]}</h2>
@@ -228,7 +241,7 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
         {!log?.length && <p className="empty">ยังไม่มีการแก้ไขโดยแอดมิน</p>}
         <ul className="history">
           {(log ?? []).map((l) => (
-            <li key={l.id}><time>{when(l.at)}</time><b>{l.staff_name}</b> {ACTION[l.action] ?? l.action}{l.action === 'status' && l.detail ? ` → ${STATUS[(l.detail as { to: string }).to]?.label ?? ''}` : ''}{l.action === 'extra_days' && l.detail ? ` ${(l.detail as { days: number }).days} วัน` : ''}</li>
+            <li key={l.id}><time>{when(l.at)}</time><b>{l.staff_name}</b> {ACTION[l.action] ?? l.action}{l.action === 'status' && l.detail ? ` → ${STATUS[(l.detail as { to: string }).to]?.label ?? ''}` : ''}{l.action === 'extra_days' && l.detail ? ` ${(l.detail as { days: number }).days} วัน` : ''}{l.action === 'reschedule' && l.detail ? (() => { const d = l.detail as { old_start: string; old_end: string; new_start: string; new_end: string; extra_amount: number }; return ` ${thDate(d.old_start)}–${thDate(d.old_end)} → ${thDate(d.new_start)}–${thDate(d.new_end)}${d.extra_amount > 0 ? ` · เก็บเพิ่ม ${n(d.extra_amount)} บาท` : ''}`; })() : ''}</li>
           ))}
         </ul>
       </section>

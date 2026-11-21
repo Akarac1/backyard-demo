@@ -138,6 +138,22 @@ export async function addExtraDays(_: ActionResult, f: FormData): Promise<Action
   return r;
 }
 
+/** Change a booking's dates (reschedule). Charges the extra days if the stay got longer, and resets its shuttle trips for the new dates. */
+export async function rescheduleBooking(_: ActionResult, f: FormData): Promise<ActionResult> {
+  const id = str(f, 'id');
+  const paid = f.get('paid') === 'on';
+  const r = await run('admin_reschedule_booking',
+    { p_id: id, p_new_start: str(f, 'start'), p_new_end: str(f, 'end'), p_paid: paid },
+    'เลื่อนวันจองแล้ว', [`/admin/bookings/${id}`, '/admin', '/exec', '/admin/trips']);
+  if (r?.ok && !paid && f.get('line') === 'on') {
+    const { data: p } = await db().from('payments').select('id').eq('booking_id', id).eq('kind', 'reschedule_extra').eq('status', 'pending')
+      .order('created_at', { ascending: false }).limit(1).maybeSingle();
+    const sent = p ? await sendExtraPayCard(p.id).catch((e) => { console.error('reschedule card', e); return false; }) : false;
+    return { ok: p ? (sent ? 'เลื่อนวันจองแล้ว · ส่ง QR ชำระเงินส่วนต่างให้ลูกค้าทาง LINE แล้ว' : 'เลื่อนวันจองแล้ว · ลูกค้าไม่ได้จองผ่าน LINE จึงไม่ได้ส่ง QR (รับเงินที่หน้างานได้)') : 'เลื่อนวันจองแล้ว' };
+  }
+  return r;
+}
+
 /** Re-send the QR card of a pending payment to the customer's LINE. */
 export async function resendPayCard(_: ActionResult, f: FormData): Promise<ActionResult> {
   try { await staffForAction(['admin']); } catch { return { error: ERR.not_allowed }; }
