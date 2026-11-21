@@ -394,8 +394,12 @@ async function fetchVehicleEvents(dev, since, until) {
       Channel: [0],
     };
     const find = await rpcCall(dev, login, 'mediaFileFind.findFile', { condition }, obj);
-    if (!find.json?.result) throw new Error(`findFile failed: ${find.text.slice(0, 300)}`);
+    // this NVR sometimes replies result:false with a generic error code purely because the time
+    // window has zero matching events (confirmed: findNextFile right after still correctly
+    // reports found:0, not a real failure) — only findNextFile itself erroring is a real problem.
+    if (!find.json?.result) log(`vehicle log: findFile replied result:false (code ${find.json?.error?.code ?? '?'}) — usually just means no events in this window, continuing`);
     const next = await rpcCall(dev, login, 'mediaFileFind.findNextFile', { count: 200 }, obj);
+    if (!next.json?.result) throw new Error(`findNextFile failed: ${next.text.slice(0, 300)}`);
     const infos = next.json?.params?.infos ?? [];
     return infos
       .map((info) => {
@@ -533,46 +537,60 @@ async function gatePoll() {
   }
 }
 
-// Barrier test. Read-only by default; `fire` sends exactly one open command to the chosen camera.
+// Barrier test. Read-only by default; `fire` sends exactly one open command to the chosen barrier.
+// Read-only probes go through the NVR (known-good NVR_USER/NVR_PASS login) with the channel
+// number for IN/OUT (same CAM_IN_CHANNEL / CAM_OUT_CHANNEL as fireGateOpen) — not the camera's
+// own, separate, unconfirmed login.
 async function gatetest(which, rest) {
-  const base = which === 'out' ? cfg.camOut : cfg.camIn;
-  const dev = { base, user: cfg.camUser, pass: cfg.camPass };
+  const channel = Number(which === 'out' ? process.env.CAM_OUT_CHANNEL ?? 1 : process.env.CAM_IN_CHANNEL ?? 0);
   const get = async (path) => {
-    try { const r = await nvrFetch(path, dev); return { status: r.status, text: (await r.text()).trim() }; }
+    try { const r = await nvrFetch(path); return { status: r.status, text: (await r.text()).trim() }; }
     catch (e) { return { status: 0, text: `(${e.message})` }; }
   };
   if (rest[0] === 'fire') {
     const how = rest[1];
     if (how === 'strobe') {
-      log(`>>> sending ONE open command to ${which === 'out' ? 'OUT' : 'IN'} camera ${base} (same path the production emergency-open button uses)`);
+      log(`>>> sending ONE open command to ${which === 'out' ? 'OUT' : 'IN'} barrier (channel ${channel}) via the NVR (same path the production emergency-open button uses)`);
       try { log('reply:', await fireGateOpen(which)); } catch (e) { log('ERROR', e.message); }
       log('did the barrier go up? did it come down by itself? tell me both.');
       return;
     }
+    if (how === 'relay') {
+      const index = Number(rest[2]);
+      if (!(index === 0 || index === 1)) { console.error('usage: gatetest in|out fire relay 0   |   gatetest in|out fire relay 1   (getOutSlots says this NVR has 2 relay outputs, index 0 or 1)'); process.exit(1); }
+      log(`>>> pulsing alarm relay output ${index} for ~1s via the NVR (this device has no ITC/ANPR license, so the camera "strobe" command 400s — the physical relay output is the other way a Dahua NVR can trigger a barrier)`);
+      const on = await get(`/cgi-bin/alarm.cgi?${q({ action: 'setOutState', channel: 0, index, state: 1 })}`);
+      log('relay ON reply: HTTP', on.status, on.text.slice(0, 200) || '(empty)');
+      await new Promise((r) => setTimeout(r, 1000));
+      const off = await get(`/cgi-bin/alarm.cgi?${q({ action: 'setOutState', channel: 0, index, state: 0 })}`);
+      log('relay OFF reply: HTTP', off.status, off.text.slice(0, 200) || '(empty)');
+      log('did the barrier go up? did it come down by itself? tell me both. (if relay 0 didn\'t do it, try: gatetest in fire relay 1)');
+      return;
+    }
     const path = how === 'raw' && rest[2]?.startsWith('/cgi-bin/') ? rest[2] : '';
-    if (!path) { console.error('usage: gatetest in|out fire strobe   |   gatetest in|out fire raw "/cgi-bin/..."'); process.exit(1); }
-    log(`>>> sending ONE open command to ${which === 'out' ? 'OUT' : 'IN'} camera ${base}: ${path}`);
+    if (!path) { console.error('usage: gatetest in|out fire strobe   |   gatetest in|out fire relay 0|1   |   gatetest in|out fire raw "/cgi-bin/..."'); process.exit(1); }
+    log(`>>> sending ONE open command to ${which === 'out' ? 'OUT' : 'IN'} barrier via the NVR: ${path}`);
     const r = await get(path);
     log('reply: HTTP', r.status, r.text.slice(0, 300) || '(empty)');
     log('did the barrier go up? did it come down by itself? tell me both.');
     return;
   }
-  log(`camera ${which === 'out' ? 'OUT' : 'IN'} ${base} (read-only)`);
+  log(`${which === 'out' ? 'OUT' : 'IN'} barrier, channel ${channel}, via NVR ${cfg.nvr} (read-only)`);
   const probes = [
     '/cgi-bin/magicBox.cgi?action=getDeviceType',
     '/cgi-bin/magicBox.cgi?action=getSoftwareVersion',
-    '/cgi-bin/alarm.cgi?action=getOutSlots',
-    '/cgi-bin/alarm.cgi?action=getOutState',
-    '/cgi-bin/configManager.cgi?action=getConfig&name=AlarmOut',
-    '/cgi-bin/configManager.cgi?action=getConfig&name=TrafficStrobe',
-    '/cgi-bin/configManager.cgi?action=getConfig&name=TrafficSnapshot',
+    `/cgi-bin/alarm.cgi?action=getOutSlots&channel=${channel}`,
+    `/cgi-bin/alarm.cgi?action=getOutState&channel=${channel}`,
+    `/cgi-bin/configManager.cgi?action=getConfig&name=AlarmOut&channel=${channel}`,
+    `/cgi-bin/configManager.cgi?action=getConfig&name=TrafficStrobe&channel=${channel}`,
+    `/cgi-bin/configManager.cgi?action=getConfig&name=TrafficSnapshot&channel=${channel}`,
   ];
   for (const path of probes) {
     const r = await get(path);
     const lines = r.text.split(/\r?\n/).slice(0, 25).map((l) => (/password|passwd|pwd|token/i.test(l) ? l.replace(/=.*/, '=***') : l));
     console.log(`\n# ${path}\nHTTP ${r.status}\n${lines.join('\n')}`);
-    if (r.status === 401 || r.status === 403) { // every extra wrong login makes a Dahua camera lock the account for longer
-      console.log('\nSTOPPED: the camera refused the login. Do NOT retry yet; wait 10 minutes. Put the camera login in .env (CAM_USER / CAM_PASS) first.');
+    if (r.status === 401 || r.status === 403) { // every extra wrong login makes the device lock the account for longer
+      console.log('\nSTOPPED: the NVR refused the login. Do NOT retry yet; wait 10 minutes. Check NVR_USER / NVR_PASS in .env first.');
       break;
     }
   }
