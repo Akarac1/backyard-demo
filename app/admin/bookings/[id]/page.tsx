@@ -130,6 +130,19 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
                 <input type="hidden" name="id" value={id} />
                 <label>วันเข้าจอดใหม่<input name="start" type="date" defaultValue={b.start_date} required /></label>
                 <label>วันรับรถคืนใหม่<input name="end" type="date" defaultValue={b.end_date} required /></label>
+                {b.shuttle && (
+                  <>
+                    {(trips ?? []).some((t) => t.direction === 'to_airport' && t.status !== 'done' && t.status !== 'cancelled') && (
+                      <label>เวลาไปส่งใหม่ (ไปสนามบิน)<input name="pickup_to" type="datetime-local" /><small>เว้นว่างไว้ได้ ไปใส่ทีหลังที่ช่อง &quot;แก้เวลาไปส่ง&quot; ด้านล่าง</small></label>
+                    )}
+                    {(trips ?? []).some((t) => t.direction === 'from_airport' && t.status !== 'done' && t.status !== 'cancelled') && (
+                      <>
+                        <label>เวลาเครื่องลงใหม่ (ขากลับ)<input name="landing_from" type="datetime-local" /></label>
+                        <label>เวลารับกลับใหม่<input name="pickup_from" type="datetime-local" /><small>เว้นว่าง = ใช้เวลาเครื่องลง</small></label>
+                      </>
+                    )}
+                  </>
+                )}
                 <label className="check"><input name="paid" type="checkbox" /> ได้รับเงินส่วนต่างแล้ว (ถ้ามี)</label>
                 <label className="check"><input name="line" type="checkbox" defaultChecked /> ถ้ายังไม่รับเงิน ส่ง QR ชำระให้ลูกค้าทาง LINE</label>
                 <div className="form-actions span2"><Submit>เลื่อนวันจอง</Submit></div>

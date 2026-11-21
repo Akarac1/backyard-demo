@@ -138,12 +138,18 @@ export async function addExtraDays(_: ActionResult, f: FormData): Promise<Action
   return r;
 }
 
-/** Change a booking's dates (reschedule). Charges the extra days if the stay got longer, and resets its shuttle trips for the new dates. */
+/** Change a booking's dates (reschedule). Charges the extra days if the stay got longer, resets its shuttle trips for the new dates, and sets the new pickup/landing times right away if given. */
 export async function rescheduleBooking(_: ActionResult, f: FormData): Promise<ActionResult> {
   const id = str(f, 'id');
   const paid = f.get('paid') === 'on';
+  const pickupTo = str(f, 'pickup_to'); const pickupFrom = str(f, 'pickup_from'); const landingFrom = str(f, 'landing_from');
   const r = await run('admin_reschedule_booking',
-    { p_id: id, p_new_start: str(f, 'start'), p_new_end: str(f, 'end'), p_paid: paid },
+    {
+      p_id: id, p_new_start: str(f, 'start'), p_new_end: str(f, 'end'), p_paid: paid,
+      p_pickup_to: pickupTo ? bkkLocalToIso(pickupTo) : null,
+      p_pickup_from: pickupFrom ? bkkLocalToIso(pickupFrom) : null,
+      p_landing_from: landingFrom ? bkkLocalToIso(landingFrom) : null,
+    },
     'เลื่อนวันจองแล้ว', [`/admin/bookings/${id}`, '/admin', '/exec', '/admin/trips']);
   if (r?.ok && !paid && f.get('line') === 'on') {
     const { data: p } = await db().from('payments').select('id').eq('booking_id', id).eq('kind', 'reschedule_extra').eq('status', 'pending')
