@@ -17,16 +17,29 @@ export default function TimeOnlyInput({
 }: { name: string; dateFieldName: string; defaultValue?: string; placeholder?: string }) {
   const [time, setTime] = useState(defaultValue.slice(11, 16));
   const [date, setDate] = useState(defaultValue.slice(0, 10));
+  const timeRef = useRef(time);
+  timeRef.current = time;
   const hiddenRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    const form = hiddenRef.current?.form;
+    const hidden = hiddenRef.current;
+    const form = hidden?.form;
     const dateInput = form?.elements.namedItem(dateFieldName) as HTMLInputElement | null;
-    if (!dateInput) return;
-    setDate(dateInput.value);
-    const onInput = () => setDate(dateInput.value);
-    dateInput.addEventListener('input', onInput);
-    return () => dateInput.removeEventListener('input', onInput);
+    if (!hidden || !form || !dateInput) return;
+    const sync = () => setDate(dateInput.value);
+    sync();
+    dateInput.addEventListener('input', sync);
+    dateInput.addEventListener('change', sync); // some mobile browsers only fire 'change' on a date field
+    // belt-and-braces: write the hidden field's value straight to the DOM right before the form submits,
+    // from whatever the date field holds at that instant — so this never depends on a React re-render
+    // having flushed in time
+    const onSubmit = () => { hidden.value = dateInput.value && timeRef.current ? `${dateInput.value}T${timeRef.current}` : ''; };
+    form.addEventListener('submit', onSubmit, { capture: true });
+    return () => {
+      dateInput.removeEventListener('input', sync);
+      dateInput.removeEventListener('change', sync);
+      form.removeEventListener('submit', onSubmit, { capture: true });
+    };
   }, [dateFieldName]);
 
   const combined = date && time ? `${date}T${time}` : '';
