@@ -68,8 +68,13 @@ const q = (o) => Object.entries(o).map(([k, v]) => `${k}=${encodeURIComponent(v)
 // then every further call carries the returned "session" token in the request body itself.
 const up = (s) => createHash('md5').update(s).digest('hex').toUpperCase();
 async function rpcRaw(base, body) {
+  // Some Dahua firmware rejects a POST to /RPC2 outright (connection reset, no HTTP response
+  // at all) unless Referer/Origin look like they came from the device's own web UI.
   const r = await fetch(`${base}/RPC2`, {
-    method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body), signal: AbortSignal.timeout(10000),
+    method: 'POST',
+    headers: { 'content-type': 'application/json', referer: `${base}/`, origin: base },
+    body: JSON.stringify(body),
+    signal: AbortSignal.timeout(10000),
   });
   const text = await r.text();
   let json; try { json = JSON.parse(text); } catch { json = null; }
@@ -432,7 +437,7 @@ if (cmd === 'probe') await probe();
 else if (cmd === 'ownertest') { try { await ownertest(); } catch (e) { log('ERROR', e.message); process.exitCode = 1; } }
 else if (cmd === 'sample') await sample();
 else if (cmd === 'events') { try { await events(Number(flags[0]) > 0 ? Number(flags[0]) : 60); } catch (e) { log('ERROR', e.message); process.exitCode = 1; } }
-else if (cmd === 'vehicles') { try { await vehicles(Number(flags[0]) > 0 ? Number(flags[0]) : 1440); } catch (e) { log('ERROR', e.message); process.exitCode = 1; } }
+else if (cmd === 'vehicles') { try { await vehicles(Number(flags[0]) > 0 ? Number(flags[0]) : 1440); } catch (e) { log('ERROR', e.message, e.cause ? `(cause: ${e.cause.code ?? e.cause.message ?? e.cause})` : ''); process.exitCode = 1; } }
 else if (cmd === 'gatetest') { try { await gatetest(flags[0] === 'out' ? 'out' : 'in', flags.slice(1)); } catch (e) { log('ERROR', e.message); process.exitCode = 1; } }
 else if (cmd === 'cleanup') { try { await cleanup(apply); } catch (e) { log('ERROR', e.message); process.exitCode = 1; } }
 else if (cmd === 'selftest') { try { await selftest(); } catch (e) { log('ERROR', e.message); process.exitCode = 1; } }
