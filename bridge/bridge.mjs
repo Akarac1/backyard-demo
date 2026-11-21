@@ -332,7 +332,8 @@ async function gatetest(which, rest) {
 
 const [cmd = 'once', ...flags] = process.argv.slice(2);
 const apply = flags.includes('--apply');
-for (const [k, v] of Object.entries({ SITE_URL: cfg.site, NVR_USER: cfg.user, NVR_PASS: cfg.pass, ...(cmd === 'probe' || cmd === 'cleanup' || cmd === 'gatetest' || cmd === 'events' ? {} : { LPR_BRIDGE_KEY: cfg.key }) })) {
+const needsSite = cmd === 'once' || cmd === 'run'; // only these talk to the web app; the rest only touch the NVR/camera
+for (const [k, v] of Object.entries({ NVR_USER: cfg.user, NVR_PASS: cfg.pass, ...(needsSite ? { SITE_URL: cfg.site, LPR_BRIDGE_KEY: cfg.key } : {}) })) {
   if (!v) { console.error(`missing ${k} in .env`); process.exit(1); }
 }
 if (cmd === 'probe') await probe();
