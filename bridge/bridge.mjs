@@ -7,12 +7,17 @@
 //                                    pass-by events found, without pushing them)
 //   node bridge.mjs once --apply     make the changes once (also pushes new vehicle pass-by
 //                                    events to the web app, for the arrival report)
-//   node bridge.mjs run --apply      keep doing both, every POLL_SECONDS
+//   node bridge.mjs run --apply      keep doing both, every POLL_SECONDS — also polls every
+//                                    GATE_POLL_SECONDS (default 3s) for emergency barrier-open
+//                                    requests from the /ops page and fires them on the camera
 //   node bridge.mjs events [minutes] read-only: look for a pass-by (ANPR) log via the old
 //                                    cgi-bin API (this NVR turned out not to have one there)
 //   node bridge.mjs vehicles [minutes] read-only: same lookup via /RPC2 JSON-RPC, matching
 //                                    this NVR's own "AI Search > Motor Vehicle" page — this
 //                                    is the one that actually works on this hardware
+//   node bridge.mjs channels         read-only: list the NVR's channel titles, to find which
+//                                    channel number is the IN barrier camera and which is OUT
+//                                    (for CAM_IN_CHANNEL / CAM_OUT_CHANNEL in .env)
 // Needs Node 20+. No packages to install.
 import { createHash, randomBytes } from 'node:crypto';
 import { readFileSync, writeFileSync, existsSync } from 'node:fs';
@@ -41,6 +46,7 @@ const cfg = {
   camUser: process.env.CAM_USER || process.env.NVR_USER || '',
   camPass: process.env.CAM_PASS || process.env.NVR_PASS || '',
   poll: Number(process.env.POLL_SECONDS ?? 120),
+  gatePoll: Number(process.env.GATE_POLL_SECONDS ?? 3), // the emergency-open button needs a fast loop, separate from the main plate-sync cadence
   maxChanges: Number(process.env.MAX_CHANGES ?? 10),
   maxDeletes: Number(process.env.MAX_DELETES ?? 5),
 };
@@ -482,6 +488,51 @@ async function cleanup(doApply) {
   log(`done: deleted ${dead.length} | rows now ${n} (expected ${rows.length - dead.length}) | expired left ${still} | BY- rows ${ours}`);
 }
 
+/** Read-only: lists the NVR's channel titles, to find which channel index is the IN barrier
+ * camera and which is OUT, for CAM_IN_CHANNEL / CAM_OUT_CHANNEL in .env. Goes through the NVR
+ * with NVR_USER/NVR_PASS — the login already proven to work (same as the plate-list sync and
+ * the vehicle-log pull), not the camera's own (separate, unconfirmed) login. */
+async function channels() {
+  const r = await nvrFetch('/cgi-bin/configManager.cgi?action=getConfig&name=ChannelTitle');
+  const text = (await r.text()).trim();
+  if (r.status < 200 || r.status >= 300) { log('ERROR: NVR replied HTTP', r.status, text.slice(0, 200)); return; }
+  log('channel titles from the NVR (match the name to the IN/OUT barrier camera, then set CAM_IN_CHANNEL / CAM_OUT_CHANNEL in .env — default guess is 0/1):');
+  console.log(text);
+}
+
+/** Sends exactly one open command to the IN or OUT barrier's strobe/relay output, via the NVR
+ * (same login already proven to work for the plate-list sync and vehicle-log pull) rather than
+ * the camera's own, separate login. Shared by `gatetest ... fire strobe` (manual, on-site test)
+ * and gatePoll() (the production path, driven by the "emergency open" button on /ops). Throws on
+ * a non-2xx reply or a request error. Run `node bridge.mjs channels` first to confirm the channel
+ * numbers below (CAM_IN_CHANNEL / CAM_OUT_CHANNEL) are right for this site. */
+async function fireGateOpen(which) {
+  const channel = Number(which === 'out' ? process.env.CAM_OUT_CHANNEL ?? 1 : process.env.CAM_IN_CHANNEL ?? 0);
+  const path = `/cgi-bin/trafficSnap.cgi?${q({ action: 'openStrobe', channel, 'info.openType': 'Normal' })}`;
+  const r = await nvrFetch(path); // defaults to { base: cfg.nvr, user: cfg.user, pass: cfg.pass }
+  const text = (await r.text()).trim();
+  if (r.status < 200 || r.status >= 300) throw new Error(`NVR replied HTTP ${r.status}: ${text.slice(0, 200)}`);
+  return text;
+}
+
+/** Polls the web app for pending emergency-open requests (from the /ops button) and fires each
+ * one on the real barrier, then reports back so a command is never fired twice. Runs on its own,
+ * much faster cadence than the main plate-sync loop (sync()) — see GATE_POLL_SECONDS. */
+async function gatePoll() {
+  const { commands } = await site('/api/lpr/gate-commands');
+  for (const c of commands ?? []) {
+    log(`gate command #${c.id}: opening ${c.which === 'out' ? 'OUT' : 'IN'} barrier (requested ${c.requested_at})`);
+    try {
+      await fireGateOpen(c.which === 'out' ? 'out' : 'in');
+      await site('/api/lpr/gate-commands', { method: 'POST', body: JSON.stringify({ id: c.id, result: 'ok' }) });
+      log(`gate command #${c.id}: fired ok`);
+    } catch (e) {
+      log(`gate command #${c.id}: ERROR`, e.message);
+      await site('/api/lpr/gate-commands', { method: 'POST', body: JSON.stringify({ id: c.id, result: 'error', error: e.message }) }).catch(() => {});
+    }
+  }
+}
+
 // Barrier test. Read-only by default; `fire` sends exactly one open command to the chosen camera.
 async function gatetest(which, rest) {
   const base = which === 'out' ? cfg.camOut : cfg.camIn;
@@ -492,8 +543,13 @@ async function gatetest(which, rest) {
   };
   if (rest[0] === 'fire') {
     const how = rest[1];
-    const path = how === 'strobe' ? `/cgi-bin/trafficSnap.cgi?${q({ action: 'openStrobe', channel: 1, 'info.openType': 'Normal' })}`
-      : how === 'raw' && rest[2]?.startsWith('/cgi-bin/') ? rest[2] : '';
+    if (how === 'strobe') {
+      log(`>>> sending ONE open command to ${which === 'out' ? 'OUT' : 'IN'} camera ${base} (same path the production emergency-open button uses)`);
+      try { log('reply:', await fireGateOpen(which)); } catch (e) { log('ERROR', e.message); }
+      log('did the barrier go up? did it come down by itself? tell me both.');
+      return;
+    }
+    const path = how === 'raw' && rest[2]?.startsWith('/cgi-bin/') ? rest[2] : '';
     if (!path) { console.error('usage: gatetest in|out fire strobe   |   gatetest in|out fire raw "/cgi-bin/..."'); process.exit(1); }
     log(`>>> sending ONE open command to ${which === 'out' ? 'OUT' : 'IN'} camera ${base}: ${path}`);
     const r = await get(path);
@@ -533,16 +589,29 @@ else if (cmd === 'ownertest') { try { await ownertest(); } catch (e) { log('ERRO
 else if (cmd === 'sample') await sample();
 else if (cmd === 'events') { try { await events(Number(flags[0]) > 0 ? Number(flags[0]) : 60); } catch (e) { log('ERROR', e.message); process.exitCode = 1; } }
 else if (cmd === 'vehicles') { try { await vehicles(Number(flags[0]) > 0 ? Number(flags[0]) : 1440); } catch (e) { log('ERROR', e.message, e.cause ? `(cause: ${e.cause.code ?? e.cause.message ?? e.cause})` : ''); process.exitCode = 1; } }
+else if (cmd === 'channels') { try { await channels(); } catch (e) { log('ERROR', e.message); process.exitCode = 1; } }
 else if (cmd === 'gatetest') { try { await gatetest(flags[0] === 'out' ? 'out' : 'in', flags.slice(1)); } catch (e) { log('ERROR', e.message); process.exitCode = 1; } }
 else if (cmd === 'cleanup') { try { await cleanup(apply); } catch (e) { log('ERROR', e.message); process.exitCode = 1; } }
 else if (cmd === 'selftest') { try { await selftest(); } catch (e) { log('ERROR', e.message); process.exitCode = 1; } }
 else if (cmd === 'once') {
   try { const r = await sync(apply); if (apply) await report(r); } catch (e) { log('ERROR', e.message); if (apply) await report({ ok: false, error: e.message }); process.exitCode = 1; }
   try { await vehicleSync(apply); } catch (e) { log('vehicle sync ERROR', e.message); }
+  if (apply) { try { await gatePoll(); } catch (e) { log('gate poll ERROR', e.message); } }
 } else if (cmd === 'run') {
-  for (;;) {
-    try { const r = await sync(apply); if (apply) await report(r); } catch (e) { log('ERROR', e.message); if (apply) await report({ ok: false, error: e.message }); }
-    try { await vehicleSync(apply); } catch (e) { log('vehicle sync ERROR', e.message); }
-    await new Promise((r) => setTimeout(r, cfg.poll * 1000));
-  }
-} else { console.error('usage: node bridge.mjs probe | selftest | ownertest | once [--apply] | cleanup [--apply] | gatetest in|out [fire strobe] | events [minutes] | vehicles [minutes] | run --apply'); process.exit(1); }
+  const mainLoop = async () => {
+    for (;;) {
+      try { const r = await sync(apply); if (apply) await report(r); } catch (e) { log('ERROR', e.message); if (apply) await report({ ok: false, error: e.message }); }
+      try { await vehicleSync(apply); } catch (e) { log('vehicle sync ERROR', e.message); }
+      await new Promise((r) => setTimeout(r, cfg.poll * 1000));
+    }
+  };
+  // separate, much faster loop so the emergency-open button on /ops doesn't wait out the main POLL_SECONDS
+  const gateLoop = async () => {
+    if (!apply) return; // dry run never fires the barrier
+    for (;;) {
+      try { await gatePoll(); } catch (e) { log('gate poll ERROR', e.message); }
+      await new Promise((r) => setTimeout(r, cfg.gatePoll * 1000));
+    }
+  };
+  await Promise.all([mainLoop(), gateLoop()]);
+} else { console.error('usage: node bridge.mjs probe | selftest | ownertest | once [--apply] | cleanup [--apply] | gatetest in|out [fire strobe] | events [minutes] | vehicles [minutes] | channels | run --apply'); process.exit(1); }
