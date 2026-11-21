@@ -1,0 +1,21 @@
+[Unit]
+Description=Backyard LPR bridge (NVR plate sync)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/backyard-bridge
+ExecStart=/usr/bin/node bridge.mjs run --apply
+Restart=always
+RestartSec=5
+# journald captures stdout/stderr; view with: journalctl -u backyard-bridge -f
+StandardOutput=journal
+StandardError=journal
+User=backyard-bridge
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target
