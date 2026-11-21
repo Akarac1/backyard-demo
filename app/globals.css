@@ -207,6 +207,7 @@ table.report th:first-child, table.report td:first-child { text-align: left; }
 .tbl th { text-align: left; font-weight: 500; color: var(--muted); font-size: 13px; padding: 12px 16px; background: #F8FAF8; border-bottom: 1px solid #E6ECE7; white-space: nowrap; }
 .tbl td { padding: 11px 16px; border-bottom: 1px solid #F0F3F1; vertical-align: top; }
 .tbl tr:hover td { background: #FAFCFA; }
+.tbl tr.warn td { background: #FFFBF2; }
 .tbl .r { text-align: right; font-variant-numeric: tabular-nums; }
 .tbl .code { font-weight: 600; text-decoration: none; color: var(--navy); border-bottom: 1px dashed #9FB8A7; }
 .pager { display: flex; justify-content: space-between; align-items: center; }

@@ -7,6 +7,7 @@ const ADMIN_ITEMS = [
   { href: '/admin/bookings', label: 'การจอง' },
   { href: '/ops', label: 'หน้างาน' },
   { href: '/admin/trips', label: 'รถรับส่ง' },
+  { href: '/admin/vehicle-log', label: 'รถเข้า-ออก' },
   { href: '/admin/members', label: 'สมาชิก' },
   { href: '/admin/campaigns', label: 'แคมเปญ' },
   { href: '/driver', label: 'หน้าคนขับ' },

@@ -3,9 +3,11 @@
 // Runs on a computer on the same LAN as the NVR. It only makes outbound HTTPS calls to the web app.
 //   node bridge.mjs probe            read-only check of the NVR API (no changes)
 //   node bridge.mjs selftest         add/change/remove ONE test row to prove write access
-//   node bridge.mjs once             show what would change (dry run)
-//   node bridge.mjs once --apply     make the changes once
-//   node bridge.mjs run --apply      keep doing it every POLL_SECONDS
+//   node bridge.mjs once             show what would change (dry run; also shows new vehicle
+//                                    pass-by events found, without pushing them)
+//   node bridge.mjs once --apply     make the changes once (also pushes new vehicle pass-by
+//                                    events to the web app, for the arrival report)
+//   node bridge.mjs run --apply      keep doing both, every POLL_SECONDS
 //   node bridge.mjs events [minutes] read-only: look for a pass-by (ANPR) log via the old
 //                                    cgi-bin API (this NVR turned out not to have one there)
 //   node bridge.mjs vehicles [minutes] read-only: same lookup via /RPC2 JSON-RPC, matching
@@ -362,6 +364,69 @@ async function vehicles(minutes) {
   log('send me everything above (the session id in it is a temporary token, not a password — fine to share). If findNextFile lists cars with plates and times, this is the real source we build the feature on.');
 }
 
+// ---------- vehicle pass-by log (real plate recognition, not the allow list) ----------
+// Runs every poll cycle inside `once`/`run`, right after the allow-list sync. Tracks the last
+// event time it successfully pushed in a small local state file so each poll only asks the NVR
+// for a short, recent window (with a 10-minute overlap for safety) instead of the whole history.
+const vehicleStateFile = join(here, '.vehicle_state.json');
+const loadVehicleState = () => { try { return JSON.parse(readFileSync(vehicleStateFile, 'utf8')); } catch { return {}; } };
+const saveVehicleState = (s) => { try { writeFileSync(vehicleStateFile, JSON.stringify(s)); } catch (e) { log('could not save vehicle sync state:', e.message); } };
+const toBangkokIso = (s) => (s ? `${s.replace(' ', 'T')}+07:00` : null); // NVR's own EventTime is already Asia/Bangkok local time
+
+async function fetchVehicleEvents(dev, since, until) {
+  const login = await rpcLogin(dev);
+  if (!login.ok) throw new Error(`vehicle-log login failed at step ${login.step}: ${JSON.stringify(login.raw.json ?? login.raw.text).slice(0, 300)}`);
+  const create = await rpcCall(dev, login, 'mediaFileFind.factory.create', null);
+  const obj = create.json?.result;
+  if (!obj) throw new Error(`could not create mediaFileFind object: ${create.text.slice(0, 300)}`);
+  try {
+    const fmt = (d) => d.toLocaleString('sv-SE', { timeZone: 'Asia/Bangkok' }).replace(',', '');
+    const condition = {
+      StartTime: fmt(since), EndTime: fmt(until),
+      Events: ['VehicleAnalyse', 'TrafficJunction'],
+      DB: { TrafficCar: { GroupType: '', Order: 'Desc', PlateNumber: '' } },
+      Channel: [0],
+    };
+    const find = await rpcCall(dev, login, 'mediaFileFind.findFile', { condition }, obj);
+    if (!find.json?.result) throw new Error(`findFile failed: ${find.text.slice(0, 300)}`);
+    const next = await rpcCall(dev, login, 'mediaFileFind.findNextFile', { count: 200 }, obj);
+    const infos = next.json?.params?.infos ?? [];
+    return infos
+      .map((info) => {
+        const car = info?.Summary?.TrafficCar;
+        if (!car?.PlateNumber || car.PlateNumber === 'Unknown') return null;
+        return {
+          plate: car.PlateNumber,
+          event_time: toBangkokIso(info.EventTime ?? info.StartTime),
+          channel: Number.isInteger(info.Channel) ? info.Channel : 0,
+          vehicle_color: car.VehicleColor || null,
+          vehicle_brand: car.VehicleSign || null,
+          vehicle_category: car.Category || null,
+        };
+      })
+      .filter((e) => e && e.event_time);
+  } finally {
+    await rpcCall(dev, login, 'mediaFileFind.factory.destroy', null, obj).catch(() => {});
+  }
+}
+
+async function vehicleSync(apply) {
+  const dev = { base: cfg.nvr, user: cfg.user, pass: cfg.pass };
+  const state = loadVehicleState();
+  const now = new Date();
+  const since = state.last_event_time
+    ? new Date(Date.parse(state.last_event_time) - 10 * 60000)
+    : new Date(now.getTime() - Number(process.env.VEHICLE_LOOKBACK_MINUTES ?? 180) * 60000);
+  const events = await fetchVehicleEvents(dev, since, now);
+  if (events.length === 0) { log('vehicle log: no new events'); return; }
+  log(`vehicle log: ${events.length} event(s) found:`, events.map((e) => `${e.plate}@${e.event_time}`).join(', '));
+  const maxTime = events.reduce((m, e) => (e.event_time > m ? e.event_time : m), state.last_event_time ?? '');
+  if (!apply) { log('dry run: not pushing to the web app. Add --apply to push.'); return; }
+  const { inserted } = await site('/api/lpr/vehicle-events', { method: 'POST', body: JSON.stringify({ events }) });
+  log(`vehicle log: pushed, ${inserted} new row(s) stored (rest were already seen)`);
+  saveVehicleState({ last_event_time: maxTime || now.toISOString() });
+}
+
 // Which Owner texts does the NVR accept? Tries several on ONE throw-away plate and removes it each time.
 async function ownertest() {
   const base = { plate: 'ทดสอบ9998', from: new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Bangkok' }), to: '2030-01-01' };
@@ -473,9 +538,11 @@ else if (cmd === 'cleanup') { try { await cleanup(apply); } catch (e) { log('ERR
 else if (cmd === 'selftest') { try { await selftest(); } catch (e) { log('ERROR', e.message); process.exitCode = 1; } }
 else if (cmd === 'once') {
   try { const r = await sync(apply); if (apply) await report(r); } catch (e) { log('ERROR', e.message); if (apply) await report({ ok: false, error: e.message }); process.exitCode = 1; }
+  try { await vehicleSync(apply); } catch (e) { log('vehicle sync ERROR', e.message); }
 } else if (cmd === 'run') {
   for (;;) {
     try { const r = await sync(apply); if (apply) await report(r); } catch (e) { log('ERROR', e.message); if (apply) await report({ ok: false, error: e.message }); }
+    try { await vehicleSync(apply); } catch (e) { log('vehicle sync ERROR', e.message); }
     await new Promise((r) => setTimeout(r, cfg.poll * 1000));
   }
 } else { console.error('usage: node bridge.mjs probe | selftest | ownertest | once [--apply] | cleanup [--apply] | gatetest in|out [fire strobe] | events [minutes] | vehicles [minutes] | run --apply'); process.exit(1); }
