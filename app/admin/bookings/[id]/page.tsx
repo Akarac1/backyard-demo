@@ -5,7 +5,7 @@ import { bkkDay, thDate, thTime, todayBkk } from '@/lib/format';
 import { DIRECTION, STATUS, StatusTag } from '@/lib/labels';
 import { ActionButton, ActionForm, Submit } from '@/components/ActionForm';
 import { toBkkLocal } from '@/lib/shuttle';
-import { addExtraDays, adjustPoints, payPayment, rescheduleBooking, resendPayCard, setStatus, setTierOverride, updateBooking, updateReturnTrip } from '../../actions';
+import { addExtraDays, adjustPoints, payPayment, rescheduleBooking, resendPayCard, setStatus, setTierOverride, updateBooking, updateReturnTrip, updateTrip } from '../../actions';
 
 export const dynamic = 'force-dynamic';
 
@@ -227,6 +227,16 @@ export default async function BookingDetail({ params }: { params: Promise<{ id: 
                       <label>เวลารับ<input name="pickup_at" type="datetime-local" defaultValue={t.pickup_at ? toBkkLocal(t.pickup_at) : ''} /><small>เว้นว่างไว้ = เลื่อนตามเวลาเครื่องลง</small></label>
                       <label>เที่ยวบิน<input name="flight" defaultValue={t.flight_number ?? ''} placeholder="เช่น TG123" /></label>
                       <div className="form-actions span2"><Submit small>บันทึกเวลารับกลับ</Submit></div>
+                    </ActionForm>
+                  </details>
+                )}
+                {t.direction === 'to_airport' && t.status !== 'done' && t.status !== 'cancelled' && (
+                  <details className="span2" style={{ flexBasis: '100%' }}>
+                    <summary>แก้เวลาไปส่ง{!t.pickup_at ? ' (ยังไม่มีเวลา — ตั้งก่อนถึงจะไปจัดรถที่หน้า “รถรับส่ง” ได้)' : ''}</summary>
+                    <ActionForm action={updateTrip} className="form grid2">
+                      <input type="hidden" name="id" value={t.id} />
+                      <label>เวลารับ (ไปสนามบิน)<input name="pickup_at" type="datetime-local" defaultValue={t.pickup_at ? toBkkLocal(t.pickup_at) : ''} required /></label>
+                      <div className="form-actions span2"><Submit small>บันทึกเวลาไปส่ง</Submit></div>
                     </ActionForm>
                   </details>
                 )}
