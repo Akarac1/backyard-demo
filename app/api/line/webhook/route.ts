@@ -66,7 +66,7 @@ async function handleSlipImage(e: Event) {
   const { data } = await db().from('payments')
     .select('id, kind, amount, created_at, booking_id, bookings!inner(code, group_id, status, customers!inner(line_user_id))')
     .eq('status', 'pending').eq('bookings.customers.line_user_id', userId)
-    .not('bookings.status', 'in', '(cancelled,no_show,expired)')
+    .not('bookings.status', 'in', '(cancelled,no_show)')
     .order('created_at', { ascending: false });
   const pending = (data ?? []) as unknown as PendingPayment[];
 
@@ -74,16 +74,24 @@ async function handleSlipImage(e: Event) {
     await reply(replyToken, [{ type: 'text', text: 'ได้รับรูปแล้วค่ะ แต่ตอนนี้ไม่มีรายการค้างชำระของคุณในระบบนะคะ ถ้าคิดว่าไม่ถูกต้อง ทักแจ้งแอดมินในแชทนี้ได้เลยค่ะ' }]);
     return;
   }
-  if (pending.length > 1) {
+
+  // A booking whose 15-minute hold lapsed (status "expired") can still be rescued by a slip — same as the
+  // web upload page — as long as the spot is still available; confirm_payment() itself checks that. But a
+  // customer who repeatedly lets holds lapse can rack up several old "expired" bookings with a pending
+  // "booking" payment each — those are stale noise, not real ambiguity. So: a still-live (pending_payment)
+  // payment always wins; only treat it as genuinely ambiguous (ask admin, don't guess) when there's more
+  // than one of those. With zero live ones, fall back to the single most recent expired one.
+  const live = pending.filter((x) => x.bookings?.status !== 'expired');
+  if (live.length > 1) {
     await reply(replyToken, [{ type: 'text', text: 'ได้รับรูปแล้วค่ะ เนื่องจากมีรายการค้างชำระมากกว่า 1 รายการ แอดมินจะตรวจสอบและยืนยันให้โดยเร็วที่สุดนะคะ' }]);
-    const codes = pending.map((p) => p.bookings?.code).filter(Boolean).join(', ');
+    const codes = live.map((x) => x.bookings?.code).filter(Boolean).join(', ');
     await Promise.all(alertIds().map((id) =>
       push(id, [{ type: 'text', text: `📎 ลูกค้าส่งสลิปในแชท แต่มีรายการค้างชำระหลายรายการ (${codes}) ระบบไม่กล้าเดา รบกวนตรวจสอบและอัปโหลดสลิปให้เองในหน้าการจองนะครับ` }])
         .catch((err) => console.error('slip-ambiguous alert', String(err)))));
     return;
   }
 
-  const p = pending[0];
+  const p = live[0] ?? pending[0]; // pending[0] is the most recent (already ordered desc) expired one
   const b = p.bookings;
   if (!b) return;
 
@@ -128,7 +136,13 @@ async function handleSlipImage(e: Event) {
   const { error: confirmErr } = await db().rpc('confirm_payment', { p_payment_id: p.id, p_verified_by: `auto:${result.provider}:${result.transRef}` });
   if (confirmErr) {
     console.error('line slip confirm_payment', confirmErr);
-    await reply(replyToken, [{ type: 'text', text: 'ตรวจสลิปผ่านแล้วค่ะ แต่บันทึกระบบไม่สำเร็จ แอดมินจะช่วยตรวจสอบและยืนยันให้นะคะ' }]);
+    const full = confirmErr.message?.startsWith('full_after_hold_expired');
+    await reply(replyToken, [{ type: 'text', text: full
+      ? 'ตรวจสลิปผ่านแล้วค่ะ แต่ที่จอดช่วงที่จองไว้เต็มไปแล้วเนื่องจากหมดเวลากันที่ แอดมินจะติดต่อกลับเพื่อแก้ไขให้นะคะ ขออภัยในความไม่สะดวกค่ะ'
+      : 'ตรวจสลิปผ่านแล้วค่ะ แต่บันทึกระบบไม่สำเร็จ แอดมินจะช่วยตรวจสอบและยืนยันให้นะคะ' }]);
+    if (full) await Promise.all(alertIds().map((id) =>
+      push(id, [{ type: 'text', text: `⚠️ ลูกค้าส่งสลิปในแชทสำหรับ ${b.code} แต่ที่จอดเต็มแล้วเพราะหมดเวลากันที่ รบกวนติดต่อลูกค้าเพื่อแก้ไขนะครับ` }])
+        .catch((err) => console.error('slip-full alert', String(err)))));
     return;
   }
 

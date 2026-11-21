@@ -50,7 +50,7 @@ export default async function AdminHome({ searchParams }: { searchParams: Promis
     sb.from('bookings').select(sel).eq('start_date', today).in('status', ['confirmed', 'checked_in']).order('created_at'),
     sb.from('bookings').select(sel).eq('end_date', today).in('status', ['confirmed', 'checked_in', 'checked_out']).order('created_at'),
     sb.from('bookings').select('id', { count: 'exact', head: true }).eq('status', 'checked_in'),
-    sb.from('payments').select('id, amount, slip_path, created_at, bookings!inner(id, code, plate, status)').eq('status', 'pending').in('kind', ['booking', 'reschedule_extra']).not('slip_path', 'is', null).not('bookings.status', 'in', '(cancelled,no_show,expired)').order('created_at'),
+    sb.from('payments').select('id, amount, slip_path, created_at, bookings!inner(id, code, plate, status)').eq('status', 'pending').in('kind', ['booking', 'reschedule_extra']).not('slip_path', 'is', null).not('bookings.status', 'in', '(cancelled,no_show)').order('created_at'),
     sb.from('lpr_sync').select('id, plate, plate_province, action, valid_from, valid_to').neq('status', 'done').order('created_at'),
     sb.from('shuttle_trips').select('id, direction, pax, pickup_at, flight_number, status, called_at, vehicles(name), bookings(id, code, plate, customers(name, phone))')
       .gte('pickup_at', `${today}T00:00:00+07:00`).lt('pickup_at', `${addDays(today, 2)}T00:00:00+07:00`).neq('status', 'cancelled').order('pickup_at'),
