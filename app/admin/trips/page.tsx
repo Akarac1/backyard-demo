@@ -88,9 +88,9 @@ export default async function TripsPage({ searchParams }: { searchParams: Promis
                 </select>
               </label>
               {t.direction === 'from_airport' && (
-                <label>เวลาเครื่องลง <small>(ส่งข้อความต้อนรับเวลานี้)</small><input type="datetime-local" name="landing_at" defaultValue={localInput(t.landing_at)} /></label>
+                <label>เวลาเครื่องลง <small>(ส่งข้อความต้อนรับเวลานี้)</small><input type="datetime-local" name="landing_at" step={1800} defaultValue={localInput(t.landing_at)} /></label>
               )}
-              <label>เวลารับ{t.direction === 'from_airport' && <small> (แก้เวลาเครื่องลงอย่างเดียว เวลารับจะเลื่อนตาม)</small>}<input type="datetime-local" name="pickup_at" defaultValue={localInput(t.pickup_at)} /></label>
+              <label>เวลารับ{t.direction === 'from_airport' && <small> (แก้เวลาเครื่องลงอย่างเดียว เวลารับจะเลื่อนตาม)</small>}<input type="datetime-local" name="pickup_at" step={1800} defaultValue={localInput(t.pickup_at)} /></label>
               <div className="form-actions"><Submit small>บันทึก</Submit></div>
             </ActionForm>
             <details className="trip-bags">

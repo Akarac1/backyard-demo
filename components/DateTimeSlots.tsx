@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 
-const STEP = 15; // minutes between choices
+const STEP = 30; // minutes between choices
 const TIMES: string[] = [];
 for (let m = 0; m < 24 * 60; m += STEP) TIMES.push(`${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`);
 
