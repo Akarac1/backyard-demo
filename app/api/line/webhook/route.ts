@@ -66,7 +66,7 @@ async function handleSlipImage(e: Event) {
   const { data } = await db().from('payments')
     .select('id, kind, amount, created_at, booking_id, bookings!inner(code, group_id, status, customers!inner(line_user_id))')
     .eq('status', 'pending').eq('bookings.customers.line_user_id', userId)
-    .not('bookings.status', 'in', '(cancelled,no_show)')
+    .not('bookings.status', 'in', '(cancelled,no_show,expired)')
     .order('created_at', { ascending: false });
   const pending = (data ?? []) as unknown as PendingPayment[];
 
