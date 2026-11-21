@@ -393,7 +393,7 @@ export default function BookPage() {
               {cars > 1 && <p className="small" style={{ margin: '6px 0 0' }}>{t('ทั้งกลุ่มต้องนั่งรถรับส่งคันเดียว คนและกระเป๋าใหญ่รวมกันต้องไม่เกินที่รถรับได้ (รถ 7 ที่นั่ง กระเป๋าใหญ่ 5 ใบ)')}</p>}
               <p className="bag-warn" role="note"><span aria-hidden>⚠️</span><span><b>{t('นับเฉพาะใบใหญ่')}</b> {t('ไม่ต้องนับกระเป๋าถือขึ้นเครื่อง เป้ หรือใบเล็ก ระบบใช้จำนวนนี้เลือกรถที่ใส่กระเป๋าได้พอ')}</span></p>
               <label htmlFor="out">{t('ขาไป: เวลาที่จะมาถึงลานจอด')}</label>
-              <DateTimeSlots id="out" value={f.outboundTime} onChange={(v) => setF({ ...f, outboundTime: v })} defaultDate={f.start} placeholder={t('เลือกเวลา')} invalid={!!slotFull} />
+              <DateTimeSlots id="out" value={f.outboundTime} onChange={(v) => setF({ ...f, outboundTime: v })} defaultDate={f.start} placeholder={t('เลือกเวลา')} invalid={!!slotFull} lockDate />
               {slotFull && (
                 <div className="slot-full" role="alert">
                   <b>{tooBig ? t('จำนวนผู้โดยสารและกระเป๋าเกินกว่ารถ 1 คันรับได้') : t('รถรับส่งเวลา {t} เต็มแล้ว', { t: f.outboundTime.slice(11, 16) })}</b>
@@ -413,7 +413,7 @@ export default function BookPage() {
                 </div>
               )}
               <label htmlFor="land">{t('ขากลับ: เวลาเครื่องลง')}</label>
-              <DateTimeSlots id="land" value={f.returnLanding} onChange={(v) => setF({ ...f, returnLanding: v })} defaultDate={f.end} placeholder={t('เลือกเวลา')} />
+              <DateTimeSlots id="land" value={f.returnLanding} onChange={(v) => setF({ ...f, returnLanding: v })} defaultDate={f.end} placeholder={t('เลือกเวลา')} lockDate />
               {rule.enabled && rule.percent < 100 && <p className="small" style={{ margin: '4px 0 0' }}>{t('เข้าลานตั้งแต่ {a} น. ค่าจอดวันเข้าคิด {p}% · เครื่องลงขากลับภายใน {b} น. ค่าจอดวันรับรถคิด {p}%', { a: rule.arrivalFrom, b: rule.returnBy, p: rule.percent })}</p>}
               <div className="row">
                 <div><label htmlFor="flight">{t('เลขไฟลต์ขากลับ (ถ้ามี)')}</label><input id="flight" placeholder="TG 629" value={f.returnFlight} onChange={set('returnFlight')} /></div>

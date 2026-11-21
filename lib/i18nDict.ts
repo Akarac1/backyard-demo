@@ -58,6 +58,8 @@ const D: Record<string, [string, string]> = {
   'รถรับส่งเวลา {t} เต็มแล้ว': ['The shuttle at {t} is full', '{t} 的接驳车已满'],
   'เลือกเวลาที่ยังว่าง:': ['Pick a time that is still free:', '请选择仍有空位的时间：'],
   'ช่วงใกล้เคียงไม่มีรถว่าง ลองเปลี่ยนเวลา หรือติดต่อร้าน': ['No shuttle is free around that time. Try another time or contact us.', '附近时段没有空车，请换个时间或联系我们。'],
+  'เวลามาถึงลานต้องเป็นวันเดียวกับวันเข้าจอด': ['The time you arrive at the lot must be on your check-in date.', '到达停车场的时间必须与入场日期为同一天。'],
+  'เวลาเครื่องลงขากลับต้องเป็นวันเดียวกับวันรับรถคืน': ['Your return flight landing time must be on your check-out date.', '返程航班落地时间必须与取车日期为同一天。'],
   'จองที่จอดอย่างเดียว ไม่ใช้รถรับส่ง': ['Book parking only, no shuttle', '仅预订停车，不用接驳车'],
   'กำลังตรวจรถรับส่ง…': ['Checking the shuttle…', '正在查询接驳车…'],
   'คนขับคันที่ว่างก่อนจะออกมารับที่ {m} และหน้านี้จะบอกเวลาที่รถจะถึงหลังกดเรียก': ['The first free driver will come to {m}. This page shows the arrival time once you call.', '最先空出的司机会前往{m}接您，叫车后本页会显示预计到达时间。'],

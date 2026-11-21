@@ -22,6 +22,9 @@ export async function POST(req: Request) {
   if (!b.name?.trim() || !b.phone?.trim() || !b.plate?.trim()) return json({ error: L('กรอกข้อมูลให้ครบ') }, 400);
 
   if (!b.start || !b.end || b.end < b.start) return json({ error: L('วันรับรถคืนต้องไม่ก่อนวันเข้าจอด') }, 400);
+  // the client locks these dates to the parking dates already; this just rejects a mismatch that got through some other way
+  if (b.shuttle && b.outboundTime && b.outboundTime.slice(0, 10) !== b.start) return json({ error: L('เวลามาถึงลานต้องเป็นวันเดียวกับวันเข้าจอด') }, 400);
+  if (b.shuttle && b.returnLanding && b.returnLanding.slice(0, 10) !== b.end) return json({ error: L('เวลาเครื่องลงขากลับต้องเป็นวันเดียวกับวันรับรถคืน') }, 400);
 
   // Pickup time = landing + time to get out of the terminal (settings), customer-entered (no flight API in the lean plan).
   let returnPickup: string | null = null;
