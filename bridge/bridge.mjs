@@ -219,6 +219,17 @@ async function events(minutes) {
   const fmt = (d) => d.toLocaleString('sv-SE', { timeZone: 'Asia/Bangkok' }).replace(',', '');
   const candidates = ['TrafficCar', 'ITSPlateResult', 'TrafficSnapshot', 'TrafficJunction', 'ANPR', 'TrafficInfo', 'ITSCapture', 'Hybrid_TrafficJunction'];
 
+  // Sanity check first: the SAME query shape against the table we already know works
+  // (the allow list). If this one also fails, the problem is the query shape, not the name.
+  const sane = await nvrFetch(`/cgi-bin/recordFinder.cgi?${q({ action: 'find', name: cfg.list, count: 5 })}`);
+  const saneText = await sane.text();
+  console.log(`\n# sanity check: name=${cfg.list} (known-good table, allow list)\nHTTP ${sane.status}\n${saneText.split(/\r?\n/).slice(0, 10).join('\n')}`);
+  if (sane.status !== 200 || /error/i.test(saneText)) {
+    log('even the known-good table failed with the same query shape — the problem is NOT the table name, something else about this query is wrong on this NVR. Send me the output above.');
+    return;
+  }
+  log('sanity check passed (the known-good table still works this way) — so if the candidates below all 400, those table names genuinely do not exist on this NVR.');
+
   // Step 1: which table names even exist on this NVR? Same bare query style as the
   // allow-list lookup that already works (no time filter yet) — a 400 here means the
   // name itself is wrong, not that the time filter is the problem.
@@ -231,7 +242,18 @@ async function events(minutes) {
     if (r.status === 200 && !/error/i.test(t)) { ok.push(name); log(`-> "${name}" looks valid`); }
   }
   if (ok.length === 0) {
-    log('none of the usual table names worked at all — send me the output above and I will look for other ones for this NVR model.');
+    log('none of the usual ANPR table names worked — checking whether this NVR even advertises traffic/ITC capability ...');
+    for (const path of [
+      '/cgi-bin/magicBox.cgi?action=getProductDefinition&name=ITC',
+      '/cgi-bin/magicBox.cgi?action=getProductDefinition&name=Traffic',
+      '/cgi-bin/magicBox.cgi?action=getDeviceType',
+      '/cgi-bin/configManager.cgi?action=getConfig&name=ITC',
+    ]) {
+      const r = await nvrFetch(path);
+      const t = await r.text();
+      console.log(`\n# ${path}\nHTTP ${r.status}\n${t.split(/\r?\n/).slice(0, 10).join('\n')}`);
+    }
+    log('send me everything above — if this NVR has no ITC/ANPR license, it likely never logged real pass-by events at all (the allow list is a separate, simpler feature) and we may need a different source (e.g. the plate camera itself, if it is a dedicated ANPR camera rather than this NVR).');
     return;
   }
 
