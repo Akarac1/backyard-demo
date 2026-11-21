@@ -6,9 +6,12 @@
 //   node bridge.mjs once             show what would change (dry run)
 //   node bridge.mjs once --apply     make the changes once
 //   node bridge.mjs run --apply      keep doing it every POLL_SECONDS
+//   node bridge.mjs events [minutes] read-only: look for the NVR's real pass-by (ANPR) log,
+//                                    not just the allow list — first step toward checking
+//                                    whether booked cars actually arrived on time
 // Needs Node 20+. No packages to install.
 import { createHash, randomBytes } from 'node:crypto';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -27,6 +30,10 @@ const cfg = {
   user: process.env.NVR_USER ?? '',
   pass: process.env.NVR_PASS ?? '',
   list: process.env.NVR_LIST_NAME ?? 'TrafficRedList',
+  camIn: (process.env.CAM_IN_URL ?? 'http://192.168.1.101').replace(/\/$/, ''),
+  camOut: (process.env.CAM_OUT_URL ?? 'http://192.168.1.102').replace(/\/$/, ''),
+  camUser: process.env.CAM_USER || process.env.NVR_USER || '',
+  camPass: process.env.CAM_PASS || process.env.NVR_PASS || '',
   poll: Number(process.env.POLL_SECONDS ?? 120),
   maxChanges: Number(process.env.MAX_CHANGES ?? 10),
   maxDeletes: Number(process.env.MAX_DELETES ?? 5),
@@ -36,18 +43,18 @@ const log = (...a) => console.log(new Date().toLocaleString('sv-SE'), ...a);
 
 // ---------- Digest auth (Dahua uses it on /cgi-bin) ----------
 const md5 = (s) => createHash('md5').update(s).digest('hex');
-async function nvrFetch(path) {
-  const url = `${cfg.nvr}${path}`;
+async function nvrFetch(path, dev = { base: cfg.nvr, user: cfg.user, pass: cfg.pass }) {
+  const url = `${dev.base}${path}`;
   const first = await fetch(url, { signal: AbortSignal.timeout(10000) });
   if (first.status !== 401) return first;
   const h = first.headers.get('www-authenticate') ?? '';
   const p = Object.fromEntries([...h.matchAll(/(\w+)="?([^",]+)"?/g)].map((m) => [m[1], m[2]]));
   const uri = new URL(url).pathname + new URL(url).search;
   const nc = '00000001', cnonce = randomBytes(8).toString('hex');
-  const ha1 = md5(`${cfg.user}:${p.realm}:${cfg.pass}`);
+  const ha1 = md5(`${dev.user}:${p.realm}:${dev.pass}`);
   const ha2 = md5(`GET:${uri}`);
   const response = p.qop ? md5(`${ha1}:${p.nonce}:${nc}:${cnonce}:auth:${ha2}`) : md5(`${ha1}:${p.nonce}:${ha2}`);
-  const auth = `Digest username="${cfg.user}", realm="${p.realm}", nonce="${p.nonce}", uri="${uri}", response="${response}"` +
+  const auth = `Digest username="${dev.user}", realm="${p.realm}", nonce="${p.nonce}", uri="${uri}", response="${response}"` +
     (p.qop ? `, qop=auth, nc=${nc}, cnonce="${cnonce}"` : '') + (p.opaque ? `, opaque="${p.opaque}"` : '');
   return fetch(url, { headers: { Authorization: auth }, signal: AbortSignal.timeout(10000) });
 }
@@ -202,6 +209,32 @@ async function sample() {
   log('HTTP', r.status); console.log(out.join('\n'));
 }
 
+// Diagnostic, read-only: look for the NVR's actual ANPR pass-by log (every car the camera
+// recognized, not just the allow-list) so we can later check bookings against real arrivals.
+// Dahua NVRs usually keep this under a different record table than the allow list — tries
+// the common names and dumps what each returns so we can see which one is real on this NVR.
+async function events(minutes) {
+  const end = new Date();
+  const start = new Date(end.getTime() - minutes * 60000);
+  const fmt = (d) => d.toLocaleString('sv-SE', { timeZone: 'Asia/Bangkok' }).replace(',', '');
+  const candidates = ['TrafficCar', 'ITSPlateResult', 'TrafficSnapshot', 'TrafficJunction', 'ANPR'];
+  log(`looking for pass-by records between ${fmt(start)} and ${fmt(end)} ...`);
+  for (const name of candidates) {
+    const r = await nvrFetch(`/cgi-bin/recordFinder.cgi?${q({
+      action: 'find', name, count: 20,
+      'condition.Channel': 0,
+      'condition.StartTime': fmt(start),
+      'condition.EndTime': fmt(end),
+    })}`);
+    const t = await r.text();
+    const lines = t.split(/\r?\n/).slice(0, 30);
+    console.log(`\n# name=${name}\nHTTP ${r.status}\n${lines.join('\n')}`);
+    if (r.status === 200 && /records\[\d+\]\./.test(t)) log(`-> "${name}" has records[] rows — likely the right table name`);
+    else if (r.status === 200 && /^found=0/m.test(t)) log(`-> "${name}" exists but found 0 rows in this time window (table name may still be right)`);
+  }
+  log('send me the output above (it has no password in it) and I will build the real matching feature from whichever table name actually works.');
+}
+
 // Which Owner texts does the NVR accept? Tries several on ONE throw-away plate and removes it each time.
 async function ownertest() {
   const base = { plate: 'ทดสอบ9998', from: new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Bangkok' }), to: '2030-01-01' };
@@ -217,14 +250,97 @@ async function ownertest() {
   log('done; if a row for ทดสอบ9998 is left in the NVR, delete it by hand');
 }
 
+// One-off tidy-up: deletes rows NOT made by this system (owner without "BY-") whose end date is before today.
+// A CSV backup in the NVR's own import format is written first, so nothing is lost.
+async function cleanup(doApply) {
+  const today = new Date().toLocaleDateString('sv-SE', { timeZone: 'Asia/Bangkok' });
+  const rows = await nvr.list();
+  const dead = rows.filter((r) => !r.owner.startsWith(TAG) && /^\d{4}-\d{2}-\d{2}/.test(r.end) && r.end.slice(0, 10) < today && r.recno !== undefined)
+    .sort((a, b) => Number(b.recno) - Number(a.recno)); // highest recno first, so a renumbering could never hit the rows still to do
+  log(`NVR rows: ${rows.length} | made by this system: ${rows.filter((r) => r.owner.startsWith(TAG)).length} | expired before ${today} and not ours: ${dead.length}`);
+  for (const r of dead.slice(0, 10)) log('  e.g.', r.plate, '| ended', r.end.slice(0, 10));
+  if (dead.length > 10) log(`  ... and ${dead.length - 10} more`);
+  if (!doApply) { log('dry run: nothing deleted. Add --apply to back up and delete them.'); return; }
+  if (!dead.length) return;
+  const ddmm = (t) => { const m = t.match(/^(\d{4})-(\d{2})-(\d{2}) (\d{2}):(\d{2})/); return m ? `${m[3]}-${m[2]}-${m[1]} ${m[4]}:${m[5]}` : t; };
+  const cell = (v) => `"${String(v).replace(/"/g, '""')}"`;
+  const csv = '﻿' + [['Plate No.', 'Type', 'Owner Name', 'Valid Start Time(DD-MM-YYYY HH:mm)', 'Valid End Time(DD-MM-YYYY HH:mm)'], ...dead.map((r) => [r.plate, 'Allow List', r.owner, ddmm(r.begin), ddmm(r.end)])].map((l) => l.map(cell).join(',')).join('\r\n') + '\r\n';
+  const file = join(here, `backup-expired-${new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)}.csv`);
+  writeFileSync(file, csv);
+  log('backup written:', file, `(${dead.length} rows; re-import it in the NVR UI to restore)`);
+  const count = async (want) => { let n; for (let i = 0; i < 20; i++) { n = (await nvr.list()).length; if (n === want) return n; await new Promise((x) => setTimeout(x, 1000)); } return n; };
+  let left = rows.length;
+  for (let i = 0; i < dead.length; i++) {
+    const r = dead[i];
+    await nvr.remove(r.recno, r.plate);
+    left--;
+    if (i === 0) { // prove on the first delete that the other record numbers did not move
+      const n = await count(left);
+      if (n !== left) throw new Error(`stopped after 1 delete: NVR shows ${n} rows, expected ${left}`);
+      const now = await nvr.list();
+      const moved = dead.slice(1).filter((d) => now.find((x) => x.recno === d.recno)?.plate !== d.plate);
+      if (moved.length) throw new Error(`stopped after 1 delete: record numbers changed (${moved.length} rows moved). Nothing more was deleted.`);
+      log('first delete verified; continuing');
+    }
+  }
+  const n = await count(rows.length - dead.length);
+  const now = await nvr.list();
+  const still = now.filter((r) => !r.owner.startsWith(TAG) && /^\d{4}-\d{2}-\d{2}/.test(r.end) && r.end.slice(0, 10) < today).length;
+  const ours = now.filter((r) => r.owner.startsWith(TAG)).length;
+  log(`done: deleted ${dead.length} | rows now ${n} (expected ${rows.length - dead.length}) | expired left ${still} | BY- rows ${ours}`);
+}
+
+// Barrier test. Read-only by default; `fire` sends exactly one open command to the chosen camera.
+async function gatetest(which, rest) {
+  const base = which === 'out' ? cfg.camOut : cfg.camIn;
+  const dev = { base, user: cfg.camUser, pass: cfg.camPass };
+  const get = async (path) => {
+    try { const r = await nvrFetch(path, dev); return { status: r.status, text: (await r.text()).trim() }; }
+    catch (e) { return { status: 0, text: `(${e.message})` }; }
+  };
+  if (rest[0] === 'fire') {
+    const how = rest[1];
+    const path = how === 'strobe' ? `/cgi-bin/trafficSnap.cgi?${q({ action: 'openStrobe', channel: 1, 'info.openType': 'Normal' })}`
+      : how === 'raw' && rest[2]?.startsWith('/cgi-bin/') ? rest[2] : '';
+    if (!path) { console.error('usage: gatetest in|out fire strobe   |   gatetest in|out fire raw "/cgi-bin/..."'); process.exit(1); }
+    log(`>>> sending ONE open command to ${which === 'out' ? 'OUT' : 'IN'} camera ${base}: ${path}`);
+    const r = await get(path);
+    log('reply: HTTP', r.status, r.text.slice(0, 300) || '(empty)');
+    log('did the barrier go up? did it come down by itself? tell me both.');
+    return;
+  }
+  log(`camera ${which === 'out' ? 'OUT' : 'IN'} ${base} (read-only)`);
+  const probes = [
+    '/cgi-bin/magicBox.cgi?action=getDeviceType',
+    '/cgi-bin/magicBox.cgi?action=getSoftwareVersion',
+    '/cgi-bin/alarm.cgi?action=getOutSlots',
+    '/cgi-bin/alarm.cgi?action=getOutState',
+    '/cgi-bin/configManager.cgi?action=getConfig&name=AlarmOut',
+    '/cgi-bin/configManager.cgi?action=getConfig&name=TrafficStrobe',
+    '/cgi-bin/configManager.cgi?action=getConfig&name=TrafficSnapshot',
+  ];
+  for (const path of probes) {
+    const r = await get(path);
+    const lines = r.text.split(/\r?\n/).slice(0, 25).map((l) => (/password|passwd|pwd|token/i.test(l) ? l.replace(/=.*/, '=***') : l));
+    console.log(`\n# ${path}\nHTTP ${r.status}\n${lines.join('\n')}`);
+    if (r.status === 401 || r.status === 403) { // every extra wrong login makes a Dahua camera lock the account for longer
+      console.log('\nSTOPPED: the camera refused the login. Do NOT retry yet; wait 10 minutes. Put the camera login in .env (CAM_USER / CAM_PASS) first.');
+      break;
+    }
+  }
+}
+
 const [cmd = 'once', ...flags] = process.argv.slice(2);
 const apply = flags.includes('--apply');
-for (const [k, v] of Object.entries({ SITE_URL: cfg.site, NVR_USER: cfg.user, NVR_PASS: cfg.pass, ...(cmd === 'probe' ? {} : { LPR_BRIDGE_KEY: cfg.key }) })) {
+for (const [k, v] of Object.entries({ SITE_URL: cfg.site, NVR_USER: cfg.user, NVR_PASS: cfg.pass, ...(cmd === 'probe' || cmd === 'cleanup' || cmd === 'gatetest' || cmd === 'events' ? {} : { LPR_BRIDGE_KEY: cfg.key }) })) {
   if (!v) { console.error(`missing ${k} in .env`); process.exit(1); }
 }
 if (cmd === 'probe') await probe();
 else if (cmd === 'ownertest') { try { await ownertest(); } catch (e) { log('ERROR', e.message); process.exitCode = 1; } }
 else if (cmd === 'sample') await sample();
+else if (cmd === 'events') { try { await events(Number(flags[0]) > 0 ? Number(flags[0]) : 60); } catch (e) { log('ERROR', e.message); process.exitCode = 1; } }
+else if (cmd === 'gatetest') { try { await gatetest(flags[0] === 'out' ? 'out' : 'in', flags.slice(1)); } catch (e) { log('ERROR', e.message); process.exitCode = 1; } }
+else if (cmd === 'cleanup') { try { await cleanup(apply); } catch (e) { log('ERROR', e.message); process.exitCode = 1; } }
 else if (cmd === 'selftest') { try { await selftest(); } catch (e) { log('ERROR', e.message); process.exitCode = 1; } }
 else if (cmd === 'once') {
   try { const r = await sync(apply); if (apply) await report(r); } catch (e) { log('ERROR', e.message); if (apply) await report({ ok: false, error: e.message }); process.exitCode = 1; }
@@ -233,4 +349,4 @@ else if (cmd === 'once') {
     try { const r = await sync(apply); if (apply) await report(r); } catch (e) { log('ERROR', e.message); if (apply) await report({ ok: false, error: e.message }); }
     await new Promise((r) => setTimeout(r, cfg.poll * 1000));
   }
-} else { console.error('usage: node bridge.mjs probe | selftest | ownertest | once [--apply] | run --apply'); process.exit(1); }
+} else { console.error('usage: node bridge.mjs probe | selftest | ownertest | once [--apply] | cleanup [--apply] | gatetest in|out [fire strobe] | events [minutes] | run --apply'); process.exit(1); }
