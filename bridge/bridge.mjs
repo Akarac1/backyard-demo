@@ -73,23 +73,26 @@ const up = (s) => createHash('md5').update(s).digest('hex').toUpperCase();
 // (this NVR included — confirmed, it throws UND_ERR_SOCKET on /RPC2 POSTs) send responses
 // that trip that strictness even though curl/a browser reads them fine. Node's older
 // node:http/https client is far more lenient, so /RPC2 POSTs go through that instead.
-function rawPost(urlStr, body) {
+// Confirmed from the real browser traffic: the login handshake goes to /RPC2_Login (NOT
+// /RPC2), and the server also sets a `WebClientHttpSessionID` cookie that must be carried on
+// every later request — the JSON body's own "session" field is not enough by itself.
+function rawPost(urlStr, body, cookie) {
   return new Promise((resolve, reject) => {
     const u = new URL(urlStr);
     const lib = u.protocol === 'https:' ? httpsRequest : httpRequest;
     const data = JSON.stringify(body);
+    const headers = {
+      'content-type': 'application/json', 'content-length': Buffer.byteLength(data),
+      accept: 'application/json, text/plain, */*', referer: `${u.origin}/`, origin: u.origin, connection: 'keep-alive',
+    };
+    if (cookie) headers.cookie = cookie;
     const req = lib({
       hostname: u.hostname, port: u.port || (u.protocol === 'https:' ? 443 : 80), path: u.pathname + u.search,
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json', 'content-length': Buffer.byteLength(data),
-        referer: `${u.origin}/`, origin: u.origin, connection: 'close',
-      },
-      timeout: 10000,
+      method: 'POST', headers, timeout: 10000,
     }, (res) => {
       const chunks = [];
       res.on('data', (c) => chunks.push(c));
-      res.on('end', () => resolve({ status: res.statusCode, text: Buffer.concat(chunks).toString('utf8') }));
+      res.on('end', () => resolve({ status: res.statusCode, text: Buffer.concat(chunks).toString('utf8'), setCookie: res.headers['set-cookie'] }));
       res.on('error', reject);
     });
     req.on('timeout', () => req.destroy(new Error('request timed out')));
@@ -98,32 +101,33 @@ function rawPost(urlStr, body) {
     req.end();
   });
 }
-async function rpcRaw(base, body) {
-  const { status, text } = await rawPost(`${base}/RPC2`, body);
+async function rpcRaw(base, path, body, cookie) {
+  const { status, text, setCookie } = await rawPost(`${base}${path}`, body, cookie);
   let json; try { json = JSON.parse(text); } catch { json = null; }
-  return { status, text, json };
+  return { status, text, json, cookie: setCookie?.[0]?.split(';')[0] };
 }
 let rpcId = 1000;
 async function rpcLogin(dev) {
   // Call 1: no "session" field at all yet — just asks for the challenge.
-  const first = await rpcRaw(dev.base, { method: 'global.login', params: { userName: dev.user, password: '', clientType: 'Web3.0' }, id: rpcId++ });
+  const first = await rpcRaw(dev.base, '/RPC2_Login', { method: 'global.login', params: { userName: dev.user, password: '', clientType: 'Web3.0' }, id: rpcId++ });
   const p = first.json?.params;
   const loginSession = first.json?.session; // the pre-auth session token to carry into call 2
   if (!p?.realm || !p?.random || !loginSession) return { ok: false, step: 'challenge', raw: first };
   const pass1 = up(`${dev.user}:${p.realm}:${dev.pass}`);
   const passHash = up(`${dev.user}:${p.random}:${pass1}`);
-  // Call 2: carries the challenge session from call 1's response, plus the hashed password.
-  const second = await rpcRaw(dev.base, {
+  // Call 2: carries the challenge session from call 1's response, the challenge cookie, and the hashed password.
+  const second = await rpcRaw(dev.base, '/RPC2_Login', {
     method: 'global.login',
     params: { userName: dev.user, password: passHash, clientType: 'Web3.0', authorityType: p.encryption || 'Default', passwordType: p.encryption || 'Default' },
     id: rpcId++, session: loginSession,
-  });
+  }, first.cookie);
   if (!second.json?.result) return { ok: false, step: 'login', raw: second };
-  return { ok: true, session: second.json.session, raw: second }; // the NEW session from call 2's response is the real, authenticated one
+  // The NEW session + cookie from call 2's response are the real, authenticated ones — used for every /RPC2 call after this.
+  return { ok: true, session: second.json.session, cookie: second.cookie ?? first.cookie, raw: second };
 }
-async function rpcCall(dev, session, method, params, object) {
-  const body = { method, params: params ?? null, id: rpcId++, session, ...(object !== undefined ? { object } : {}) };
-  return rpcRaw(dev.base, body);
+async function rpcCall(dev, auth, method, params, object) {
+  const body = { method, params: params ?? null, id: rpcId++, session: auth.session, ...(object !== undefined ? { object } : {}) };
+  return rpcRaw(dev.base, '/RPC2', body, auth.cookie);
 }
 
 // ---------- NVR adapter (Dahua HTTP API). Confirm with `probe` before using --apply. ----------
@@ -331,7 +335,7 @@ async function vehicles(minutes) {
   }
   log(`logged in, session=${login.session}`);
 
-  const create = await rpcCall(dev, login.session, 'mediaFileFind.factory.create', null);
+  const create = await rpcCall(dev, login, 'mediaFileFind.factory.create', null);
   const obj = create.json?.result;
   console.log(`\n# mediaFileFind.factory.create\nHTTP ${create.status}\n${create.text.slice(0, 300)}`);
   if (!obj) { log('could not create a mediaFileFind object — send me the output above.'); return; }
@@ -345,16 +349,16 @@ async function vehicles(minutes) {
     DB: { TrafficCar: { GroupType: '', Order: 'Desc', PlateNumber: '' } },
     Channel: [0],
   };
-  const find = await rpcCall(dev, login.session, 'mediaFileFind.findFile', { condition }, obj);
+  const find = await rpcCall(dev, login, 'mediaFileFind.findFile', { condition }, obj);
   console.log(`\n# mediaFileFind.findFile (${fmt(start)} .. ${fmt(end)})\nHTTP ${find.status}\n${find.text.slice(0, 500)}`);
 
-  const count = await rpcCall(dev, login.session, 'mediaFileFind.getCount', null, obj);
+  const count = await rpcCall(dev, login, 'mediaFileFind.getCount', null, obj);
   console.log(`\n# mediaFileFind.getCount\nHTTP ${count.status}\n${count.text.slice(0, 300)}`);
 
-  const next = await rpcCall(dev, login.session, 'mediaFileFind.findNextFile', { count: 50 }, obj);
+  const next = await rpcCall(dev, login, 'mediaFileFind.findNextFile', { count: 50 }, obj);
   console.log(`\n# mediaFileFind.findNextFile\nHTTP ${next.status}\n${next.text.slice(0, 4000)}`);
 
-  await rpcCall(dev, login.session, 'mediaFileFind.factory.destroy', null, obj).catch(() => {});
+  await rpcCall(dev, login, 'mediaFileFind.factory.destroy', null, obj).catch(() => {});
   log('send me everything above (the session id in it is a temporary token, not a password — fine to share). If findNextFile lists cars with plates and times, this is the real source we build the feature on.');
 }
 
