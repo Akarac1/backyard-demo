@@ -37,6 +37,16 @@ export const push = (to: string, messages: LineMessage[]) => {
   return call('/message/push', { to, messages });
 };
 
+/** Download the binary content of an image (or other media) message the customer sent — e.g. a payment slip photo. */
+export async function getMessageContent(messageId: string): Promise<{ buffer: Buffer; contentType: string }> {
+  const res = await fetch(`https://api-data.line.me/v2/bot/message/${messageId}/content`, {
+    headers: { Authorization: `Bearer ${token()}` },
+  });
+  if (!res.ok) throw new Error(`LINE content ${messageId}: HTTP ${res.status}`);
+  const buffer = Buffer.from(await res.arrayBuffer());
+  return { buffer, contentType: res.headers.get('content-type') ?? 'image/jpeg' };
+}
+
 export function verifySignature(body: string, signature: string | null): boolean {
   const secret = process.env.LINE_CHANNEL_SECRET;
   if (!secret || !signature) return false;

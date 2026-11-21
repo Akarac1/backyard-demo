@@ -1,8 +1,11 @@
-import { reply, verifySignature, type LineMessage } from '@/lib/line';
+import { getMessageContent, push, reply, verifySignature, type LineMessage } from '@/lib/line';
 import { json } from '@/lib/request';
 import { db } from '@/lib/supabase';
 import { getContact, type Contact } from '@/lib/shop';
 import { lateNightRule, DEFAULT_LATE_NIGHT } from '@/lib/freeDays';
+import { verifySlip } from '@/lib/slip';
+import { afterConfirmed } from '@/lib/confirm';
+import { sendExtraPaidNote } from '@/lib/extraPay';
 
 type P = { price_per_day: number; shuttle_price: number; extra_price_per_day: number; reschedule_min_days: number };
 const DEFAULT_P: P = { price_per_day: 100, shuttle_price: 300, extra_price_per_day: 120, reschedule_min_days: 7 };
@@ -37,7 +40,110 @@ const ADDRESS = '242 หมู่ 7 ถนนกิ่งแก้ว ตำบ�
 const MAP_URL = process.env.NEXT_PUBLIC_MAP_URL ?? 'https://maps.app.goo.gl/9s7ZS7NdW4Uayuz17';
 
 // Everything here answers with reply messages, which do not count against the LINE OA quota.
-type Event = { type: string; replyToken?: string; message?: { type: string; text?: string }; source?: { userId?: string } };
+type Event = { type: string; replyToken?: string; message?: { type: string; text?: string; id?: string }; source?: { userId?: string } };
+
+type PendingPayment = {
+  id: string; kind: string; amount: number; created_at: string; booking_id: string;
+  bookings: { code: string; group_id: string | null; status: string } | null;
+};
+
+/** Who to tell about a slip we couldn't safely auto-match (e.g. more than one pending payment). */
+const alertIds = () => (process.env.ALERT_LINE_USER_IDS ?? '').split(',').map((s) => s.trim()).filter(Boolean);
+
+/**
+ * Customer sent a photo directly in LINE chat instead of using the booking app's slip-upload page — the
+ * recurring "ลูกค้าส่งสลิปมาในแชท" case. Mirrors app/api/bookings/[id]/slip/route.ts: download the image,
+ * save it against the customer's one pending payment, run it through the same EasySlip auto-verify, and
+ * auto-confirm on success — same as if they'd uploaded it on the web. If we can't safely tell which payment
+ * it's for (none, or more than one pending), we don't guess: save nothing to a payment, tell the customer
+ * admin will check, and alert staff so it doesn't get missed.
+ */
+async function handleSlipImage(e: Event) {
+  const replyToken = e.replyToken!;
+  const userId = e.source?.userId;
+  if (!userId) return;
+
+  const { data } = await db().from('payments')
+    .select('id, kind, amount, created_at, booking_id, bookings!inner(code, group_id, status, customers!inner(line_user_id))')
+    .eq('status', 'pending').eq('bookings.customers.line_user_id', userId)
+    .order('created_at', { ascending: false });
+  const pending = (data ?? []) as unknown as PendingPayment[];
+
+  if (!pending.length) {
+    await reply(replyToken, [{ type: 'text', text: 'ได้รับรูปแล้วค่ะ แต่ตอนนี้ไม่มีรายการค้างชำระของคุณในระบบนะคะ ถ้าคิดว่าไม่ถูกต้อง ทักแจ้งแอดมินในแชทนี้ได้เลยค่ะ' }]);
+    return;
+  }
+  if (pending.length > 1) {
+    await reply(replyToken, [{ type: 'text', text: 'ได้รับรูปแล้วค่ะ เนื่องจากมีรายการค้างชำระมากกว่า 1 รายการ แอดมินจะตรวจสอบและยืนยันให้โดยเร็วที่สุดนะคะ' }]);
+    const codes = pending.map((p) => p.bookings?.code).filter(Boolean).join(', ');
+    await Promise.all(alertIds().map((id) =>
+      push(id, [{ type: 'text', text: `📎 ลูกค้าส่งสลิปในแชท แต่มีรายการค้างชำระหลายรายการ (${codes}) ระบบไม่กล้าเดา รบกวนตรวจสอบและอัปโหลดสลิปให้เองในหน้าการจองนะครับ` }])
+        .catch((err) => console.error('slip-ambiguous alert', String(err)))));
+    return;
+  }
+
+  const p = pending[0];
+  const b = p.bookings;
+  if (!b) return;
+
+  // at most 6 tries per payment: protects the slip-check quota, same guard as the web upload route
+  const { error: tooMany } = await db().rpc('payment_slip_attempt', { p_payment: p.id });
+  if (tooMany) {
+    await reply(replyToken, [{ type: 'text', text: 'ส่งสลิปครบจำนวนครั้งที่ตรวจอัตโนมัติได้แล้วค่ะ แอดมินจะตรวจสลิปล่าสุดให้นะคะ' }]);
+    return;
+  }
+
+  let file: File;
+  try {
+    const { buffer, contentType } = await getMessageContent(e.message!.id!);
+    const ext = contentType.includes('png') ? 'png' : contentType.includes('webp') ? 'webp' : 'jpg';
+    file = new File([new Uint8Array(buffer)], `line-slip.${ext}`, { type: contentType || 'image/jpeg' });
+  } catch (err) {
+    console.error('line slip download', err);
+    await reply(replyToken, [{ type: 'text', text: 'ขออภัยค่ะ รับรูปไม่สำเร็จ รบกวนส่งใหม่อีกครั้ง หรือแจ้งแอดมินในแชทนี้นะคะ' }]);
+    return;
+  }
+
+  const path = `${p.booking_id}/line-${Date.now()}.${file.name.split('.').pop()}`;
+  const { error: upErr } = await db().storage.from('slips').upload(path, file, { contentType: file.type });
+  if (upErr) { console.error('line slip upload', upErr); await reply(replyToken, [{ type: 'text', text: 'ขออภัยค่ะ บันทึกรูปไม่สำเร็จ รบกวนลองใหม่ หรือแจ้งแอดมินในแชทนี้นะคะ' }]); return; }
+  await db().from('payments').update({ slip_path: path }).eq('id', p.id);
+
+  if (p.kind === 'booking' && b.status === 'pending_payment') {
+    const hold = new Date(Date.now() + 60 * 60_000).toISOString();
+    await db().from('bookings').update({ hold_expires_at: hold }).eq('id', p.booking_id).eq('status', 'pending_payment');
+    if (b.group_id) await db().from('bookings').update({ hold_expires_at: hold }).eq('group_id', b.group_id).eq('status', 'pending_payment');
+  }
+
+  const result = await verifySlip(file, { amount: p.amount, notBefore: new Date(p.created_at), remark: `Backyard ${b.code}` });
+  if (!result.ok) {
+    const pendingReview = result.reason === 'pending' || result.reason === 'error' || result.reason === 'review';
+    await reply(replyToken, [{ type: 'text', text: pendingReview
+      ? 'ได้รับสลิปแล้วค่ะ ระบบกำลังตรวจสอบ ถ้ามีปัญหาแอดมินจะติดต่อกลับนะคะ'
+      : `ได้รับสลิปแล้วค่ะ แต่ตรวจไม่ผ่าน: ${result.message} รบกวนตรวจสอบยอด/สลิปอีกครั้ง หรือแจ้งแอดมินในแชทนี้ได้เลยค่ะ` }]);
+    return;
+  }
+
+  const { error: confirmErr } = await db().rpc('confirm_payment', { p_payment_id: p.id, p_verified_by: `auto:${result.provider}:${result.transRef}` });
+  if (confirmErr) {
+    console.error('line slip confirm_payment', confirmErr);
+    await reply(replyToken, [{ type: 'text', text: 'ตรวจสลิปผ่านแล้วค่ะ แต่บันทึกระบบไม่สำเร็จ แอดมินจะช่วยตรวจสอบและยืนยันให้นะคะ' }]);
+    return;
+  }
+
+  if (p.kind === 'booking') {
+    let leadId = p.booking_id;
+    if (b.group_id) {
+      const { data: g } = await db().from('booking_groups').select('lead_booking_id').eq('id', b.group_id).maybeSingle();
+      if (g?.lead_booking_id) leadId = g.lead_booking_id;
+    }
+    await afterConfirmed(leadId).catch((err) => console.error('afterConfirmed', err));
+    await reply(replyToken, [{ type: 'text', text: 'ตรวจสลิปผ่านแล้วค่ะ ยืนยันการจองเรียบร้อย ✅' }]);
+  } else {
+    await sendExtraPaidNote(p.id).catch((err) => console.error('extra paid note', err));
+    await reply(replyToken, [{ type: 'text', text: 'ตรวจสลิปผ่านแล้วค่ะ ชำระยอดเพิ่มเติมเรียบร้อย ✅' }]);
+  }
+}
 
 const GREEN = '#0E3320';
 const GOLD = '#E0B04A';
@@ -242,6 +348,8 @@ export async function POST(req: Request) {
     if (!e.replyToken) return;
     // the welcome message on follow is set in LINE OA Manager (Greeting message), not here
     if (e.type === 'follow') return;
+    // a customer sending a payment slip as a photo directly in chat, instead of via the booking app
+    if (e.type === 'message' && e.message?.type === 'image' && e.message.id) return handleSlipImage(e);
     const text = e.type === 'message' && e.message?.type === 'text' ? e.message.text ?? '' : '';
     // type "myid" in the chat to get your LINE user id (for ALERT_LINE_USER_IDS). Reply messages are free.
     if (/^\s*myid\s*$/i.test(text) && e.source?.userId) return reply(e.replyToken, [{ type: 'text', text: `LINE user ID ของคุณ:\n${e.source.userId}` }]);

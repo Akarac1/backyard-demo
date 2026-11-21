@@ -238,10 +238,15 @@ export async function confirmSlip(_: ActionResult, f: FormData): Promise<ActionR
   const pid = str(f, 'payment_id');
   let actor: string;
   try { actor = (await staffForAction(['admin'])).uid; } catch { return { error: ERR.not_allowed }; }
+  const { data: pay } = await db().from('payments').select('kind, booking_id').eq('id', pid).maybeSingle();
   const { data, error } = await db().rpc('admin_confirm_slip', { p_actor: actor, p_payment_id: pid });
   if (error) return { error: thai(error.message) };
-  const bookingId = (data as { id: string } | null)?.id;
-  if (bookingId) await afterConfirmed(bookingId).catch((e) => console.error('afterConfirmed', e));
+  const bookingId = (data as { id: string } | null)?.id ?? pay?.booking_id;
+  if (pay?.kind === 'booking') {
+    if (bookingId) await afterConfirmed(bookingId).catch((e) => console.error('afterConfirmed', e));
+  } else {
+    await sendExtraPaidNote(pid).catch((e) => console.error('extra paid note', e));
+  }
   revalidatePath('/admin'); revalidatePath('/admin/bookings');
   return { ok: 'ยืนยันรับเงินแล้ว' };
 }
